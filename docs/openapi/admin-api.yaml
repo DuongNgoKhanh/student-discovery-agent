@@ -9,410 +9,103 @@ info:
     - Admin-managed user CRUD operations
     - Bulk user create, update, and soft delete
     - User restore after soft delete
+
+    Chat-first contract theo docs/prd/chat_first_assessment_api_proposal.md (Proposed, 12/10/2026).
+    Conversation → Activities → Results; resource model rộng hơn MVP 6 câu/card trong SRS v0.3.
+    MVP chỉ personality_assessment; các loại career_interest/skill/career_exploration là extension sau.
+    Conversation pin Agent Release; activity pin Assessment Release. Structured option interaction không bắt buộc gọi LLM.
+    Natural text đi qua Agent; start_activity và answer mapping chỉ là validated commands, Engine giữ state/scoring correctness.
+    Runtime sở hữu conversation/messages/activity/result; Studio/Product sở hữu definition/draft/release/audit; không ghi chéo bảng.
+
+    Wire choices đề xuất để define docs: synchronous JSON (chưa SSE); persisted committed messages/blocks;
+    immutable result_id mới mỗi snapshot + result_revision tăng theo activity; :end/:activate/:rollback dùng nhất quán custom methods.
+    Các lựa chọn này cần baseline theo §9 proposal trước implementation. Không tự thêm API server render ảnh.
+    expected_revision của public turn/end thuộc conversation; activity và result có revision riêng.
+    Option/text phải thuộc current question; proposal binds activity/question/activity revision.
+    General chat không tự tăng progress hoặc invalidate result. Completion activity không đóng conversation.
+    Commit parent/activity/state/messages/outcome nguyên tử; LLM ngoài transaction chỉ commit khi captured guards còn đúng và chưa đóng/hết hạn.
+    Owner/lifecycle kiểm trước replay; committed replay trước stale revision; collision payload không chạy lại.
+    Client giữ state revision mới hơn khi response đến muộn; retry/auth refresh giữ nguyên body/key/revision.
+
+    DEC-01: edit option ở in_progress/completed, bỏ suffix sau k và invalidate proposal/result cũ; tên no digits/emoji và không đổi sau bước tên.
+    DEC-02: summary.v1 share PNG/demo, full share qua projection version riêng; layout/limits/assets còn mở.
+    DEC-03: read-after-close/TTL/retention còn mở; end/expiry không đồng nghĩa xóa ngay và không resume.
+    DEC-04 hoãn rules/scoring/coverage/tie/golden outcomes; JSON structure hợp lệ không đủ để publish.
+    DEC-05 text auto-accept khi policy đã duyệt/membership/revision hợp lệ, mơ hồ hỏi lại.
+    DEC-06 LLM từ phase đầu; provider/model/budget còn mở. DEC-07 anonymous owner + Admin login/RBAC; bootstrap/CSRF/proof chưa chốt.
+    DEC-08 workload/rate/input limits/benchmark chốt sau; không có default số production tự đặt.
+
+    Public output có thể thêm optional fields; requests/share allowlist strict. Unknown block/type/version có controlled incompatibility.
+    Các block có stable block_id/type/schema_version; messages/turns có IDs ổn định để replay/history không duplicate.
+    Timestamp UTC Z, safe integer revisions, SHA-256 canonical JSON RFC8785 cho snapshot hash.
+    Envelope status/success/data/error/meta. Chat/Studio mới dùng 409 conflict/stale, 422 semantic invalid; scaffold cũ giữ HTTP mapping hiện hữu.
+
+
+    Mục lục tổng hợp: mỗi resource có YAML riêng; xem README.md.
+    Schema/response/example dùng $ref tới định nghĩa gốc; không sửa bản alias ở đây.
   version: 1.0.0
   contact:
     name: Backend API Team
     email: support@example.com
-
 servers:
   - url: http://localhost:8000/api/v1
     description: Local development server
   - url: https://api.example.com/api/v1
     description: Production server
-
 tags:
   - name: Admin-Auth
     description: Admin authentication and token management
   - name: Admin-Users
     description: Admin user management operations
-
+  - name: Studio Assessments
+    description: Metadata/draft, validation/evaluation and isolated preview.
+  - name: Studio Releases
+    description: Publish immutable snapshot, environment activation/rollback.
+  - name: Studio Audit
+    description: Server-authorized administrative audit.
 paths:
   /admin/auth/login:
-    post:
-      tags:
-        - Admin-Auth
-      summary: Authenticate admin user
-      description: Authenticate an admin user with username and password and return a JWT access token.
-      operationId: adminLogin
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminLoginRequest'
-      responses:
-        '200':
-          description: Admin authenticated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminAuthResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
+    $ref: admin-auth-api.yaml#/paths/~1admin~1auth~1login
   /admin/users:
-    post:
-      tags:
-        - Admin-Users
-      summary: Create a new user via admin
-      description: Create a new user record with optional profile fields.
-      operationId: adminCreateUser
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminUserCreate'
-      responses:
-        '200':
-          description: User created successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-    delete:
-      tags:
-        - Admin-Users
-      summary: Bulk soft delete users
-      description: Soft delete multiple users by their IDs.
-      operationId: adminBulkDeleteUsers
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminBulkUserDelete'
-      responses:
-        '200':
-          description: Bulk delete completed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminUserBulkResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
+    $ref: admin-user-api.yaml#/paths/~1admin~1users
   /admin/users/bulk/create:
-    post:
-      tags:
-        - Admin-Users
-      summary: Bulk create users
-      description: Create multiple user records in a single request.
-      operationId: adminBulkCreateUsers
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminBulkUserCreate'
-      responses:
-        '200':
-          description: Bulk create completed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminUserBulkResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
+    $ref: admin-user-api.yaml#/paths/~1admin~1users~1bulk~1create
   /admin/users/bulk/update:
-    put:
-      tags:
-        - Admin-Users
-      summary: Bulk update users
-      description: Update multiple users in a single request.
-      operationId: adminBulkUpdateUsers
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminBulkUserUpdate'
-      responses:
-        '200':
-          description: Bulk update completed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminUserBulkResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
+    $ref: admin-user-api.yaml#/paths/~1admin~1users~1bulk~1update
   /admin/users/{user_id}:
-    get:
-      tags:
-        - Admin-Users
-      summary: Get admin user by ID
-      description: Retrieve a specific user's profile by ID.
-      operationId: adminGetUserById
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: user_id
-          in: path
-          required: true
-          description: User ID
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: User retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-    put:
-      tags:
-        - Admin-Users
-      summary: Update an existing user
-      description: Update a user's profile data and optional status fields.
-      operationId: adminUpdateUser
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: user_id
-          in: path
-          required: true
-          description: User ID
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AdminUserUpdate'
-      responses:
-        '200':
-          description: User updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-    delete:
-      tags:
-        - Admin-Users
-      summary: Soft delete a user
-      description: Soft delete a single user by ID.
-      operationId: adminDeleteUser
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: user_id
-          in: path
-          required: true
-          description: User ID
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: User soft deleted successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
+    $ref: admin-user-api.yaml#/paths/~1admin~1users~1{user_id}
   /admin/users/{user_id}/restore:
-    post:
-      tags:
-        - Admin-Users
-      summary: Restore a soft-deleted user
-      description: Restore a previously soft deleted user by ID.
-      operationId: adminRestoreUser
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: user_id
-          in: path
-          required: true
-          description: User ID
-          schema:
-            type: integer
-      responses:
-        '200':
-          description: User restored successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /admin/users:
-    get:
-      tags:
-        - Admin-Users
-      summary: List admin-managed users
-      description: Retrieve a paginated list of users with filtering and sorting options.
-      operationId: adminListUsers
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: page
-          in: query
-          required: false
-          description: Page number (starting from 1)
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: limit
-          in: query
-          required: false
-          description: Number of items per page
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-        - name: order_by
-          in: query
-          required: false
-          description: Field to order results by
-          schema:
-            type: string
-            default: created_at
-        - name: dir
-          in: query
-          required: false
-          description: Sort direction
-          schema:
-            type: string
-            enum: [asc, desc]
-            default: desc
-        - name: name
-          in: query
-          required: false
-          description: Filter by user name (partial match)
-          schema:
-            type: string
-        - name: email
-          in: query
-          required: false
-          description: Filter by email address (partial match)
-          schema:
-            type: string
-        - name: position
-          in: query
-          required: false
-          description: Filter by job position
-          schema:
-            type: string
-        - name: is_deleted
-          in: query
-          required: false
-          description: Filter by deleted status
-          schema:
-            type: boolean
-      responses:
-        '200':
-          description: Users list retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AdminPaginatedUsersResponse'
-        '400':
-          $ref: '#/components/responses/BadRequestError'
-        '401':
-          $ref: '#/components/responses/UnauthorizedError'
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
+    $ref: admin-user-api.yaml#/paths/~1admin~1users~1{user_id}~1restore
+  /admin/assessments:
+    $ref: assessment-api.yaml#/paths/~1admin~1assessments
+  /admin/assessments/{id}:
+    $ref: assessment-api.yaml#/paths/~1admin~1assessments~1{id}
+  /admin/assessments/{id}/draft:
+    $ref: assessment-api.yaml#/paths/~1admin~1assessments~1{id}~1draft
+  /admin/assessments/{id}/validations:
+    $ref: assessment-validation-api.yaml#/paths/~1admin~1assessments~1{id}~1validations
+  /admin/assessments/{id}/evaluations:
+    $ref: assessment-validation-api.yaml#/paths/~1admin~1assessments~1{id}~1evaluations
+  /admin/assessments/{id}/previews:
+    $ref: assessment-preview-api.yaml#/paths/~1admin~1assessments~1{id}~1previews
+  /admin/assessment-previews/{preview_id}/turns:
+    $ref: assessment-preview-api.yaml#/paths/~1admin~1assessment-previews~1{preview_id}~1turns
+  /admin/assessments/{id}/releases:
+    $ref: assessment-release-api.yaml#/paths/~1admin~1assessments~1{id}~1releases
+  /admin/assessment-releases/{release_id}:
+    $ref: assessment-release-api.yaml#/paths/~1admin~1assessment-releases~1{release_id}
+  /admin/assessments/{id}/active-release:
+    $ref: assessment-release-api.yaml#/paths/~1admin~1assessments~1{id}~1active-release
+  /admin/assessment-releases/{release_id}:activate:
+    $ref: assessment-release-api.yaml#/paths/~1admin~1assessment-releases~1{release_id}:activate
+  /admin/assessments/{id}:rollback:
+    $ref: assessment-release-api.yaml#/paths/~1admin~1assessments~1{id}:rollback
+  /admin/audit-logs:
+    $ref: audit-api.yaml#/paths/~1admin~1audit-logs
+  /admin/audit-logs/{event_id}:
+    $ref: audit-api.yaml#/paths/~1admin~1audit-logs~1{event_id}
+  /admin/assessments/{id}/audit-logs:
+    $ref: audit-api.yaml#/paths/~1admin~1assessments~1{id}~1audit-logs
 components:
   securitySchemes:
     BearerAuth:
@@ -420,398 +113,222 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: Admin JWT access token required for protected admin endpoints
-
   schemas:
     ApiResponse:
-      type: object
-      required:
-        - success
-        - message
-      properties:
-        success:
-          type: boolean
-          example: true
-        message:
-          type: string
-          example: "Operation successful"
-        data:
-          type: object
-          nullable: true
-        errors:
-          type: array
-          items:
-            type: string
-          nullable: true
-        meta:
-          type: object
-          nullable: true
-
+      $ref: schemas/common.yaml#/components/schemas/ApiResponse
+    ResponseMeta:
+      $ref: schemas/common.yaml#/components/schemas/ResponseMeta
+    ErrorDetail:
+      $ref: schemas/common.yaml#/components/schemas/ErrorDetail
     ErrorResponse:
-      type: object
-      required:
-        - success
-        - message
-      properties:
-        success:
-          type: boolean
-          example: false
-        message:
-          type: string
-          description: Error message
-        data:
-          type: object
-          nullable: true
-
+      $ref: schemas/common.yaml#/components/schemas/ErrorResponse
     AdminLoginRequest:
-      type: object
-      required:
-        - username
-        - password
-      properties:
-        username:
-          type: string
-          description: Admin username
-          example: "admin"
-        password:
-          type: string
-          description: Admin password
-          example: "strongpassword123"
-
+      $ref: admin-auth-api.yaml#/components/schemas/AdminLoginRequest
     AdminTokenResponse:
-      type: object
-      required:
-        - access_token
-        - token_type
-        - expires_in
-      properties:
-        access_token:
-          type: string
-          description: JWT access token for admin
-          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-        token_type:
-          type: string
-          example: "bearer"
-        expires_in:
-          type: integer
-          description: Expiration time in seconds
-          example: 3600
-
+      $ref: admin-auth-api.yaml#/components/schemas/AdminTokenResponse
     AdminAuthResponse:
-      type: object
-      required:
-        - success
-        - message
-        - data
-      properties:
-        success:
-          type: boolean
-          example: true
-        message:
-          type: string
-          example: "Login successful"
-        data:
-          $ref: '#/components/schemas/AdminTokenResponse'
-
+      $ref: admin-auth-api.yaml#/components/schemas/AdminAuthResponse
     AdminUserResponse:
-      type: object
-      required:
-        - id
-        - email
-        - is_deleted
-        - created_at
-      properties:
-        id:
-          type: integer
-          example: 1
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-        name:
-          type: string
-          nullable: true
-          example: "John Doe"
-        avatar_url:
-          type: string
-          format: uri
-          nullable: true
-          example: "https://example.com/avatars/user_1.jpg"
-        bio:
-          type: string
-          nullable: true
-          example: "Software developer"
-        position:
-          type: string
-          nullable: true
-          example: "Senior Developer"
-        is_deleted:
-          type: boolean
-          example: false
-        created_at:
-          type: string
-          format: date-time
-          example: "2025-04-18T12:00:00Z"
-        updated_at:
-          type: string
-          format: date-time
-          nullable: true
-          example: "2025-04-19T09:30:00Z"
-
+      $ref: admin-user-api.yaml#/components/schemas/AdminUserResponse
     AdminUserCreate:
-      type: object
-      required:
-        - email
-      properties:
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-        password:
-          type: string
-          nullable: true
-          example: "optionalPassword123"
-        name:
-          type: string
-          nullable: true
-          example: "John Doe"
-        avatar_url:
-          type: string
-          format: uri
-          nullable: true
-          example: "https://example.com/avatars/user_1.jpg"
-        bio:
-          type: string
-          nullable: true
-          example: "Software developer"
-        position:
-          type: string
-          nullable: true
-          example: "Senior Developer"
-
+      $ref: admin-user-api.yaml#/components/schemas/AdminUserCreate
     AdminUserUpdate:
-      type: object
-      properties:
-        name:
-          type: string
-          nullable: true
-          example: "John Doe"
-        avatar_url:
-          type: string
-          format: uri
-          nullable: true
-          example: "https://example.com/avatars/user_1.jpg"
-        bio:
-          type: string
-          nullable: true
-          example: "Software developer"
-        position:
-          type: string
-          nullable: true
-          example: "Senior Developer"
-        password:
-          type: string
-          nullable: true
-          example: "newPassword123"
-        is_deleted:
-          type: boolean
-          nullable: true
-          example: false
-
+      $ref: admin-user-api.yaml#/components/schemas/AdminUserUpdate
     AdminBulkUserCreate:
-      type: object
-      required:
-        - users
-      properties:
-        users:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminUserCreate'
-
+      $ref: admin-user-api.yaml#/components/schemas/AdminBulkUserCreate
     AdminBulkUserUpdate:
-      type: object
-      required:
-        - users
-      properties:
-        users:
-          type: array
-          items:
-            type: object
-            required:
-              - id
-              - updates
-            properties:
-              id:
-                type: integer
-                example: 1
-              updates:
-                $ref: '#/components/schemas/AdminUserUpdate'
-
+      $ref: admin-user-api.yaml#/components/schemas/AdminBulkUserUpdate
     AdminBulkUserDelete:
-      type: object
-      required:
-        - user_ids
-      properties:
-        user_ids:
-          type: array
-          items:
-            type: integer
-          example: [1, 2, 3]
-
+      $ref: admin-user-api.yaml#/components/schemas/AdminBulkUserDelete
     AdminUserBulkResult:
-      type: object
-      required:
-        - success
-        - user_id
-      properties:
-        success:
-          type: boolean
-          example: true
-        user_id:
-          type: integer
-          example: 1
-        error:
-          type: string
-          nullable: true
-          example: null
-
+      $ref: admin-user-api.yaml#/components/schemas/AdminUserBulkResult
     AdminUserBulkResponse:
-      type: object
-      required:
-        - success
-        - message
-        - data
-        - total_processed
-        - total_success
-        - total_failed
-      properties:
-        success:
-          type: boolean
-          example: true
-        message:
-          type: string
-          example: "Operation successful"
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminUserBulkResult'
-        total_processed:
-          type: integer
-          example: 3
-        total_success:
-          type: integer
-          example: 3
-        total_failed:
-          type: integer
-          example: 0
-
+      $ref: admin-user-api.yaml#/components/schemas/AdminUserBulkResponse
     PaginationMeta:
-      type: object
-      required:
-        - page
-        - limit
-        - total
-        - total_pages
-        - has_next
-        - has_prev
-      properties:
-        page:
-          type: integer
-          example: 1
-        limit:
-          type: integer
-          example: 20
-        total:
-          type: integer
-          example: 123
-        total_pages:
-          type: integer
-          example: 7
-        has_next:
-          type: boolean
-          example: true
-        has_prev:
-          type: boolean
-          example: false
-
+      $ref: admin-user-api.yaml#/components/schemas/PaginationMeta
     AdminPaginatedUsersResponse:
-      type: object
-      required:
-        - success
-        - message
-        - data
-        - pagination
-      properties:
-        success:
-          type: boolean
-          example: true
-        message:
-          type: string
-          example: "Users retrieved successfully"
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminUserResponse'
-        pagination:
-          $ref: '#/components/schemas/PaginationMeta'
-
+      $ref: admin-user-api.yaml#/components/schemas/AdminPaginatedUsersResponse
+    AssessmentProgress:
+      $ref: schemas/activity.yaml#/components/schemas/AssessmentProgress
+    AssessmentOption:
+      $ref: schemas/activity.yaml#/components/schemas/AssessmentOption
+    AssessmentQuestion:
+      $ref: schemas/activity.yaml#/components/schemas/AssessmentQuestion
+    ClarificationCandidate:
+      $ref: schemas/activity.yaml#/components/schemas/ClarificationCandidate
+    ActivityClarification:
+      $ref: schemas/activity.yaml#/components/schemas/ActivityClarification
+    ActivityAnswer:
+      $ref: schemas/activity.yaml#/components/schemas/ActivityAnswer
+    ActivityResultRef:
+      $ref: schemas/activity.yaml#/components/schemas/ActivityResultRef
+    ActivityView:
+      $ref: schemas/activity.yaml#/components/schemas/ActivityView
+    ConversationView:
+      $ref: schemas/chat.yaml#/components/schemas/ConversationView
+    MessageTurnInput:
+      $ref: schemas/chat.yaml#/components/schemas/MessageTurnInput
+    SetNameInteraction:
+      $ref: schemas/chat.yaml#/components/schemas/SetNameInteraction
+    SubmitAnswerInteraction:
+      $ref: schemas/chat.yaml#/components/schemas/SubmitAnswerInteraction
+    ConfirmAnswerInteraction:
+      $ref: schemas/chat.yaml#/components/schemas/ConfirmAnswerInteraction
+    EditAnswerInteraction:
+      $ref: schemas/chat.yaml#/components/schemas/EditAnswerInteraction
+    InteractionTurnInput:
+      $ref: schemas/chat.yaml#/components/schemas/InteractionTurnInput
+    ConversationTurnInput:
+      $ref: schemas/chat.yaml#/components/schemas/ConversationTurnInput
+    HouseIdentity:
+      $ref: schemas/typed-blocks.yaml#/components/schemas/HouseIdentity
+    PersonalityCardData:
+      $ref: schemas/typed-blocks.yaml#/components/schemas/PersonalityCardData
+    TextBlock:
+      $ref: schemas/typed-blocks.yaml#/components/schemas/TextBlock
+    AssessmentQuestionBlock:
+      $ref: schemas/typed-blocks.yaml#/components/schemas/AssessmentQuestionBlock
+    AssessmentClarificationBlock:
+      $ref: schemas/typed-blocks.yaml#/components/schemas/AssessmentClarificationBlock
+    PersonalityCardBlock:
+      $ref: schemas/typed-blocks.yaml#/components/schemas/PersonalityCardBlock
+    TypedBlock:
+      $ref: schemas/typed-blocks.yaml#/components/schemas/TypedBlock
+    ConversationTurnResult:
+      $ref: schemas/chat.yaml#/components/schemas/ConversationTurnResult
+    ChatResponseMeta:
+      $ref: schemas/common.yaml#/components/schemas/ChatResponseMeta
+    RevisionConflictDetails:
+      $ref: schemas/common.yaml#/components/schemas/RevisionConflictDetails
+    StaleResultDetails:
+      $ref: schemas/common.yaml#/components/schemas/StaleResultDetails
+    SnapshotConflictDetails:
+      $ref: schemas/common.yaml#/components/schemas/SnapshotConflictDetails
+    ValidationIssue:
+      $ref: schemas/common.yaml#/components/schemas/ValidationIssue
+    ValidationDetails:
+      $ref: schemas/common.yaml#/components/schemas/ValidationDetails
+    DomainError:
+      $ref: schemas/common.yaml#/components/schemas/DomainError
+    SuccessEnvelope:
+      $ref: schemas/common.yaml#/components/schemas/SuccessEnvelope
+    ErrorEnvelope:
+      $ref: schemas/common.yaml#/components/schemas/ErrorEnvelope
+    ConversationTurnEnvelope:
+      $ref: schemas/chat.yaml#/components/schemas/ConversationTurnEnvelope
+    AssessmentDefinitionOption:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentDefinitionOption
+    AssessmentDefinitionQuestion:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentDefinitionQuestion
+    AssessmentHouseMetadata:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentHouseMetadata
+    AssessmentRuleDocument:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentRuleDocument
+    AssessmentGoldenCase:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentGoldenCase
+    AssessmentDefinitionDocument:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentDefinitionDocument
+    AssessmentMetadata:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentMetadata
+    AssessmentPage:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentPage
+    CreateAssessmentInput:
+      $ref: assessment-api.yaml#/components/schemas/CreateAssessmentInput
+    PatchAssessmentInput:
+      $ref: assessment-api.yaml#/components/schemas/PatchAssessmentInput
+    AssessmentDraft:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentDraft
+    SaveDraftInput:
+      $ref: assessment-api.yaml#/components/schemas/SaveDraftInput
+    SnapshotCommandInput:
+      $ref: assessment-validation-api.yaml#/components/schemas/SnapshotCommandInput
+    ValidationReport:
+      $ref: assessment-validation-api.yaml#/components/schemas/ValidationReport
+    EvaluationCaseResult:
+      $ref: assessment-validation-api.yaml#/components/schemas/EvaluationCaseResult
+    EvaluationReport:
+      $ref: assessment-validation-api.yaml#/components/schemas/EvaluationReport
+    PreviewView:
+      $ref: assessment-preview-api.yaml#/components/schemas/PreviewView
+    PublishReleaseInput:
+      $ref: assessment-release-api.yaml#/components/schemas/PublishReleaseInput
+    AssessmentRelease:
+      $ref: assessment-release-api.yaml#/components/schemas/AssessmentRelease
+    AssessmentReleasePage:
+      $ref: assessment-release-api.yaml#/components/schemas/AssessmentReleasePage
+    ActiveReleasePointer:
+      $ref: assessment-release-api.yaml#/components/schemas/ActiveReleasePointer
+    ActivateReleaseInput:
+      $ref: assessment-release-api.yaml#/components/schemas/ActivateReleaseInput
+    RollbackInput:
+      $ref: assessment-release-api.yaml#/components/schemas/RollbackInput
+    AuditEvent:
+      $ref: audit-api.yaml#/components/schemas/AuditEvent
+    AuditPage:
+      $ref: audit-api.yaml#/components/schemas/AuditPage
+    AssessmentMetadataEnvelope:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentMetadataEnvelope
+    AssessmentPageEnvelope:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentPageEnvelope
+    AssessmentDraftEnvelope:
+      $ref: assessment-api.yaml#/components/schemas/AssessmentDraftEnvelope
+    ValidationEnvelope:
+      $ref: assessment-validation-api.yaml#/components/schemas/ValidationEnvelope
+    EvaluationEnvelope:
+      $ref: assessment-validation-api.yaml#/components/schemas/EvaluationEnvelope
+    PreviewEnvelope:
+      $ref: assessment-preview-api.yaml#/components/schemas/PreviewEnvelope
+    AssessmentReleaseEnvelope:
+      $ref: assessment-release-api.yaml#/components/schemas/AssessmentReleaseEnvelope
+    AssessmentReleasePageEnvelope:
+      $ref: assessment-release-api.yaml#/components/schemas/AssessmentReleasePageEnvelope
+    ActiveReleaseEnvelope:
+      $ref: assessment-release-api.yaml#/components/schemas/ActiveReleaseEnvelope
+    AuditPageEnvelope:
+      $ref: audit-api.yaml#/components/schemas/AuditPageEnvelope
+    AuditEventEnvelope:
+      $ref: audit-api.yaml#/components/schemas/AuditEventEnvelope
   responses:
     BadRequestError:
-      description: Bad request - Invalid input data or parameters
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-          example:
-            success: false
-            message: "Invalid input"
-            data: null
+      $ref: schemas/common.yaml#/components/responses/BadRequestError
     UnauthorizedError:
-      description: Unauthorized - Invalid, missing, or expired authentication token
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-          example:
-            success: false
-            message: "Authentication required or token invalid"
-            data: null
+      $ref: admin-auth-api.yaml#/components/responses/UnauthorizedError
     ForbiddenError:
-      description: Forbidden - Admin access required
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-          example:
-            success: false
-            message: "Admin access required"
-            data: null
+      $ref: admin-user-api.yaml#/components/responses/ForbiddenError
     NotFoundError:
-      description: Resource not found
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-          example:
-            success: false
-            message: "Resource not found"
-            data: null
+      $ref: admin-user-api.yaml#/components/responses/NotFoundError
     ValidationError:
-      description: Validation error - Invalid input data format
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-          example:
-            success: false
-            message: "Input data validation failed"
-            data: null
+      $ref: schemas/common.yaml#/components/responses/ValidationError
     InternalServerError:
-      description: Internal server error
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-          example:
-            success: false
-            message: "An unexpected error occurred"
-            data: null
+      $ref: schemas/common.yaml#/components/responses/InternalServerError
+    ChatError400:
+      $ref: schemas/common.yaml#/components/responses/ChatError400
+    ChatError401:
+      $ref: schemas/common.yaml#/components/responses/ChatError401
+    ChatError403:
+      $ref: schemas/common.yaml#/components/responses/ChatError403
+    ChatError404:
+      $ref: schemas/common.yaml#/components/responses/ChatError404
+    ChatError409:
+      $ref: schemas/common.yaml#/components/responses/ChatError409
+    ChatError410:
+      $ref: schemas/common.yaml#/components/responses/ChatError410
+    ChatError413:
+      $ref: schemas/common.yaml#/components/responses/ChatError413
+    ChatError422:
+      $ref: schemas/common.yaml#/components/responses/ChatError422
+    ChatError429:
+      $ref: schemas/common.yaml#/components/responses/ChatError429
+    ChatError500:
+      $ref: schemas/common.yaml#/components/responses/ChatError500
+    ChatError503:
+      $ref: schemas/common.yaml#/components/responses/ChatError503
+    ChatError504:
+      $ref: schemas/common.yaml#/components/responses/ChatError504
+  examples:
+    RevisionConflict:
+      $ref: schemas/common.yaml#/components/examples/RevisionConflict
+    Rollback:
+      $ref: assessment-release-api.yaml#/components/examples/Rollback
+    IncompleteDraft:
+      $ref: assessment-api.yaml#/components/examples/IncompleteDraft

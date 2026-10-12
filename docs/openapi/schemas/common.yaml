@@ -1,0 +1,576 @@
+components:
+  schemas:
+    ApiResponse:
+      type: object
+      required:
+        - status
+        - success
+        - data
+        - error
+        - meta
+      properties:
+        status:
+          type: integer
+          description: HTTP status; inspect success even for HTTP 200.
+        success:
+          type: boolean
+        message:
+          type: string
+          nullable: true
+        data:
+          nullable: true
+          description: Endpoint-specific object, array, scalar or null.
+        error:
+          anyOf:
+            - $ref: '#/components/schemas/ErrorDetail'
+            - type: object
+              nullable: true
+              enum:
+                - null
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    ResponseMeta:
+      type: object
+      required:
+        - request_id
+        - trace_id
+        - timestamp
+      properties:
+        request_id:
+          type: string
+        trace_id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    ErrorDetail:
+      type: object
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+        details:
+          type: object
+          additionalProperties: true
+          nullable: true
+    ErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            success:
+              type: boolean
+              enum:
+                - false
+            error:
+              $ref: '#/components/schemas/ErrorDetail'
+    ChatResponseMeta:
+      type: object
+      properties:
+        request_id:
+          type: string
+          minLength: 1
+        trace_id:
+          type: string
+          minLength: 1
+        timestamp:
+          type: string
+          format: date-time
+          pattern: Z$
+        replayed:
+          type: boolean
+      required:
+        - request_id
+        - trace_id
+        - timestamp
+      additionalProperties: true
+    RevisionConflictDetails:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - revision_conflict
+        expected_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        actual_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        conversation:
+          anyOf:
+            - $ref: chat.yaml#/components/schemas/ConversationView
+            - type: object
+              nullable: true
+              enum:
+                - null
+        activity:
+          anyOf:
+            - $ref: activity.yaml#/components/schemas/ActivityView
+            - type: object
+              nullable: true
+              enum:
+                - null
+      required:
+        - kind
+        - expected_revision
+        - actual_revision
+        - conversation
+        - activity
+      additionalProperties: true
+      description: Snapshot chỉ trả khi caller có quyền đọc; activity guard có thể gây conflict dù conversation
+        guard đúng.
+    StaleResultDetails:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - stale_result
+        result_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        expected_result_revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+          nullable: true
+        current_result:
+          anyOf:
+            - $ref: activity.yaml#/components/schemas/ActivityResultRef
+            - type: object
+              nullable: true
+              enum:
+                - null
+      required:
+        - kind
+        - result_id
+        - expected_result_revision
+        - current_result
+      additionalProperties: true
+    SnapshotConflictDetails:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - snapshot_conflict
+        resource_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        expected_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        actual_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        current_hash:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+          nullable: true
+      required:
+        - kind
+        - resource_id
+        - expected_revision
+        - actual_revision
+        - current_hash
+      additionalProperties: true
+    ValidationIssue:
+      type: object
+      properties:
+        path:
+          type: string
+        code:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        message:
+          type: string
+          minLength: 1
+        rule_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          nullable: true
+      required:
+        - path
+        - code
+        - message
+        - rule_id
+      additionalProperties: true
+    ValidationDetails:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - validation
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+          minItems: 1
+      required:
+        - kind
+        - issues
+      additionalProperties: true
+    DomainError:
+      type: object
+      properties:
+        code:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        message:
+          type: string
+          minLength: 1
+        retryable:
+          type: boolean
+        details:
+          anyOf:
+            - $ref: '#/components/schemas/RevisionConflictDetails'
+            - $ref: '#/components/schemas/StaleResultDetails'
+            - $ref: '#/components/schemas/SnapshotConflictDetails'
+            - $ref: '#/components/schemas/ValidationDetails'
+            - type: object
+              properties:
+                kind:
+                  type: string
+                  minLength: 1
+                  not:
+                    type: string
+                    enum:
+                      - revision_conflict
+                      - stale_result
+                      - snapshot_conflict
+                      - validation
+              required:
+                - kind
+              additionalProperties: true
+            - type: object
+              nullable: true
+              enum:
+                - null
+      required:
+        - code
+        - message
+        - retryable
+        - details
+      additionalProperties: true
+      description: |-
+        Stable domain codes; unknown code/details kind có generic fallback.
+        400 INVALID_REQUEST: malformed JSON/duplicate keys/non-finite number.
+        401 AUTH_REQUIRED; 403 FORBIDDEN; 404 RESOURCE_NOT_FOUND gồm inaccessible resource.
+        409 REVISION_CONFLICT, IDEMPOTENCY_KEY_COLLISION, STALE_CLARIFICATION, STALE_RESULT_REVISION, STALE_REPORT, ACTIVE_RELEASE_CONFLICT.
+        410 CONVERSATION_ENDED, CONVERSATION_EXPIRED.
+        413 PAYLOAD_TOO_LARGE.
+        422 INVALID_INPUT, INVALID_ACTIVITY_TRANSITION, INVALID_QUESTION, INVALID_OPTION, RESULT_NOT_READY,
+            INCOMPATIBLE_SCHEMA, INCOMPATIBLE_RELEASE, ASSESSMENT_NOT_CONFIGURED, PUBLISH_GATE_FAILED, ENGINE_FAILURE.
+        429 RATE_LIMITED; 500 INTERNAL_ERROR; 503 SERVICE_UNAVAILABLE; 504 REQUEST_TIMEOUT.
+        Conflict/stale không auto-retry: sync state và tạo action mới. Transient retry giữ key/payload và budget.
+        HTTP mapping này áp dụng Chat/Studio mới theo proposal; API scaffold cũ giữ quy ước hiện hữu.
+    SuccessEnvelope:
+      type: object
+      properties:
+        status:
+          type: integer
+          minimum: 200
+          maximum: 299
+        success:
+          type: boolean
+          enum:
+            - true
+        data: {}
+        error:
+          type: object
+          nullable: true
+          enum:
+            - null
+        meta:
+          $ref: '#/components/schemas/ChatResponseMeta'
+        message:
+          type: string
+          nullable: true
+      required:
+        - status
+        - success
+        - data
+        - error
+        - meta
+      additionalProperties: true
+    ErrorEnvelope:
+      type: object
+      properties:
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        success:
+          type: boolean
+          enum:
+            - false
+        data:
+          type: object
+          nullable: true
+          enum:
+            - null
+        error:
+          $ref: '#/components/schemas/DomainError'
+        meta:
+          $ref: '#/components/schemas/ChatResponseMeta'
+        message:
+          type: string
+          nullable: true
+      required:
+        - status
+        - success
+        - data
+        - error
+        - meta
+      additionalProperties: true
+  responses:
+    BadRequestError:
+      description: Bad request - Invalid input data or parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 400
+            success: false
+            message: Invalid input
+            data: null
+            error:
+              code: VAL_INVALID_REQUEST
+              message: Invalid input
+              details: null
+              retryable: false
+            meta:
+              request_id: req-example
+              trace_id: trace-example
+              timestamp: '2026-10-12T03:00:00Z'
+    ValidationError:
+      description: Validation error - Invalid input data format
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 422
+            success: false
+            message: Input data validation failed
+            data: null
+            error:
+              code: VAL_UNPROCESSABLE
+              message: Input data validation failed
+              details: null
+              retryable: false
+            meta:
+              request_id: req-example
+              trace_id: trace-example
+              timestamp: '2026-10-12T03:00:00Z'
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 500
+            success: false
+            message: An unexpected error occurred
+            data: null
+            error:
+              code: SYS_INTERNAL_ERROR
+              message: An unexpected error occurred
+              details: null
+              retryable: true
+            meta:
+              request_id: req-example
+              trace_id: trace-example
+              timestamp: '2026-10-12T03:00:00Z'
+    ChatError400:
+      description: Malformed JSON/request
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ChatError401:
+      description: Anonymous/admin credential missing, invalid or expired
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ChatError403:
+      description: Insufficient permission
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ChatError404:
+      description: Not found or inaccessible resource
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ChatError409:
+      description: Revision/key/proposal/result/report conflict; synchronize before new action
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          examples:
+            conflict:
+              $ref: '#/components/examples/RevisionConflict'
+    ChatError410:
+      description: Conversation ended/expired
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ChatError413:
+      description: Payload limit exceeded
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ChatError422:
+      description: Semantic input/action/release/config/engine failure
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ChatError429:
+      description: Rate limited
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+        Retry-After:
+          schema:
+            type: string
+          description: Backoff per runtime policy.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ChatError500:
+      description: System failure; retry same key/payload if retryable
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ChatError503:
+      description: Service unavailable
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ChatError504:
+      description: Timeout; outcome may have committed
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum:
+              - no-store
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  examples:
+    RevisionConflict:
+      summary: Đồng bộ state trước action mới.
+      value:
+        status: 409
+        success: false
+        data: null
+        error:
+          code: REVISION_CONFLICT
+          message: Conversation đã thay đổi.
+          retryable: false
+          details:
+            kind: revision_conflict
+            expected_revision: 3
+            actual_revision: 4
+            conversation: null
+            activity: null
+        meta:
+          request_id: req_example
+          trace_id: trace_example
+          timestamp: '2026-10-12T03:00:00Z'

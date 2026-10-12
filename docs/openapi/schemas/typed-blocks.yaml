@@ -1,0 +1,243 @@
+components:
+  schemas:
+    HouseIdentity:
+      type: object
+      properties:
+        house_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        name:
+          type: string
+          minLength: 1
+        theme_ref:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        mascot_ref:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      required:
+        - house_id
+        - name
+        - theme_ref
+        - mascot_ref
+      additionalProperties: true
+    PersonalityCardData:
+      type: object
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          format: normalized-display-name
+          description: Tên đã chuẩn hóa NFC/khoảng trắng, không digit/emoji; giới hạn còn chờ policy.
+        house:
+          $ref: '#/components/schemas/HouseIdentity'
+        strengths:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          minItems: 1
+        tendencies:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          minItems: 1
+        career_groups:
+          type: array
+          items:
+            type: string
+            minLength: 1
+          minItems: 1
+        quote:
+          type: string
+          minLength: 1
+        is_demo:
+          type: boolean
+      required:
+        - display_name
+        - house
+        - strengths
+        - tendencies
+        - career_groups
+        - quote
+        - is_demo
+      additionalProperties: true
+      description: Metadata từ pinned assessment release. Không tự thêm phần trăm/matching trường/học phí. Các House/taxonomy/scoring
+        chính thức còn chờ DEC-04/chuyên môn.
+    TextBlock:
+      type: object
+      properties:
+        block_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        type:
+          type: string
+          enum:
+            - text
+        schema_version:
+          type: integer
+          enum:
+            - 1
+        content:
+          type: string
+          minLength: 1
+      required:
+        - block_id
+        - type
+        - schema_version
+        - content
+      additionalProperties: true
+    AssessmentQuestionBlock:
+      type: object
+      properties:
+        block_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        type:
+          type: string
+          enum:
+            - assessment_question
+        schema_version:
+          type: integer
+          enum:
+            - 1
+        activity_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        question_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        title:
+          type: string
+          minLength: 1
+        options:
+          type: array
+          items:
+            $ref: activity.yaml#/components/schemas/AssessmentOption
+          minItems: 2
+        progress:
+          $ref: activity.yaml#/components/schemas/AssessmentProgress
+      required:
+        - block_id
+        - type
+        - schema_version
+        - activity_id
+        - question_id
+        - title
+        - options
+        - progress
+      additionalProperties: true
+    AssessmentClarificationBlock:
+      type: object
+      properties:
+        block_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        type:
+          type: string
+          enum:
+            - assessment_clarification
+        schema_version:
+          type: integer
+          enum:
+            - 1
+        activity_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        proposal_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        question_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        activity_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        title:
+          type: string
+          minLength: 1
+        candidates:
+          type: array
+          items:
+            $ref: activity.yaml#/components/schemas/ClarificationCandidate
+          minItems: 1
+        progress:
+          $ref: activity.yaml#/components/schemas/AssessmentProgress
+      required:
+        - block_id
+        - type
+        - schema_version
+        - activity_id
+        - proposal_id
+        - question_id
+        - activity_revision
+        - title
+        - candidates
+        - progress
+      additionalProperties: true
+    PersonalityCardBlock:
+      type: object
+      properties:
+        block_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        type:
+          type: string
+          enum:
+            - personality_card
+        schema_version:
+          type: integer
+          enum:
+            - 1
+        activity_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        result_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        result_revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        data:
+          $ref: '#/components/schemas/PersonalityCardData'
+      required:
+        - block_id
+        - type
+        - schema_version
+        - activity_id
+        - result_id
+        - result_revision
+        - data
+      additionalProperties: true
+    TypedBlock:
+      oneOf:
+        - $ref: '#/components/schemas/TextBlock'
+        - $ref: '#/components/schemas/AssessmentQuestionBlock'
+        - $ref: '#/components/schemas/AssessmentClarificationBlock'
+        - $ref: '#/components/schemas/PersonalityCardBlock'
+      discriminator:
+        propertyName: type
+        mapping:
+          text: '#/components/schemas/TextBlock'
+          assessment_question: '#/components/schemas/AssessmentQuestionBlock'
+          assessment_clarification: '#/components/schemas/AssessmentClarificationBlock'
+          personality_card: '#/components/schemas/PersonalityCardBlock'
+      description: Backend validates every block. IDs/version ổn định qua replay/history; text không thực thi HTML.
+        Unknown block/version → incompatibility có kiểm soát trước submit tiếp.
