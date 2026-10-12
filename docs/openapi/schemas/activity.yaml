@@ -1,0 +1,413 @@
+components:
+  schemas:
+    AssessmentProgress:
+      type: object
+      properties:
+        completed:
+          type: integer
+          minimum: 0
+          maximum: 6
+        total:
+          type: integer
+          enum:
+            - 6
+      required:
+        - completed
+        - total
+      additionalProperties: true
+    AssessmentOption:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        label:
+          type: string
+          minLength: 1
+      required:
+        - id
+        - label
+      additionalProperties: true
+    AssessmentQuestion:
+      type: object
+      properties:
+        question_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        title:
+          type: string
+          minLength: 1
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssessmentOption'
+          minItems: 2
+      required:
+        - question_id
+        - title
+        - options
+      additionalProperties: true
+    ClarificationCandidate:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        option_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        label:
+          type: string
+          minLength: 1
+      required:
+        - id
+        - option_id
+        - label
+      additionalProperties: true
+    ActivityClarification:
+      type: object
+      properties:
+        proposal_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        question_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        activity_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        title:
+          type: string
+          minLength: 1
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClarificationCandidate'
+          minItems: 1
+      required:
+        - proposal_id
+        - question_id
+        - activity_revision
+        - title
+        - candidates
+      additionalProperties: true
+    ActivityAnswer:
+      type: object
+      properties:
+        answer_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        question_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        option_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        ordinal:
+          type: integer
+          minimum: 1
+          maximum: 6
+        accepted_activity_revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        source:
+          type: string
+          enum:
+            - option
+            - text_mapping
+            - text_confirmation
+            - edit_option
+        question:
+          $ref: '#/components/schemas/AssessmentQuestion'
+      required:
+        - answer_id
+        - question_id
+        - option_id
+        - ordinal
+        - accepted_activity_revision
+        - source
+        - question
+      additionalProperties: true
+    ActivityResultRef:
+      type: object
+      properties:
+        result_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        result_revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        validity:
+          type: string
+          enum:
+            - valid
+      required:
+        - result_id
+        - result_revision
+        - validity
+      additionalProperties: true
+    ActivityView:
+      description: |-
+        MVP activity type: personality_assessment. Các loại khác cần capability/schema được hỗ trợ trước activation.
+        Activity là lần thực hiện Experience, pin experience_id/experience_release_id. State/questions/progress
+        trong schema này thuộc profile personality_assessment; kiểu mới cần state schema/engine riêng.
+        Activity revision độc lập với conversation revision. General chat có thể tăng conversation revision mà không đổi activity.
+        collecting_name: name/current_question/clarification/result null, progress 0. in_progress: name/question hợp lệ, progress 0..5, result null.
+        completed: đúng 6 active answers, valid result, current_question/clarification null; vẫn cho edit theo DEC-01.
+        ended/expired: không answer/confirm/edit; không resume. Conversation có thể vẫn active nếu activity kết thúc riêng.
+        Progress khớp answers, ordinal liên tục, option thuộc question; proposal gắn question + activity revision.
+        MVP có tối đa một activity đang thu đáp án trong conversation. Completed activity vẫn có thể là ngữ cảnh để thảo luận kết quả.
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: string
+              minLength: 1
+              pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+            conversation_id:
+              type: string
+              minLength: 1
+              pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+            type:
+              type: string
+              enum:
+                - personality_assessment
+            schema_version:
+              type: integer
+              enum:
+                - 1
+            experience_id:
+              type: string
+              minLength: 1
+              pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+            experience_release_id:
+              type: string
+              minLength: 1
+              pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+            definition_hash:
+              type: string
+              pattern: ^sha256:[a-f0-9]{64}$
+            status:
+              type: string
+              enum:
+                - collecting_name
+                - in_progress
+                - completed
+                - ended
+                - expired
+            revision:
+              type: integer
+              minimum: 0
+              maximum: 9007199254740991
+            display_name:
+              type: string
+              minLength: 1
+              format: normalized-display-name
+              description: Tên đã chuẩn hóa NFC/khoảng trắng, không digit/emoji; giới hạn còn chờ policy.
+              nullable: true
+            progress:
+              $ref: '#/components/schemas/AssessmentProgress'
+            current_question:
+              anyOf:
+                - $ref: '#/components/schemas/AssessmentQuestion'
+                - type: object
+                  nullable: true
+                  enum:
+                    - null
+            clarification:
+              anyOf:
+                - $ref: '#/components/schemas/ActivityClarification'
+                - type: object
+                  nullable: true
+                  enum:
+                    - null
+            answers:
+              type: array
+              items:
+                $ref: '#/components/schemas/ActivityAnswer'
+              maxItems: 6
+            result:
+              anyOf:
+                - $ref: '#/components/schemas/ActivityResultRef'
+                - type: object
+                  nullable: true
+                  enum:
+                    - null
+            is_demo:
+              type: boolean
+            created_at:
+              type: string
+              format: date-time
+              pattern: Z$
+            expires_at:
+              type: string
+              format: date-time
+              pattern: Z$
+              nullable: true
+          required:
+            - id
+            - conversation_id
+            - type
+            - schema_version
+            - experience_id
+            - experience_release_id
+            - definition_hash
+            - status
+            - revision
+            - display_name
+            - progress
+            - current_question
+            - clarification
+            - answers
+            - result
+            - is_demo
+            - created_at
+            - expires_at
+          additionalProperties: true
+        - oneOf:
+            - type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - collecting_name
+                display_name:
+                  type: object
+                  nullable: true
+                  enum:
+                    - null
+                current_question:
+                  type: object
+                  nullable: true
+                  enum:
+                    - null
+                clarification:
+                  type: object
+                  nullable: true
+                  enum:
+                    - null
+                result:
+                  type: object
+                  nullable: true
+                  enum:
+                    - null
+                answers:
+                  type: array
+                  maxItems: 0
+                progress:
+                  type: object
+                  properties:
+                    completed:
+                      type: integer
+                      enum:
+                        - 0
+                  required:
+                    - completed
+                  additionalProperties: true
+              required:
+                - status
+              additionalProperties: true
+            - type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - in_progress
+                display_name:
+                  type: string
+                  minLength: 1
+                  format: normalized-display-name
+                  description: Tên đã chuẩn hóa NFC/khoảng trắng, không digit/emoji; giới hạn còn chờ policy.
+                current_question:
+                  $ref: '#/components/schemas/AssessmentQuestion'
+                result:
+                  type: object
+                  nullable: true
+                  enum:
+                    - null
+                progress:
+                  type: object
+                  properties:
+                    completed:
+                      type: integer
+                      minimum: 0
+                      maximum: 5
+                  required:
+                    - completed
+                  additionalProperties: true
+              required:
+                - status
+              additionalProperties: true
+            - type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - completed
+                display_name:
+                  type: string
+                  minLength: 1
+                  format: normalized-display-name
+                  description: Tên đã chuẩn hóa NFC/khoảng trắng, không digit/emoji; giới hạn còn chờ policy.
+                current_question:
+                  type: object
+                  nullable: true
+                  enum:
+                    - null
+                clarification:
+                  type: object
+                  nullable: true
+                  enum:
+                    - null
+                result:
+                  $ref: '#/components/schemas/ActivityResultRef'
+                answers:
+                  type: array
+                  minItems: 6
+                  maxItems: 6
+                progress:
+                  type: object
+                  properties:
+                    completed:
+                      type: integer
+                      enum:
+                        - 6
+                  required:
+                    - completed
+                  additionalProperties: true
+              required:
+                - status
+              additionalProperties: true
+            - type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - ended
+                    - expired
+                current_question:
+                  type: object
+                  nullable: true
+                  enum:
+                    - null
+                clarification:
+                  type: object
+                  nullable: true
+                  enum:
+                    - null
+              required:
+                - status
+              additionalProperties: true

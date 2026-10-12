@@ -208,6 +208,14 @@ __marimo__/
 codex-setup/
 .codex/
 codex/
+# Local Claude and Spec Kit tooling
+/.claude/
+/.specify/
+# Local feature specifications and plans
+/specs/
+/plans/
+spec.md
+plan.md
 # Firebase service account keys
 config/keys/*.json
 config/*.json
