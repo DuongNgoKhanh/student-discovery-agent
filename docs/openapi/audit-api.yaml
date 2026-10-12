@@ -116,7 +116,7 @@ paths:
             type: string
             minLength: 1
             pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-      x-required-permission: assessment.audit.read
+      x-required-permission: experience.audit.read
   /admin/audit-logs/{event_id}:
     get:
       operationId: readAuditLog
@@ -171,14 +171,14 @@ paths:
             type: string
             minLength: 1
             pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-      x-required-permission: assessment.audit.read
-  /admin/assessments/{id}/audit-logs:
+      x-required-permission: experience.audit.read
+  /admin/experiences/{id}/audit-logs:
     get:
-      operationId: listAssessmentAuditLogs
+      operationId: listExperienceAuditLogs
       tags:
         - Studio Audit
-      summary: Audit theo assessment
-      description: Audit theo assessment
+      summary: Audit theo experience
+      description: Audit theo experience
       security:
         - BearerAuth: []
       responses:
@@ -275,7 +275,7 @@ paths:
             type: string
             format: date-time
             pattern: Z$
-      x-required-permission: assessment.audit.read
+      x-required-permission: experience.audit.read
 components:
   schemas:
     AuditEvent:
@@ -299,7 +299,7 @@ components:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        assessment_id:
+        experience_id:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
@@ -349,7 +349,7 @@ components:
         - action
         - resource_type
         - resource_id
-        - assessment_id
+        - experience_id
         - environment
         - before_revision
         - after_revision

@@ -60,7 +60,7 @@ components:
       description: |-
         Conversation là cửa vào chat; pin Agent Release lúc tạo. Runtime sở hữu conversation/messages/activities/results; Product/Studio sở hữu config/releases.
         GET phục hồi ngữ cảnh và active activity, không tự tạo chat/activity mới. History phân trang qua messages.
-        Assessment completion không đóng conversation: học sinh tiếp tục chat về kết quả trong cùng khung chat.
+        Activity completion không đóng conversation: học sinh tiếp tục chat về kết quả trong cùng khung chat.
         End conversation đóng các activity đang chạy; expiry kiểm theo đồng hồ server. Read-after-close/retention còn chờ DEC-03.
     MessageTurnInput:
       type: object

@@ -162,6 +162,8 @@ components:
     ActivityView:
       description: |-
         MVP activity type: personality_assessment. Các loại khác cần capability/schema được hỗ trợ trước activation.
+        Activity là lần thực hiện Experience, pin experience_id/experience_release_id. State/questions/progress
+        trong schema này thuộc profile personality_assessment; kiểu mới cần state schema/engine riêng.
         Activity revision độc lập với conversation revision. General chat có thể tăng conversation revision mà không đổi activity.
         collecting_name: name/current_question/clarification/result null, progress 0. in_progress: name/question hợp lệ, progress 0..5, result null.
         completed: đúng 6 active answers, valid result, current_question/clarification null; vẫn cho edit theo DEC-01.
@@ -187,11 +189,11 @@ components:
               type: integer
               enum:
                 - 1
-            assessment_id:
+            experience_id:
               type: string
               minLength: 1
               pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-            assessment_release_id:
+            experience_release_id:
               type: string
               minLength: 1
               pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
@@ -260,8 +262,8 @@ components:
             - conversation_id
             - type
             - schema_version
-            - assessment_id
-            - assessment_release_id
+            - experience_id
+            - experience_release_id
             - definition_hash
             - status
             - revision

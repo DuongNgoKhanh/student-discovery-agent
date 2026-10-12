@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Student Discovery - Assessment Preview
+  title: Student Discovery - Experience Validation and Evaluation
   version: 1.0.0
   description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md
     để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
@@ -10,15 +10,15 @@ servers:
   - url: https://api.example.com/api/v1
     description: Production server
 tags:
-  - name: Studio Assessments
+  - name: Studio Experiences
     description: Metadata/draft, validation/evaluation and isolated preview.
 paths:
-  /admin/assessments/{id}/previews:
+  /admin/experiences/{id}/validations:
     post:
-      operationId: createAssessmentPreview
+      operationId: createExperienceValidation
       tags:
-        - Studio Assessments
-      summary: Tạo previews trên exact snapshot
+        - Studio Experiences
+      summary: Tạo validations trên exact snapshot
       description: Synchronous report/preview resource in MVP. Capture exact draft revision/hash/schema/engine;
         report stale if content changes. Unsupported DEC-04 profiles return unsupported, never pass. Preview is
         isolated and excludes production analytics/results/active pointer. Async report GET endpoints can be added
@@ -37,7 +37,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PreviewEnvelope'
+                $ref: '#/components/schemas/ValidationEnvelope'
         '400':
           $ref: schemas/common.yaml#/components/responses/ChatError400
         '401':
@@ -67,7 +67,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: assessment-validation-api.yaml#/components/schemas/SnapshotCommandInput
+              $ref: '#/components/schemas/SnapshotCommandInput'
       parameters:
         - name: id
           in: path
@@ -76,20 +76,21 @@ paths:
             type: string
             minLength: 1
             pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-      x-required-permission: assessment.config.preview
-  /admin/assessment-previews/{preview_id}/turns:
+      x-required-permission: experience.config.validate
+  /admin/experiences/{id}/evaluations:
     post:
-      operationId: submitAssessmentPreviewTurn
+      operationId: createExperienceEvaluation
       tags:
-        - Studio Assessments
-      summary: Gửi unified turn trong preview cô lập
-      description: Same message/interaction/block protocol as conversation turns; expected_revision is preview conversation
-        revision, activity_id belongs to preview only. Fixed draft snapshot; no writes to student conversations,
-        production results/analytics or active release.
+        - Studio Experiences
+      summary: Tạo evaluations trên exact snapshot
+      description: Synchronous report/preview resource in MVP. Capture exact draft revision/hash/schema/engine;
+        report stale if content changes. Unsupported DEC-04 profiles return unsupported, never pass. Preview is
+        isolated and excludes production analytics/results/active pointer. Async report GET endpoints can be added
+        after job protocol is chosen.
       security:
         - BearerAuth: []
       responses:
-        '200':
+        '201':
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -100,7 +101,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: schemas/chat.yaml#/components/schemas/ConversationTurnEnvelope
+                $ref: '#/components/schemas/EvaluationEnvelope'
         '400':
           $ref: schemas/common.yaml#/components/responses/ChatError400
         '401':
@@ -130,26 +131,47 @@ paths:
         content:
           application/json:
             schema:
-              $ref: schemas/chat.yaml#/components/schemas/ConversationTurnInput
+              $ref: '#/components/schemas/SnapshotCommandInput'
       parameters:
-        - name: preview_id
+        - name: id
           in: path
           required: true
           schema:
             type: string
             minLength: 1
             pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-      x-required-permission: assessment.config.preview
+      x-required-permission: experience.config.evaluate
 components:
   schemas:
-    PreviewView:
+    SnapshotCommandInput:
       type: object
       properties:
-        preview_id:
+        expected_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        content_hash:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+        idempotency_key:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        assessment_id:
+      required:
+        - expected_revision
+        - content_hash
+        - idempotency_key
+      additionalProperties: false
+      description: expected_revision thuộc draft. Capture exact immutable snapshot/hash; reject stale revision/hash
+        before work. Reports/preview refer to this captured snapshot.
+    ValidationReport:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        experience_id:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
@@ -160,24 +182,120 @@ components:
         content_hash:
           type: string
           pattern: ^sha256:[a-f0-9]{64}$
-        conversation:
-          $ref: schemas/chat.yaml#/components/schemas/ConversationView
-        blocks:
+        definition_schema_version:
+          type: string
+          minLength: 1
+        engine_version:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum:
+            - passed
+            - failed
+            - unsupported
+        mandatory_passed:
+          type: boolean
+        issues:
           type: array
           items:
-            $ref: schemas/typed-blocks.yaml#/components/schemas/TypedBlock
-          minItems: 1
+            $ref: schemas/common.yaml#/components/schemas/ValidationIssue
+        created_at:
+          type: string
+          format: date-time
+          pattern: Z$
       required:
-        - preview_id
-        - assessment_id
+        - id
+        - experience_id
         - draft_revision
         - content_hash
-        - conversation
-        - blocks
+        - definition_schema_version
+        - engine_version
+        - status
+        - mandatory_passed
+        - issues
+        - created_at
       additionalProperties: true
-      description: Isolated preview namespace/pinned draft snapshot. Same turn/validation protocol; never production
-        analytics/results/active pointer. Later draft edits do not mutate this preview.
-    PreviewEnvelope:
+    EvaluationCaseResult:
+      type: object
+      properties:
+        case_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        mandatory:
+          type: boolean
+        passed:
+          type: boolean
+        expected:
+          type: object
+        actual:
+          type: object
+        issues:
+          type: array
+          items:
+            $ref: schemas/common.yaml#/components/schemas/ValidationIssue
+      required:
+        - case_id
+        - mandatory
+        - passed
+        - expected
+        - actual
+        - issues
+      additionalProperties: true
+    EvaluationReport:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        experience_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        draft_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        content_hash:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+        definition_schema_version:
+          type: string
+          minLength: 1
+        engine_version:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum:
+            - passed
+            - failed
+            - unsupported
+        mandatory_passed:
+          type: boolean
+        cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvaluationCaseResult'
+        created_at:
+          type: string
+          format: date-time
+          pattern: Z$
+      required:
+        - id
+        - experience_id
+        - draft_revision
+        - content_hash
+        - definition_schema_version
+        - engine_version
+        - status
+        - mandatory_passed
+        - cases
+        - created_at
+      additionalProperties: true
+    ValidationEnvelope:
       oneOf:
         - allOf:
             - $ref: schemas/common.yaml#/components/schemas/SuccessEnvelope
@@ -186,7 +304,18 @@ components:
                 - data
               properties:
                 data:
-                  $ref: '#/components/schemas/PreviewView'
+                  $ref: '#/components/schemas/ValidationReport'
+        - $ref: schemas/common.yaml#/components/schemas/ErrorEnvelope
+    EvaluationEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/EvaluationReport'
         - $ref: schemas/common.yaml#/components/schemas/ErrorEnvelope
   securitySchemes:
     BearerAuth:

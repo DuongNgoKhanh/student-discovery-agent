@@ -19,15 +19,33 @@ paths:
       tags:
         - Conversations
       summary: Tạo conversation và greeting
-      description: Pin active Agent Release, verified anonymous owner and initial revision. Do not pin an assessment
-        release until a validated activity starts. No active/supported Agent Release → typed error, no fake conversation.
-        Credential bootstrap is separate from this resource contract.
+      description: |-
+        Học sinh không cần đăng nhập. Nếu request không có cookie sda_owner, server tạo anonymous owner
+        và conversation, trả cookie qua Set-Cookie trong response 201. Không cần gọi API auth/bootstrap riêng.
+        Nếu có cookie hợp lệ, dùng lại owner đó để tạo conversation. Cookie có mặt nhưng invalid/expired
+        trả 401; không tự thay owner hoặc cấp quyền vào conversation cũ.
+        Pin active Agent Release và initial revision; chỉ pin Experience Release khi validated activity bắt đầu.
+        No active/supported Agent Release → typed error, no fake conversation. Cookie/owner không nằm trong JSON body.
+        Idempotency scoped theo owner/operation. Retry cùng owner giữ nguyên key/payload; không dùng key
+        để tra/replay conversation của owner khác. Nếu mất cả cookie lẫn response khởi tạo, không đảm bảo
+        deduplicate xuyên owner; lần khởi tạo owner mới không khôi phục conversation cũ.
       security:
+        - {}
         - AnonymousOwner: []
       responses:
         '201':
           description: Validated envelope; status matches HTTP response.
           headers:
+            Set-Cookie:
+              description: |-
+                Có khi server cấp anonymous owner mới. Cookie chứa credential opaque do server phát hành;
+                HttpOnly, host-only, Path=/api/v1, SameSite=Lax và Secure trên production HTTPS.
+                TTL/token format theo policy DEC-07; không đưa credential vào JSON, URL hoặc logs.
+                Browser lưu cookie và gửi lại cho các API conversation/activity/result; frontend khác origin nhưng cùng site
+                cần credentials include và server cho phép credentials với origin đã cấu hình.
+              schema:
+                type: string
+              example: sda_owner=opaque-example; Path=/api/v1; HttpOnly; Secure; SameSite=Lax
             Cache-Control:
               schema:
                 type: string
@@ -379,9 +397,11 @@ components:
         - idempotency_key
       additionalProperties: false
       description: |-
-        Product xác minh anonymous capability trước mutation, chọn active Agent Release và trả greeting; không bắt đầu assessment giả.
-        Browser không gửi owner/release. Bootstrap credential/CSRF transport còn chờ DEC-07; login học sinh không bắt buộc.
-        Create key scoped theo anonymous owner/operation; response mất retry giữ key/payload.
+        Product tạo anonymous owner khi thiếu cookie, hoặc xác minh credential có sẵn trước mutation;
+        chọn active Agent Release và trả greeting. Browser không gửi owner/release, không cần đăng nhập.
+        Cookie được cấp qua Set-Cookie của POST /conversations; CSRF/token format/TTL còn chờ DEC-07.
+        Create key scoped theo anonymous owner/operation; retry cùng owner giữ key/payload.
+        Mất cả cookie và response khởi tạo không cho phép replay xuyên owner bằng idempotency_key.
         Nếu không khai báo supported_blocks, dùng bộ block v1 của MVP; chỉ gửi block/schema client được hỗ trợ.
     EndConversationInput:
       type: object
@@ -652,8 +672,8 @@ components:
             conversation_id: conv_123
             type: personality_assessment
             schema_version: 1
-            assessment_id: asm_123
-            assessment_release_id: assessment_release_demo
+            experience_id: exp_123
+            experience_release_id: experience_release_demo
             definition_hash: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             status: in_progress
             revision: 4
@@ -758,8 +778,8 @@ components:
             conversation_id: conv_123
             type: personality_assessment
             schema_version: 1
-            assessment_id: asm_123
-            assessment_release_id: assessment_release_demo
+            experience_id: exp_123
+            experience_release_id: experience_release_demo
             definition_hash: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             status: completed
             revision: 7
@@ -897,7 +917,9 @@ components:
       type: apiKey
       in: cookie
       name: sda_owner
-      description: Provisional anonymous capability transport. Credential is scoped/TTL-bound and issued/verified
-        before mutation; session/conversation/activity IDs alone do not authorize access. Bootstrap, CSRF and token
-        format pending DEC-07. No student login required.
-      x-decision-status: proposed-transport
+      description: |-
+        Anonymous owner cookie, không phải đăng nhập học sinh. POST /conversations cấp cookie khi chưa có;
+        khi có cookie phải xác minh credential. Các API đọc/thao tác conversation/activity/result yêu cầu cookie hợp lệ.
+        Credential scoped/TTL-bound; resource IDs hoặc idempotency_key không cấp quyền truy cập.
+        CSRF, token format và TTL còn chờ DEC-07.
+      x-decision-status: accepted-anonymous-bootstrap

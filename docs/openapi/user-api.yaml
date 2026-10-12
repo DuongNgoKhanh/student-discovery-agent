@@ -13,7 +13,7 @@ info:
     Chat-first contract theo docs/prd/chat_first_assessment_api_proposal.md (Proposed, 12/10/2026).
     Conversation → Activities → Results; resource model rộng hơn MVP 6 câu/card trong SRS v0.3.
     MVP chỉ personality_assessment; các loại career_interest/skill/career_exploration là extension sau.
-    Conversation pin Agent Release; activity pin Assessment Release. Structured option interaction không bắt buộc gọi LLM.
+    Conversation pin Agent Release; activity pin Experience Release. Structured option interaction không bắt buộc gọi LLM.
     Natural text đi qua Agent; start_activity và answer mapping chỉ là validated commands, Engine giữ state/scoring correctness.
     Runtime sở hữu conversation/messages/activity/result; Studio/Product sở hữu definition/draft/release/audit; không ghi chéo bảng.
 
@@ -32,7 +32,8 @@ info:
     DEC-03: read-after-close/TTL/retention còn mở; end/expiry không đồng nghĩa xóa ngay và không resume.
     DEC-04 hoãn rules/scoring/coverage/tie/golden outcomes; JSON structure hợp lệ không đủ để publish.
     DEC-05 text auto-accept khi policy đã duyệt/membership/revision hợp lệ, mơ hồ hỏi lại.
-    DEC-06 LLM từ phase đầu; provider/model/budget còn mở. DEC-07 anonymous owner + Admin login/RBAC; bootstrap/CSRF/proof chưa chốt.
+    DEC-06 LLM từ phase đầu; provider/model/budget còn mở. DEC-07 học sinh chat anonymous; POST /conversations
+    tự cấp owner cookie khi thiếu, không cần login/bootstrap API riêng. Admin login/RBAC; CSRF/token format/TTL/proof còn mở.
     DEC-08 workload/rate/input limits/benchmark chốt sau; không có default số production tự đặt.
 
     Public output có thể thêm optional fields; requests/share allowlist strict. Unknown block/type/version có controlled incompatibility.
@@ -103,10 +104,12 @@ components:
       type: apiKey
       in: cookie
       name: sda_owner
-      description: Provisional anonymous capability transport. Credential is scoped/TTL-bound and issued/verified
-        before mutation; session/conversation/activity IDs alone do not authorize access. Bootstrap, CSRF and token
-        format pending DEC-07. No student login required.
-      x-decision-status: proposed-transport
+      description: |-
+        Anonymous owner cookie, không phải đăng nhập học sinh. POST /conversations cấp cookie khi chưa có;
+        khi có cookie phải xác minh credential. Các API đọc/thao tác conversation/activity/result yêu cầu cookie hợp lệ.
+        Credential scoped/TTL-bound; resource IDs hoặc idempotency_key không cấp quyền truy cập.
+        CSRF, token format và TTL còn chờ DEC-07.
+      x-decision-status: accepted-anonymous-bootstrap
   schemas:
     ApiResponse:
       $ref: schemas/common.yaml#/components/schemas/ApiResponse

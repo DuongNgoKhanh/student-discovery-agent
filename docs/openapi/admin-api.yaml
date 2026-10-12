@@ -13,7 +13,7 @@ info:
     Chat-first contract theo docs/prd/chat_first_assessment_api_proposal.md (Proposed, 12/10/2026).
     Conversation → Activities → Results; resource model rộng hơn MVP 6 câu/card trong SRS v0.3.
     MVP chỉ personality_assessment; các loại career_interest/skill/career_exploration là extension sau.
-    Conversation pin Agent Release; activity pin Assessment Release. Structured option interaction không bắt buộc gọi LLM.
+    Conversation pin Agent Release; activity pin Experience Release. Structured option interaction không bắt buộc gọi LLM.
     Natural text đi qua Agent; start_activity và answer mapping chỉ là validated commands, Engine giữ state/scoring correctness.
     Runtime sở hữu conversation/messages/activity/result; Studio/Product sở hữu definition/draft/release/audit; không ghi chéo bảng.
 
@@ -32,7 +32,8 @@ info:
     DEC-03: read-after-close/TTL/retention còn mở; end/expiry không đồng nghĩa xóa ngay và không resume.
     DEC-04 hoãn rules/scoring/coverage/tie/golden outcomes; JSON structure hợp lệ không đủ để publish.
     DEC-05 text auto-accept khi policy đã duyệt/membership/revision hợp lệ, mơ hồ hỏi lại.
-    DEC-06 LLM từ phase đầu; provider/model/budget còn mở. DEC-07 anonymous owner + Admin login/RBAC; bootstrap/CSRF/proof chưa chốt.
+    DEC-06 LLM từ phase đầu; provider/model/budget còn mở. DEC-07 học sinh chat anonymous; POST /conversations
+    tự cấp owner cookie khi thiếu, không cần login/bootstrap API riêng. Admin login/RBAC; CSRF/token format/TTL/proof còn mở.
     DEC-08 workload/rate/input limits/benchmark chốt sau; không có default số production tự đặt.
 
     Public output có thể thêm optional fields; requests/share allowlist strict. Unknown block/type/version có controlled incompatibility.
@@ -57,7 +58,7 @@ tags:
     description: Admin authentication and token management
   - name: Admin-Users
     description: Admin user management operations
-  - name: Studio Assessments
+  - name: Studio Experiences
     description: Metadata/draft, validation/evaluation and isolated preview.
   - name: Studio Releases
     description: Publish immutable snapshot, environment activation/rollback.
@@ -76,36 +77,36 @@ paths:
     $ref: admin-user-api.yaml#/paths/~1admin~1users~1{user_id}
   /admin/users/{user_id}/restore:
     $ref: admin-user-api.yaml#/paths/~1admin~1users~1{user_id}~1restore
-  /admin/assessments:
-    $ref: assessment-api.yaml#/paths/~1admin~1assessments
-  /admin/assessments/{id}:
-    $ref: assessment-api.yaml#/paths/~1admin~1assessments~1{id}
-  /admin/assessments/{id}/draft:
-    $ref: assessment-api.yaml#/paths/~1admin~1assessments~1{id}~1draft
-  /admin/assessments/{id}/validations:
-    $ref: assessment-validation-api.yaml#/paths/~1admin~1assessments~1{id}~1validations
-  /admin/assessments/{id}/evaluations:
-    $ref: assessment-validation-api.yaml#/paths/~1admin~1assessments~1{id}~1evaluations
-  /admin/assessments/{id}/previews:
-    $ref: assessment-preview-api.yaml#/paths/~1admin~1assessments~1{id}~1previews
-  /admin/assessment-previews/{preview_id}/turns:
-    $ref: assessment-preview-api.yaml#/paths/~1admin~1assessment-previews~1{preview_id}~1turns
-  /admin/assessments/{id}/releases:
-    $ref: assessment-release-api.yaml#/paths/~1admin~1assessments~1{id}~1releases
-  /admin/assessment-releases/{release_id}:
-    $ref: assessment-release-api.yaml#/paths/~1admin~1assessment-releases~1{release_id}
-  /admin/assessments/{id}/active-release:
-    $ref: assessment-release-api.yaml#/paths/~1admin~1assessments~1{id}~1active-release
-  /admin/assessment-releases/{release_id}:activate:
-    $ref: assessment-release-api.yaml#/paths/~1admin~1assessment-releases~1{release_id}:activate
-  /admin/assessments/{id}:rollback:
-    $ref: assessment-release-api.yaml#/paths/~1admin~1assessments~1{id}:rollback
+  /admin/experiences:
+    $ref: experience-api.yaml#/paths/~1admin~1experiences
+  /admin/experiences/{id}:
+    $ref: experience-api.yaml#/paths/~1admin~1experiences~1{id}
+  /admin/experiences/{id}/draft:
+    $ref: experience-api.yaml#/paths/~1admin~1experiences~1{id}~1draft
+  /admin/experiences/{id}/validations:
+    $ref: experience-validation-api.yaml#/paths/~1admin~1experiences~1{id}~1validations
+  /admin/experiences/{id}/evaluations:
+    $ref: experience-validation-api.yaml#/paths/~1admin~1experiences~1{id}~1evaluations
+  /admin/experiences/{id}/previews:
+    $ref: experience-preview-api.yaml#/paths/~1admin~1experiences~1{id}~1previews
+  /admin/experience-previews/{preview_id}/turns:
+    $ref: experience-preview-api.yaml#/paths/~1admin~1experience-previews~1{preview_id}~1turns
+  /admin/experiences/{id}/releases:
+    $ref: experience-release-api.yaml#/paths/~1admin~1experiences~1{id}~1releases
+  /admin/experience-releases/{release_id}:
+    $ref: experience-release-api.yaml#/paths/~1admin~1experience-releases~1{release_id}
+  /admin/experiences/{id}/active-release:
+    $ref: experience-release-api.yaml#/paths/~1admin~1experiences~1{id}~1active-release
+  /admin/experience-releases/{release_id}:activate:
+    $ref: experience-release-api.yaml#/paths/~1admin~1experience-releases~1{release_id}:activate
+  /admin/experiences/{id}:rollback:
+    $ref: experience-release-api.yaml#/paths/~1admin~1experiences~1{id}:rollback
   /admin/audit-logs:
     $ref: audit-api.yaml#/paths/~1admin~1audit-logs
   /admin/audit-logs/{event_id}:
     $ref: audit-api.yaml#/paths/~1admin~1audit-logs~1{event_id}
-  /admin/assessments/{id}/audit-logs:
-    $ref: audit-api.yaml#/paths/~1admin~1assessments~1{id}~1audit-logs
+  /admin/experiences/{id}/audit-logs:
+    $ref: audit-api.yaml#/paths/~1admin~1experiences~1{id}~1audit-logs
 components:
   securitySchemes:
     BearerAuth:
@@ -217,73 +218,73 @@ components:
     ConversationTurnEnvelope:
       $ref: schemas/chat.yaml#/components/schemas/ConversationTurnEnvelope
     AssessmentDefinitionOption:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentDefinitionOption
+      $ref: experience-api.yaml#/components/schemas/AssessmentDefinitionOption
     AssessmentDefinitionQuestion:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentDefinitionQuestion
+      $ref: experience-api.yaml#/components/schemas/AssessmentDefinitionQuestion
     AssessmentHouseMetadata:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentHouseMetadata
+      $ref: experience-api.yaml#/components/schemas/AssessmentHouseMetadata
     AssessmentRuleDocument:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentRuleDocument
+      $ref: experience-api.yaml#/components/schemas/AssessmentRuleDocument
     AssessmentGoldenCase:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentGoldenCase
-    AssessmentDefinitionDocument:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentDefinitionDocument
-    AssessmentMetadata:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentMetadata
-    AssessmentPage:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentPage
-    CreateAssessmentInput:
-      $ref: assessment-api.yaml#/components/schemas/CreateAssessmentInput
-    PatchAssessmentInput:
-      $ref: assessment-api.yaml#/components/schemas/PatchAssessmentInput
-    AssessmentDraft:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentDraft
+      $ref: experience-api.yaml#/components/schemas/AssessmentGoldenCase
+    ExperienceDefinitionDocument:
+      $ref: experience-api.yaml#/components/schemas/ExperienceDefinitionDocument
+    ExperienceMetadata:
+      $ref: experience-api.yaml#/components/schemas/ExperienceMetadata
+    ExperiencePage:
+      $ref: experience-api.yaml#/components/schemas/ExperiencePage
+    CreateExperienceInput:
+      $ref: experience-api.yaml#/components/schemas/CreateExperienceInput
+    PatchExperienceInput:
+      $ref: experience-api.yaml#/components/schemas/PatchExperienceInput
+    ExperienceDraft:
+      $ref: experience-api.yaml#/components/schemas/ExperienceDraft
     SaveDraftInput:
-      $ref: assessment-api.yaml#/components/schemas/SaveDraftInput
+      $ref: experience-api.yaml#/components/schemas/SaveDraftInput
     SnapshotCommandInput:
-      $ref: assessment-validation-api.yaml#/components/schemas/SnapshotCommandInput
+      $ref: experience-validation-api.yaml#/components/schemas/SnapshotCommandInput
     ValidationReport:
-      $ref: assessment-validation-api.yaml#/components/schemas/ValidationReport
+      $ref: experience-validation-api.yaml#/components/schemas/ValidationReport
     EvaluationCaseResult:
-      $ref: assessment-validation-api.yaml#/components/schemas/EvaluationCaseResult
+      $ref: experience-validation-api.yaml#/components/schemas/EvaluationCaseResult
     EvaluationReport:
-      $ref: assessment-validation-api.yaml#/components/schemas/EvaluationReport
+      $ref: experience-validation-api.yaml#/components/schemas/EvaluationReport
     PreviewView:
-      $ref: assessment-preview-api.yaml#/components/schemas/PreviewView
+      $ref: experience-preview-api.yaml#/components/schemas/PreviewView
     PublishReleaseInput:
-      $ref: assessment-release-api.yaml#/components/schemas/PublishReleaseInput
-    AssessmentRelease:
-      $ref: assessment-release-api.yaml#/components/schemas/AssessmentRelease
-    AssessmentReleasePage:
-      $ref: assessment-release-api.yaml#/components/schemas/AssessmentReleasePage
+      $ref: experience-release-api.yaml#/components/schemas/PublishReleaseInput
+    ExperienceRelease:
+      $ref: experience-release-api.yaml#/components/schemas/ExperienceRelease
+    ExperienceReleasePage:
+      $ref: experience-release-api.yaml#/components/schemas/ExperienceReleasePage
     ActiveReleasePointer:
-      $ref: assessment-release-api.yaml#/components/schemas/ActiveReleasePointer
+      $ref: experience-release-api.yaml#/components/schemas/ActiveReleasePointer
     ActivateReleaseInput:
-      $ref: assessment-release-api.yaml#/components/schemas/ActivateReleaseInput
+      $ref: experience-release-api.yaml#/components/schemas/ActivateReleaseInput
     RollbackInput:
-      $ref: assessment-release-api.yaml#/components/schemas/RollbackInput
+      $ref: experience-release-api.yaml#/components/schemas/RollbackInput
     AuditEvent:
       $ref: audit-api.yaml#/components/schemas/AuditEvent
     AuditPage:
       $ref: audit-api.yaml#/components/schemas/AuditPage
-    AssessmentMetadataEnvelope:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentMetadataEnvelope
-    AssessmentPageEnvelope:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentPageEnvelope
-    AssessmentDraftEnvelope:
-      $ref: assessment-api.yaml#/components/schemas/AssessmentDraftEnvelope
+    ExperienceMetadataEnvelope:
+      $ref: experience-api.yaml#/components/schemas/ExperienceMetadataEnvelope
+    ExperiencePageEnvelope:
+      $ref: experience-api.yaml#/components/schemas/ExperiencePageEnvelope
+    ExperienceDraftEnvelope:
+      $ref: experience-api.yaml#/components/schemas/ExperienceDraftEnvelope
     ValidationEnvelope:
-      $ref: assessment-validation-api.yaml#/components/schemas/ValidationEnvelope
+      $ref: experience-validation-api.yaml#/components/schemas/ValidationEnvelope
     EvaluationEnvelope:
-      $ref: assessment-validation-api.yaml#/components/schemas/EvaluationEnvelope
+      $ref: experience-validation-api.yaml#/components/schemas/EvaluationEnvelope
     PreviewEnvelope:
-      $ref: assessment-preview-api.yaml#/components/schemas/PreviewEnvelope
-    AssessmentReleaseEnvelope:
-      $ref: assessment-release-api.yaml#/components/schemas/AssessmentReleaseEnvelope
-    AssessmentReleasePageEnvelope:
-      $ref: assessment-release-api.yaml#/components/schemas/AssessmentReleasePageEnvelope
+      $ref: experience-preview-api.yaml#/components/schemas/PreviewEnvelope
+    ExperienceReleaseEnvelope:
+      $ref: experience-release-api.yaml#/components/schemas/ExperienceReleaseEnvelope
+    ExperienceReleasePageEnvelope:
+      $ref: experience-release-api.yaml#/components/schemas/ExperienceReleasePageEnvelope
     ActiveReleaseEnvelope:
-      $ref: assessment-release-api.yaml#/components/schemas/ActiveReleaseEnvelope
+      $ref: experience-release-api.yaml#/components/schemas/ActiveReleaseEnvelope
     AuditPageEnvelope:
       $ref: audit-api.yaml#/components/schemas/AuditPageEnvelope
     AuditEventEnvelope:
@@ -329,6 +330,6 @@ components:
     RevisionConflict:
       $ref: schemas/common.yaml#/components/examples/RevisionConflict
     Rollback:
-      $ref: assessment-release-api.yaml#/components/examples/Rollback
+      $ref: experience-release-api.yaml#/components/examples/Rollback
     IncompleteDraft:
-      $ref: assessment-api.yaml#/components/examples/IncompleteDraft
+      $ref: experience-api.yaml#/components/examples/IncompleteDraft

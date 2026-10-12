@@ -106,7 +106,7 @@ components:
           type: integer
           minimum: 1
           maximum: 9007199254740991
-        assessment_release_id:
+        experience_release_id:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
@@ -127,7 +127,7 @@ components:
         - activity_id
         - activity_type
         - result_revision
-        - assessment_release_id
+        - experience_release_id
         - validity
         - created_at
         - data
@@ -153,7 +153,9 @@ components:
       type: apiKey
       in: cookie
       name: sda_owner
-      description: Provisional anonymous capability transport. Credential is scoped/TTL-bound and issued/verified
-        before mutation; session/conversation/activity IDs alone do not authorize access. Bootstrap, CSRF and token
-        format pending DEC-07. No student login required.
-      x-decision-status: proposed-transport
+      description: |-
+        Anonymous owner cookie, không phải đăng nhập học sinh. POST /conversations cấp cookie khi chưa có;
+        khi có cookie phải xác minh credential. Các API đọc/thao tác conversation/activity/result yêu cầu cookie hợp lệ.
+        Credential scoped/TTL-bound; resource IDs hoặc idempotency_key không cấp quyền truy cập.
+        CSRF, token format và TTL còn chờ DEC-07.
+      x-decision-status: accepted-anonymous-bootstrap

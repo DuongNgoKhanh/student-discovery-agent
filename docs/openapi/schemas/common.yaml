@@ -278,7 +278,7 @@ components:
         410 CONVERSATION_ENDED, CONVERSATION_EXPIRED.
         413 PAYLOAD_TOO_LARGE.
         422 INVALID_INPUT, INVALID_ACTIVITY_TRANSITION, INVALID_QUESTION, INVALID_OPTION, RESULT_NOT_READY,
-            INCOMPATIBLE_SCHEMA, INCOMPATIBLE_RELEASE, ASSESSMENT_NOT_CONFIGURED, PUBLISH_GATE_FAILED, ENGINE_FAILURE.
+            INCOMPATIBLE_SCHEMA, INCOMPATIBLE_RELEASE, EXPERIENCE_NOT_CONFIGURED, PUBLISH_GATE_FAILED, ENGINE_FAILURE.
         429 RATE_LIMITED; 500 INTERNAL_ERROR; 503 SERVICE_UNAVAILABLE; 504 REQUEST_TIMEOUT.
         Conflict/stale không auto-retry: sync state và tạo action mới. Transient retry giữ key/payload và budget.
         HTTP mapping này áp dụng Chat/Studio mới theo proposal; API scaffold cũ giữ quy ước hiện hữu.
@@ -415,7 +415,8 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
     ChatError401:
-      description: Anonymous/admin credential missing, invalid or expired
+      description: Anonymous/admin credential missing where required, invalid or expired. POST /conversations
+        accepts a missing anonymous cookie to create an owner; a presented invalid/expired cookie still returns 401.
       headers:
         Cache-Control:
           schema:

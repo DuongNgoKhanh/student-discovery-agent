@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Student Discovery - Assessment Configuration
+  title: Student Discovery - Experience Releases
   version: 1.0.0
   description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md
     để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
@@ -10,16 +10,78 @@ servers:
   - url: https://api.example.com/api/v1
     description: Production server
 tags:
-  - name: Studio Assessments
-    description: Metadata/draft, validation/evaluation and isolated preview.
+  - name: Studio Releases
+    description: Publish immutable snapshot, environment activation/rollback.
 paths:
-  /admin/assessments:
-    get:
-      operationId: listAssessments
+  /admin/experiences/{id}/releases:
+    post:
+      operationId: publishExperienceRelease
       tags:
-        - Studio Assessments
-      summary: Danh sách assessments
-      description: Danh sách assessments
+        - Studio Releases
+      summary: Publish immutable release từ validated snapshot
+      description: Check admin capability, exact draft revision/hash, supported rules/schema/engine, passing validation/evaluation
+        + mandatory cases and approval policy. Expert approval is separate from technical pass. Same key replays
+        created release; publish does not activate.
+      security:
+        - BearerAuth: []
+      responses:
+        '201':
+          description: Validated envelope; status matches HTTP response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceReleaseEnvelope'
+        '400':
+          $ref: schemas/common.yaml#/components/responses/ChatError400
+        '401':
+          $ref: schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: schemas/common.yaml#/components/responses/ChatError409
+        '410':
+          $ref: schemas/common.yaml#/components/responses/ChatError410
+        '413':
+          $ref: schemas/common.yaml#/components/responses/ChatError413
+        '422':
+          $ref: schemas/common.yaml#/components/responses/ChatError422
+        '429':
+          $ref: schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: schemas/common.yaml#/components/responses/ChatError503
+        '504':
+          $ref: schemas/common.yaml#/components/responses/ChatError504
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishReleaseInput'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      x-required-permission: experience.release.publish
+    get:
+      operationId: listExperienceReleases
+      tags:
+        - Studio Releases
+      summary: Liệt kê releases của experience
+      description: Liệt kê releases của experience
       security:
         - BearerAuth: []
       responses:
@@ -34,7 +96,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AssessmentPageEnvelope'
+                $ref: '#/components/schemas/ExperienceReleasePageEnvelope'
         '400':
           $ref: schemas/common.yaml#/components/responses/ChatError400
         '401':
@@ -60,6 +122,13 @@ paths:
         '504':
           $ref: schemas/common.yaml#/components/responses/ChatError504
       parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
         - name: cursor
           in: query
           required: false
@@ -75,17 +144,137 @@ paths:
             minimum: 1
             maximum: 9007199254740991
           description: Upper limit from approved runtime policy; no production default chosen here.
-      x-required-permission: assessment.config.read
+      x-required-permission: experience.config.read
+  /admin/experience-releases/{release_id}:
+    get:
+      operationId: readExperienceRelease
+      tags:
+        - Studio Releases
+      summary: Đọc immutable release
+      description: Đọc immutable release
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Validated envelope; status matches HTTP response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceReleaseEnvelope'
+        '400':
+          $ref: schemas/common.yaml#/components/responses/ChatError400
+        '401':
+          $ref: schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: schemas/common.yaml#/components/responses/ChatError409
+        '410':
+          $ref: schemas/common.yaml#/components/responses/ChatError410
+        '413':
+          $ref: schemas/common.yaml#/components/responses/ChatError413
+        '422':
+          $ref: schemas/common.yaml#/components/responses/ChatError422
+        '429':
+          $ref: schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: schemas/common.yaml#/components/responses/ChatError503
+        '504':
+          $ref: schemas/common.yaml#/components/responses/ChatError504
+      parameters:
+        - name: release_id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      x-required-permission: experience.config.read
+  /admin/experiences/{id}/active-release:
+    get:
+      operationId: readActiveExperienceRelease
+      tags:
+        - Studio Releases
+      summary: Đọc active pointer theo environment
+      description: Đọc active pointer theo environment
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Validated envelope; status matches HTTP response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveReleaseEnvelope'
+        '400':
+          $ref: schemas/common.yaml#/components/responses/ChatError400
+        '401':
+          $ref: schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: schemas/common.yaml#/components/responses/ChatError409
+        '410':
+          $ref: schemas/common.yaml#/components/responses/ChatError410
+        '413':
+          $ref: schemas/common.yaml#/components/responses/ChatError413
+        '422':
+          $ref: schemas/common.yaml#/components/responses/ChatError422
+        '429':
+          $ref: schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: schemas/common.yaml#/components/responses/ChatError503
+        '504':
+          $ref: schemas/common.yaml#/components/responses/ChatError504
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        - name: environment
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      x-required-permission: experience.config.read
+  /admin/experience-releases/{release_id}:activate:
     post:
-      operationId: createAssessment
+      operationId: activateExperienceRelease
       tags:
-        - Studio Assessments
-      summary: Tạo assessment metadata và draft resource
-      description: Tạo assessment metadata và draft resource
+        - Studio Releases
+      summary: Activate release với pointer concurrency guard
+      description: Resolve release to experience, check environment/support/approval and reject demo production.
+        Check both monotonic pointer expected_revision and expected_active_release_id. Commit active pointer + audit
+        atomically; existing activities/Agent releases remain pinned.
       security:
         - BearerAuth: []
       responses:
-        '201':
+        '200':
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -96,7 +285,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AssessmentMetadataEnvelope'
+                $ref: '#/components/schemas/ActiveReleaseEnvelope'
         '400':
           $ref: schemas/common.yaml#/components/responses/ChatError400
         '401':
@@ -126,69 +315,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateAssessmentInput'
-      x-required-permission: assessment.config.write
-  /admin/assessments/{id}:
-    get:
-      operationId: readAssessment
-      tags:
-        - Studio Assessments
-      summary: Đọc metadata và config overview
-      description: Đọc metadata và config overview
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Validated envelope; status matches HTTP response.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-                enum:
-                  - no-store
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AssessmentMetadataEnvelope'
-        '400':
-          $ref: schemas/common.yaml#/components/responses/ChatError400
-        '401':
-          $ref: schemas/common.yaml#/components/responses/ChatError401
-        '403':
-          $ref: schemas/common.yaml#/components/responses/ChatError403
-        '404':
-          $ref: schemas/common.yaml#/components/responses/ChatError404
-        '409':
-          $ref: schemas/common.yaml#/components/responses/ChatError409
-        '410':
-          $ref: schemas/common.yaml#/components/responses/ChatError410
-        '413':
-          $ref: schemas/common.yaml#/components/responses/ChatError413
-        '422':
-          $ref: schemas/common.yaml#/components/responses/ChatError422
-        '429':
-          $ref: schemas/common.yaml#/components/responses/ChatError429
-        '500':
-          $ref: schemas/common.yaml#/components/responses/ChatError500
-        '503':
-          $ref: schemas/common.yaml#/components/responses/ChatError503
-        '504':
-          $ref: schemas/common.yaml#/components/responses/ChatError504
+              $ref: '#/components/schemas/ActivateReleaseInput'
       parameters:
-        - name: id
+        - name: release_id
           in: path
           required: true
           schema:
             type: string
             minLength: 1
             pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-      x-required-permission: assessment.config.read
-    patch:
-      operationId: patchAssessment
+      x-required-permission: experience.release.activate
+  /admin/experiences/{id}:rollback:
+    post:
+      operationId: rollbackExperienceRelease
       tags:
-        - Studio Assessments
-      summary: Sửa metadata với revision guard
-      description: Sửa metadata với revision guard
+        - Studio Releases
+      summary: Rollback active pointer tới release đã biết
+      description: Target must belong to experience/environment and be compatible/approved. Expected pointer revision
+        protects ABA even if expected_active_release_id repeats. Atomic pointer/audit; future activities pin target,
+        existing activities unchanged. Rollback is not revocation.
       security:
         - BearerAuth: []
       responses:
@@ -203,7 +348,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AssessmentMetadataEnvelope'
+                $ref: '#/components/schemas/ActiveReleaseEnvelope'
         '400':
           $ref: schemas/common.yaml#/components/responses/ChatError400
         '401':
@@ -233,127 +378,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchAssessmentInput'
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            minLength: 1
-            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-      x-required-permission: assessment.config.write
-  /admin/assessments/{id}/draft:
-    get:
-      operationId: readAssessmentDraft
-      tags:
-        - Studio Assessments
-      summary: Đọc current draft
-      description: Đọc current draft
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Validated envelope; status matches HTTP response.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-                enum:
-                  - no-store
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AssessmentDraftEnvelope'
-        '400':
-          $ref: schemas/common.yaml#/components/responses/ChatError400
-        '401':
-          $ref: schemas/common.yaml#/components/responses/ChatError401
-        '403':
-          $ref: schemas/common.yaml#/components/responses/ChatError403
-        '404':
-          $ref: schemas/common.yaml#/components/responses/ChatError404
-        '409':
-          $ref: schemas/common.yaml#/components/responses/ChatError409
-        '410':
-          $ref: schemas/common.yaml#/components/responses/ChatError410
-        '413':
-          $ref: schemas/common.yaml#/components/responses/ChatError413
-        '422':
-          $ref: schemas/common.yaml#/components/responses/ChatError422
-        '429':
-          $ref: schemas/common.yaml#/components/responses/ChatError429
-        '500':
-          $ref: schemas/common.yaml#/components/responses/ChatError500
-        '503':
-          $ref: schemas/common.yaml#/components/responses/ChatError503
-        '504':
-          $ref: schemas/common.yaml#/components/responses/ChatError504
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            minLength: 1
-            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-      x-required-permission: assessment.config.read
-    put:
-      operationId: saveAssessmentDraft
-      tags:
-        - Studio Assessments
-      summary: Lưu draft với optimistic locking
-      description: Allow incomplete JSON object draft, reject malformed/oversized input. expected_revision belongs
-        to draft; same key/payload replays original save before stale revision check. Atomic update increases draft
-        revision/hash; previous reports become stale. No changes to pinned released activities.
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Validated envelope; status matches HTTP response.
-          headers:
-            Cache-Control:
-              schema:
-                type: string
-                enum:
-                  - no-store
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AssessmentDraftEnvelope'
-        '400':
-          $ref: schemas/common.yaml#/components/responses/ChatError400
-        '401':
-          $ref: schemas/common.yaml#/components/responses/ChatError401
-        '403':
-          $ref: schemas/common.yaml#/components/responses/ChatError403
-        '404':
-          $ref: schemas/common.yaml#/components/responses/ChatError404
-        '409':
-          $ref: schemas/common.yaml#/components/responses/ChatError409
-        '410':
-          $ref: schemas/common.yaml#/components/responses/ChatError410
-        '413':
-          $ref: schemas/common.yaml#/components/responses/ChatError413
-        '422':
-          $ref: schemas/common.yaml#/components/responses/ChatError422
-        '429':
-          $ref: schemas/common.yaml#/components/responses/ChatError429
-        '500':
-          $ref: schemas/common.yaml#/components/responses/ChatError500
-        '503':
-          $ref: schemas/common.yaml#/components/responses/ChatError503
-        '504':
-          $ref: schemas/common.yaml#/components/responses/ChatError504
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SaveDraftInput'
+              $ref: '#/components/schemas/RollbackInput'
             examples:
-              draft:
-                $ref: '#/components/examples/IncompleteDraft'
+              rollback:
+                $ref: '#/components/examples/Rollback'
       parameters:
         - name: id
           in: path
@@ -362,170 +390,65 @@ paths:
             type: string
             minLength: 1
             pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-      x-required-permission: assessment.config.write
+      x-required-permission: experience.release.activate
 components:
   schemas:
-    AssessmentDefinitionOption:
+    PublishReleaseInput:
       type: object
       properties:
-        option_id:
+        expected_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        content_hash:
           type: string
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-        label:
-          type: string
-          minLength: 1
-      required:
-        - option_id
-        - label
-      additionalProperties: false
-    AssessmentDefinitionQuestion:
-      type: object
-      properties:
-        question_id:
-          type: string
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-        prompt:
+          pattern: ^sha256:[a-f0-9]{64}$
+        validation_id:
           type: string
           minLength: 1
-        choices:
-          type: array
-          items:
-            $ref: '#/components/schemas/AssessmentDefinitionOption'
-          minItems: 2
-      required:
-        - question_id
-        - prompt
-        - choices
-      additionalProperties: false
-    AssessmentHouseMetadata:
-      type: object
-      properties:
-        house_id:
-          type: string
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-        name:
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        evaluation_id:
           type: string
           minLength: 1
-        theme_ref:
-          type: string
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-        mascot_ref:
-          type: string
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-        strengths:
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        approval_refs:
           type: array
           items:
             type: string
             minLength: 1
-          minItems: 1
-        tendencies:
-          type: array
-          items:
-            type: string
-            minLength: 1
-          minItems: 1
-        suggested_fields:
-          type: array
-          items:
-            type: string
-            minLength: 1
-          minItems: 1
-        quote:
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        idempotency_key:
           type: string
           minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
       required:
-        - house_id
-        - name
-        - theme_ref
-        - mascot_ref
-        - strengths
-        - tendencies
-        - suggested_fields
-        - quote
+        - expected_revision
+        - content_hash
+        - validation_id
+        - evaluation_id
+        - approval_refs
+        - idempotency_key
       additionalProperties: false
-    AssessmentRuleDocument:
+      description: Require registered supported rules + same hash/schema/engine passing reports and mandatory cases.
+        Reject DEC-04 placeholder/unsupported/stale reports. Expert approval where required. Publish does not activate.
+    ExperienceRelease:
       type: object
       properties:
-        rule_schema_ref:
-          type: string
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-        engine_version:
+        id:
           type: string
           minLength: 1
-        payload:
-          type: object
-      required:
-        - rule_schema_ref
-        - engine_version
-        - payload
-      additionalProperties: false
-      description: Transport only. Payload MUST be validated against a supported registered rule schema. DEC-04
-        unresolved; no rule schema is registered by this contract.
-      x-pending-decision: DEC-04
-    AssessmentGoldenCase:
-      type: object
-      properties:
-        case_id:
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        experience_id:
           type: string
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-        mandatory:
-          type: boolean
-        answers:
-          type: array
-          items:
-            type: object
-            properties:
-              question_id:
-                type: string
-                pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-              option_id:
-                type: string
-                pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-            required:
-              - question_id
-              - option_id
-            additionalProperties: false
-          minItems: 6
-          maxItems: 6
-        expected:
-          type: object
-          properties:
-            question_ids:
-              type: array
-              items:
-                type: string
-                pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-              minItems: 6
-              maxItems: 6
-            house_id:
-              type: string
-              pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-            scores:
-              type: object
-              additionalProperties:
-                type: number
-          required:
-            - question_ids
-            - house_id
-            - scores
-          additionalProperties: false
-      required:
-        - case_id
-        - mandatory
-        - answers
-        - expected
-      additionalProperties: false
-    AssessmentDefinitionDocument:
-      type: object
-      properties:
-        schema_version:
-          type: string
-          enum:
-            - '1.0'
-        definition_id:
-          type: string
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
         definition_version:
+          type: string
+          minLength: 1
+        definition_hash:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+        definition_schema_version:
           type: string
           minLength: 1
         engine_version:
@@ -533,122 +456,41 @@ components:
           minLength: 1
         is_demo:
           type: boolean
-        questions:
-          type: array
-          items:
-            $ref: '#/components/schemas/AssessmentDefinitionQuestion'
-          minItems: 6
-        houses:
-          type: array
-          items:
-            $ref: '#/components/schemas/AssessmentHouseMetadata'
-          minItems: 6
-          maxItems: 6
-        selection_rules:
-          $ref: '#/components/schemas/AssessmentRuleDocument'
-        scoring_rules:
-          $ref: '#/components/schemas/AssessmentRuleDocument'
-        coverage_rules:
-          $ref: '#/components/schemas/AssessmentRuleDocument'
-        tie_policy:
-          $ref: '#/components/schemas/AssessmentRuleDocument'
-        templates:
-          type: object
-          additionalProperties:
-            type: string
-            minLength: 1
-        evaluation_cases:
-          type: array
-          items:
-            $ref: '#/components/schemas/AssessmentGoldenCase'
         approval_refs:
           type: array
           items:
             type: string
-            pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-      required:
-        - schema_version
-        - definition_id
-        - definition_version
-        - engine_version
-        - is_demo
-        - questions
-        - houses
-        - selection_rules
-        - scoring_rules
-        - coverage_rules
-        - tie_policy
-        - templates
-        - evaluation_cases
-        - approval_refs
-      additionalProperties: false
-      description: A structurally valid transport document is NOT publishable. DEC-04 rules require engine registration,
-        semantic validation and independent golden outcomes.
-    AssessmentMetadata:
-      type: object
-      properties:
-        id:
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        published_at:
+          type: string
+          format: date-time
+          pattern: Z$
+        published_by:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        revision:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
-        name:
-          type: string
-          minLength: 1
-        description:
-          type: string
-        activity_type:
-          type: string
-          enum:
-            - personality_assessment
-        created_at:
-          type: string
-          format: date-time
-          pattern: Z$
-        updated_at:
-          type: string
-          format: date-time
-          pattern: Z$
-        draft_ref:
-          type: object
-          properties:
-            draft_id:
-              type: string
-              minLength: 1
-              pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-            revision:
-              type: integer
-              minimum: 0
-              maximum: 9007199254740991
-            content_hash:
-              type: string
-              pattern: ^sha256:[a-f0-9]{64}$
-          required:
-            - draft_id
-            - revision
-            - content_hash
-          additionalProperties: true
-          nullable: true
       required:
         - id
-        - revision
-        - name
-        - description
-        - activity_type
-        - created_at
-        - updated_at
-        - draft_ref
+        - experience_id
+        - definition_version
+        - definition_hash
+        - definition_schema_version
+        - engine_version
+        - is_demo
+        - approval_refs
+        - published_at
+        - published_by
       additionalProperties: true
-    AssessmentPage:
+      description: Immutable snapshot; no PATCH/PUT to release. Every started activity pins this release; active
+        pointer change never migrates existing activity.
+    ExperienceReleasePage:
       type: object
       properties:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/AssessmentMetadata'
+            $ref: '#/components/schemas/ExperienceRelease'
         next_cursor:
           type: string
           minLength: 1
@@ -657,62 +499,14 @@ components:
         - items
         - next_cursor
       additionalProperties: true
-    CreateAssessmentInput:
+    ActiveReleasePointer:
       type: object
       properties:
-        name:
-          type: string
-          minLength: 1
-        description:
-          type: string
-        activity_type:
-          type: string
-          enum:
-            - personality_assessment
-        idempotency_key:
+        experience_id:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-      required:
-        - name
-        - activity_type
-        - idempotency_key
-      additionalProperties: false
-    PatchAssessmentInput:
-      type: object
-      properties:
-        expected_revision:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
-        idempotency_key:
-          type: string
-          minLength: 1
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        name:
-          type: string
-          minLength: 1
-        description:
-          type: string
-      required:
-        - expected_revision
-        - idempotency_key
-      additionalProperties: false
-      description: Require at least one metadata field. expected_revision thuộc resource metadata; không đổi immutable
-        releases hoặc draft content ngầm.
-      anyOf:
-        - required:
-            - name
-        - required:
-            - description
-    AssessmentDraft:
-      type: object
-      properties:
-        assessment_id:
-          type: string
-          minLength: 1
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        draft_id:
+        environment:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
@@ -720,51 +514,92 @@ components:
           type: integer
           minimum: 0
           maximum: 9007199254740991
-        content_hash:
-          type: string
-          pattern: ^sha256:[a-f0-9]{64}$
-        content:
-          type: object
-          additionalProperties: true
-        updated_by:
+        release_id:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          nullable: true
         updated_at:
           type: string
           format: date-time
           pattern: Z$
       required:
-        - assessment_id
-        - draft_id
+        - experience_id
+        - environment
         - revision
-        - content_hash
-        - content
-        - updated_by
+        - release_id
         - updated_at
       additionalProperties: true
-      description: Incomplete JSON draft allowed; save không phải validation. Definition hoàn chỉnh phải theo AssessmentDefinitionDocument
-        và registered DEC-04 rule schemas; no code/secrets.
-    SaveDraftInput:
+    ActivateReleaseInput:
       type: object
       properties:
+        environment:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
         expected_revision:
           type: integer
           minimum: 0
           maximum: 9007199254740991
+        expected_active_release_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          nullable: true
         idempotency_key:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        content:
-          type: object
-          additionalProperties: true
+        reason:
+          type: string
+          minLength: 1
       required:
+        - environment
         - expected_revision
+        - expected_active_release_id
         - idempotency_key
-        - content
+        - reason
       additionalProperties: false
-    AssessmentMetadataEnvelope:
+      description: Target release in path. expected_revision refers to active pointer; expected_active_release_id
+        is an additional guard, not a replacement for monotonic revision (ABA prevention).
+    RollbackInput:
+      type: object
+      properties:
+        environment:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        expected_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        expected_active_release_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          nullable: true
+        idempotency_key:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        reason:
+          type: string
+          minLength: 1
+        target_release_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      required:
+        - environment
+        - expected_revision
+        - expected_active_release_id
+        - idempotency_key
+        - reason
+        - target_release_id
+      additionalProperties: false
+      description: Update pointer/audit atomically to an existing compatible release. Reject demo in production;
+        approval/environment checks. Only new activities use target; not revocation of pinned releases.
+    ExperienceReleaseEnvelope:
       oneOf:
         - allOf:
             - $ref: schemas/common.yaml#/components/schemas/SuccessEnvelope
@@ -773,9 +608,9 @@ components:
                 - data
               properties:
                 data:
-                  $ref: '#/components/schemas/AssessmentMetadata'
+                  $ref: '#/components/schemas/ExperienceRelease'
         - $ref: schemas/common.yaml#/components/schemas/ErrorEnvelope
-    AssessmentPageEnvelope:
+    ExperienceReleasePageEnvelope:
       oneOf:
         - allOf:
             - $ref: schemas/common.yaml#/components/schemas/SuccessEnvelope
@@ -784,9 +619,9 @@ components:
                 - data
               properties:
                 data:
-                  $ref: '#/components/schemas/AssessmentPage'
+                  $ref: '#/components/schemas/ExperienceReleasePage'
         - $ref: schemas/common.yaml#/components/schemas/ErrorEnvelope
-    AssessmentDraftEnvelope:
+    ActiveReleaseEnvelope:
       oneOf:
         - allOf:
             - $ref: schemas/common.yaml#/components/schemas/SuccessEnvelope
@@ -795,16 +630,18 @@ components:
                 - data
               properties:
                 data:
-                  $ref: '#/components/schemas/AssessmentDraft'
+                  $ref: '#/components/schemas/ActiveReleasePointer'
         - $ref: schemas/common.yaml#/components/schemas/ErrorEnvelope
   examples:
-    IncompleteDraft:
-      summary: Draft chưa hoàn chỉnh vẫn lưu được.
+    Rollback:
+      summary: Pointer revision thêm để tránh ABA.
       value:
-        expected_revision: 1
-        idempotency_key: save_draft_001
-        content:
-          questions: []
+        target_release_id: rel_v12
+        expected_active_release_id: rel_v13
+        expected_revision: 8
+        environment: demo
+        reason: Rollback after evaluation regression
+        idempotency_key: rollback_001
   securitySchemes:
     BearerAuth:
       type: http
