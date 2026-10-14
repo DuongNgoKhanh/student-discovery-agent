@@ -2,6 +2,8 @@
 
 Tài liệu này chi tiết hóa các Contract headers, schemas và dữ liệu mẫu (fixtures) dùng chung giữa tầng **TypeScript Product/Studio Layer** và tầng **Python Execution Layer**, phục vụ nghiệm thu **AT-19** và **AT-20**.
 
+**Phạm vi tài liệu:** các snippets là ví dụ thiết kế, không phải bằng chứng schema/runtime đã được đăng ký. [ADR-001](ADR-001-auth-persistence-release-boundary.md) vẫn PROPOSED. Phần 4 bổ sung tác động của [ADR-002](ADR-002-adaptive-riasec-scoring.md) đã được người dùng duyệt về thiết kế; OpenAPI hiện vẫn có constraints sáu câu và chưa được sửa trong đợt soạn docs này.
+
 ---
 
 ## 1. Giao Thức Xác Thực & Trao Đổi Ngữ Cảnh (Auth & Context Contract)
@@ -61,6 +63,8 @@ X-Caller-Context: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjYWxsZXJfdHlwZSI6InN0d
 ## 2. Release Delivery & Pinning Contract (Studio $\rightarrow$ Execution)
 
 ### 2.1. Contract Đóng Gói Release Snapshot (`ExperienceReleasePayload`)
+
+Ví dụ dưới đây thuộc bản thiết kế G0-03 trước profile adaptive. `schema_version` ở envelope và tên `holland_dominant_v2` trong ví dụ không xác định schema/profile `riasec.mean.bounds.v2`. Không dùng ví dụ này làm fixture đầy đủ của ngân hàng 30 items.
 
 Khi một bản Release được kích hoạt hoặc đồng bộ sang Execution Engine, payload cấu hình có cấu trúc bất biến:
 
@@ -211,4 +215,121 @@ Khi một bản Release được kích hoạt hoặc đồng bộ sang Execution
   }
 ]
 ```
+
+## 4. Mở rộng contract cho Adaptive RIASEC (ADR-002)
+
+Phần này là **contract đích để phối hợp architecture**, chưa phải schema được runtime/OpenAPI chấp nhận. Thuật toán và policy đầy đủ nằm trong [ADR-002, mục 7](ADR-002-adaptive-riasec-scoring.md); không duy trì công thức khác ở tầng TS.
+
+Đọc ADR-002 mục 8 (ví dụ contract/state transitions) cho các payload và mục 9 (ma trận truy vết) để đối chiếu FR/AT và schema hiện có.
+
+### 4.1. Nhận diện profile và compatibility
+
+| Định danh | Giá trị thiết kế | Ý nghĩa |
+|---|---|---|
+| Activity type | `personality_assessment_adaptive` | Phân biệt với activity sáu câu `personality_assessment` |
+| Assessment definition schema | `2.0` | Cấu trúc ngân hàng/rating/coverage của definition mới |
+| Algorithm profile | `riasec.mean.bounds.v2` | Behavior scoring/selection/stop của ADR-002 |
+| Activity view, assessment_question và assessment_clarification | Schema version `2` cho profile adaptive | Hai block có progress cần phân biệt với version 1 cố định sáu câu; choices nằm trong question, không tạo block choices riêng |
+| PersonalityCard/ShareCard | Giữ schema/projection hiện có nếu đúng allowlist | Card vẫn một House; ShareCard `summary.v1` không mang internal scores |
+| Engine version | Version được Python đăng ký và report xác nhận | Không suy ra engine đã hỗ trợ chỉ từ suffix `v2` của profile |
+
+Schema của release delivery envelope là một định danh riêng; không đồng nhất với definition schema `2.0`. Content hash phải bao phủ definition và những policy bất biến thuộc release theo canonicalization đã được hai plane thống nhất. Cùng content hash nhưng profile/engine không được report hỗ trợ vẫn không được coi là evaluation pass.
+
+Proposal cho `CreateConversationInput` ở `POST /conversations` bổ sung `accepted_activity_profiles`, là danh sách profiles client hiểu, đi cùng `supported_blocks` đã có. Nếu không khai báo profiles thì mặc định chỉ profile sáu câu; nếu không khai báo supported_blocks thì mặc định bộ blocks v1. Client tự khai báo capability không cấp quyền auth hoặc quyền chọn release khác.
+
+Manifest của `riasec.mean.bounds.v2` yêu cầu client hiểu Activity view version 2 và đủ bộ blocks: `text` version 1, `assessment_question` version 2, `assessment_clarification` version 2, `personality_card` version 1. Khai báo profile này đồng nghĩa client hiểu Activity view version 2; khai báo profile không tự bổ sung hoặc ghi đè supported_blocks. Nếu khai báo adaptive nhưng thiếu một block bắt buộc, bootstrap trả incompatibility trước khi tạo conversation/preview; không âm thầm nâng version hoặc hạ profile.
+
+TS chuyển tiếp cả hai khai báo nguyên vẹn. Python xác minh support và lưu snapshot capability trong conversation khi tạo. Mọi activity khởi tạo qua Agent/message hoặc structured turn đều đọc snapshot này và kiểm profile của release cùng manifest trước khi commit. Không giả định có endpoint tạo Activity độc lập. Turns, retry hoặc LLM intent không được tự mở rộng capability. GET/reload dùng snapshot đã lưu; client không hiểu version phải dừng thao tác có kiểm soát, không làm server downgrade activity đã pin.
+
+Preview bootstrap `POST /admin/experiences/{id}/previews` cũng cần input riêng kết hợp snapshot-command hiện có với accepted_activity_profiles và supported_blocks, lưu capability trên preview conversation cùng draft snapshot. Defaults/checks giống conversation thật; không truyền capability UI vào validation/evaluation commands không tạo preview. Preview turns không được bỏ qua negotiation chỉ vì caller là Admin.
+
+Conversation legacy thiếu capability vẫn có thể dùng chat/profile cũ; nếu Agent muốn bắt đầu adaptive thì trả incompatibility trước khi tạo activity mới. Report/response báo incompatibility có kiểu; ID lỗi được đồng bộ trong OpenAPI ở đợt riêng. Không tự đổi sang profile cũ, không downgrade release đã pin.
+
+### 4.2. Quyền sở hữu dữ liệu và kết quả
+
+| Dữ liệu/việc xử lý | Chủ sở hữu | Điều kiện |
+|---|---|---|
+| Definition, bank 30 items, metadata, tie order, release pointer | TS Product/Studio | Draft có revision; published release bất biến |
+| Definition validation, golden evaluation, scoring, bounds, selector, stop | Python engine | Cùng behavior version cho runtime/preview/evaluation |
+| Active answers, current question, activity revision, proposals, result validity | Python Harness/persistence | Owner/revision/idempotency được kiểm trước commit |
+| Sums/counts/exact means/contributions và lý do dừng | Python result snapshot | Refs/hash/profile/engine đủ replay |
+| Progress và card UI | Browser, từ state server | Không tự tính điểm hoặc tự quyết định completed |
+| ShareCard | Projection từ valid result | Closed allowlist; không xuất scores/bounds/answers ra ảnh |
+
+R/I/A/S/E/C là ký hiệu chiều đánh giá trong tài liệu. `house_id` trong question/result/card phải tham chiếu cùng House metadata của release; không thay ID của metadata bằng ký hiệu hoặc theme của UI khi proxy/render.
+
+### 4.3. Progress biến thiên
+
+Ví dụ fragment của Activity view adaptive sau 14 active scored answers:
+
+```json
+{
+  "schema_version": 2,
+  "activity_type": "personality_assessment_adaptive",
+  "algorithm_profile": "riasec.mean.bounds.v2",
+  "status": "in_progress",
+  "progress": {
+    "completed": 14,
+    "min_total": 12,
+    "max_total": 30,
+    "total": null,
+    "phase": "adaptive"
+  }
+}
+```
+
+Đây là fragment minh họa, không phải ActivityView hoàn chỉnh. `completed` đếm active scored answers, không đếm tên, chat tự do, clarification hoặc retry. `total=null` trước khi có result; khi completed, total bằng số answers thực tế. End/expiry trước completion giữ phase/count gần nhất và không tạo total giả hoặc valid card.
+
+UI hiển thị “Đã trả lời 14 câu; đang làm rõ kết quả”. Không biểu diễn 14/30 như lời hứa rằng chắc chắn cần thêm 16 câu. Khi edit cắt suffix, count và phase có thể giảm; client dùng state mới từ server.
+
+### 4.4. Một lượt answer/edit và commit
+
+```mermaid
+sequenceDiagram
+    participant UI as Browser
+    participant TS as TS Product API
+    participant H as Python Harness
+    participant E as Engine cùng profile
+    participant DB as Execution persistence
+    UI->>TS: Action, key, question/option và revision
+    TS->>H: Caller context + payload được bảo toàn
+    H->>DB: Kiểm owner/state, replay và revision
+    H->>E: Pinned definition + prefix answers dự kiến
+    E-->>H: Continue/next question hoặc valid stop/winner
+    H->>DB: Atomic compare-and-commit state/result/response
+    alt Commit thành công
+        DB-->>H: Revision mới và outcome đã lưu
+        H-->>TS: State/progress và typed blocks
+        TS-->>UI: Response cùng outcome
+    else Revision thay đổi hoặc commit lỗi
+        DB-->>H: Không ghi một phần
+        H-->>TS: Conflict hoặc lỗi có kiểu
+        TS-->>UI: Lỗi và state được phép đọc để đồng bộ
+    end
+```
+
+Engine tính ngoài transaction chỉ được commit nếu expected revision và điều kiện end/expiry vẫn hợp lệ. Retry sau response bị mất đọc lại outcome đã lưu, không chạy thêm answer. Edit giữ prefix tới câu k, thay option k, bỏ suffix và vô hiệu proposal/result/card cũ trong cùng mutation; engine recompute trên prefix mới.
+
+Release snapshot thiếu/không hỗ trợ, option không thuộc question, prefix sai hoặc engine failure không được tạo completed/result. LLM lỗi dùng option/template flow; text chưa confirmed không commit rating. Replay của request cũ không được khôi phục latest validity của result đã bị edit vô hiệu hóa; thao tác đọc/export vẫn kiểm validity/revision hiện hành.
+
+### 4.5. Evaluation report, pinning và các ca contract cần có
+
+Report adaptive phải gắn đúng content hash, definition schema, algorithm profile, engine version và mandatory case IDs/outcomes. Đổi draft hoặc profile làm report cũ không còn khớp; technical validation không thay phê duyệt nội dung/chuyên môn.
+
+| Case tài liệu | Expected behavior |
+|---|---|
+| Client không khai báo adaptive | Không tạo adaptive activity ngầm; incompatibility có kiểu nếu release yêu cầu profile mới |
+| Client khai báo adaptive nhưng chỉ blocks v1 | Bootstrap bị từ chối; không coi accepted_activity_profiles là quyền ghi đè supported_blocks |
+| Start qua message/Agent hoặc preview turns | Kiểm snapshot capability đã lưu trước commit; không có đường start bỏ qua manifest |
+| Activity v1 đang chạy khi v2 được activate | Giữ release/schema/behavior v1; không đổi total=6 hoặc thứ tự câu |
+| Adaptive early stop tại 18 | Completed có đúng 18 active answers, total=18 và một valid House/card |
+| Adaptive chưa rõ tại 18 | In_progress, total=null, selector phát câu hợp lệ tiếp theo |
+| Đủ 30 và hòa | Một House theo tie policy đã pin; không hỏi câu 31 |
+| Edit completed | Suffix và result cũ mất hiệu lực; state mới theo recomputed stop, revision tăng đúng một mutation |
+| Key replay sau edit khác | Trả outcome replay nhưng không coi card cũ là latest valid để export |
+| Report đúng hash nhưng sai profile/engine | Không dùng để vượt publish gate |
+| Draft đổi sau tạo preview | Preview tiếp tục dùng draft snapshot đã pin, không tác động activity/release thật |
+| Snapshot release không khả dụng | Lỗi có kiểu, không chuyển active release khác và không tạo result giả |
+
+Danh sách trên là acceptance criteria cần có khi đồng bộ contract, không phải fixtures/tests đã được triển khai. Profile mới không đổi auth/owner policy của phần 1, không tự chốt các tham số vận hành còn thuộc quyết định riêng.
 
