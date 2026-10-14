@@ -6,6 +6,8 @@
 - **Module liên quan:** M-AUTH, M-CFG, M-ADM (TypeScript Layer) / M-SES, M-ENG, M-EVL (Python Layer)
 - **Người tham gia review:** Dev A (TypeScript Product), Dev B (Python Execution), Technical Lead, QA / Security Reviewer
 
+**Tài liệu liên quan:** [ADR-002 — Adaptive RIASEC](ADR-002-adaptive-riasec-scoring.md) mô tả profile assessment mới sử dụng ranh giới TS–Python ở đây. Người dùng duyệt thiết kế ADR-002 không thay trạng thái PROPOSED của ADR-001; auth, TTL/retention và migration vẫn theo phạm vi quyết định riêng.
+
 ---
 
 ## 1. Ngữ cảnh & Đặt vấn đề (Context)
@@ -85,11 +87,14 @@ flowchart TD
 1. Kế thừa cơ chế xác thực Scaffold hiện có (`app/modules/admin` và `admin-auth-api.yaml`).
 2. Quản trị viên đăng nhập nhận `access_token` (Bearer JWT).
 3. Tầng TS kiểm tra JWT và phân quyền RBAC:
-   - `experience.draft.write`: Cho phép sửa draft.
-   - `experience.validate`: Cho phép chạy test/evaluation.
-   - `experience.publish`: Cho phép xuất bản release mới.
-   - `experience.activate`: Cho phép đổi active release / rollback.
-   - `audit.read`: Cho phép xem lịch sử log.
+   - `experience.config.write`: Cho phép sửa draft.
+   - `experience.config.validate`: Cho phép chạy validation.
+   - `experience.config.evaluate`: Cho phép chạy evaluation.
+   - `experience.release.publish`: Cho phép xuất bản release mới.
+   - `experience.release.activate`: Cho phép đổi active release / rollback.
+   - `experience.audit.read`: Cho phép xem lịch sử log.
+
+   Tên quyền thống nhất theo `x-required-permission` trong OpenAPI (`docs/openapi/*.yaml`).
 
 #### C. Giao tiếp Service-to-Service: TypeScript $\rightarrow$ Python Execution Layer
 1. Python Execution Layer **không mở public trực tiếp ra Internet**; chỉ nhận request từ tầng TS (qua mạng nội bộ hoặc Docker network).
@@ -151,7 +156,7 @@ sequenceDiagram
 ```
 
 1. **Chuẩn hóa Hashing (Deterministic Content Hashing):**
-   - Nội dung cấu hình draft được chuẩn hóa (canonical JSON: sắp xếp keys alphabet, UTF-8, không khoảng trắng dư thừa) trước khi hash bằng `SHA-256`.
+   - Nội dung cấu hình draft được chuẩn hóa theo RFC 8785 (JSON Canonicalization Scheme), như quy ước đã ghi trong docs `user-api.yaml`, trước khi hash bằng `SHA-256`.
    - Mã băm được đặt tên: `sha256:<hash_hex>`.
 2. **Tính bất biến của Release:**
    - Một khi bản ghi Release đã được tạo trong bảng `experience_releases`, **không được phép UPDATE hoặc DELETE**.
@@ -171,7 +176,7 @@ sequenceDiagram
 | **AT-19.1** | Giả mạo Cookie định danh | Gửi cookie `sda_owner` với chữ ký không hợp lệ hoặc chuỗi tự chế ngẫu nhiên | Trả về `401 Unauthorized` kèm mã lỗi `AUTH_INVALID_CREDENTIAL`. |
 | **AT-19.2** | Truy cập chéo Owner (IDOR) | Cookie của `Owner_A` nhưng cố tình đọc/thực hiện turn trên `conversation_id` của `Owner_B` | Trả về `403 Forbidden` kèm mã lỗi `FORBIDDEN_RESOURCE_ACCESS`. |
 | **AT-19.3** | Gọi API không qua TS Layer | Gọi trực tiếp vào endpoint Python mà không có header `X-Internal-Caller` hợp lệ | Bị chặn ngay tại middleware với `403 Forbidden` (`CALLER_NOT_AUTHORIZED`). |
-| **AT-19.4** | Admin không đủ quyền | User có token hợp lệ nhưng role không có quyền `experience.publish` | Bị chặn `403 Forbidden` (`PERMISSION_DENIED`), không tạo được release. |
+| **AT-19.4** | Admin không đủ quyền | User có token hợp lệ nhưng role không có quyền `experience.release.publish` | Bị chặn `403 Forbidden` (`PERMISSION_DENIED`), không tạo được release. |
 | **AT-19.5** | Stale Validation Report | Cố tình gọi Publish khi Draft JSON đã bị sửa đổi (Hash hiện tại khác Hash trong Report) | Trả về `409 Conflict` hoặc `422 Unprocessable` (`VALIDATION_REPORT_STALE`). |
 | **AT-20.1** | Session Pinning Isolation | Tạo Session 1 (Release v1) $\rightarrow$ Admin activate Release v2 $\rightarrow$ Session 1 tiếp tục gửi turn | Session 1 vẫn nhận câu hỏi và luật của Release v1, không bị chuyển sang v2. |
 
