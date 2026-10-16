@@ -68,11 +68,11 @@ describe('failure', () => {
 });
 
 describe('withHandler', () => {
-  const route: RouteContext<{ id: string }> = { params: Promise.resolve({ id: '7' }) };
+  const route: RouteContext<{ id: string }> = { params: { id: '7' } };
 
-  it('passes request, context and Next 15 async params to handler', async () => {
+  it('passes request, context and URL params to handler', async () => {
     const handler = withHandler<{ id: string }>(async (_req, c, r) => {
-      const { id } = await r.params;
+      const { id } = r.params;
       return success({ id, requestId: c.requestId }, c);
     });
     const res = await handler(new Request('http://x/api/v1/a/7', { headers: { 'x-request-id': 'rid-1', 'x-trace-id': 'tid-1' } }), route);

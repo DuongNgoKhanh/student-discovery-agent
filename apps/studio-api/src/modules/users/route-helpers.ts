@@ -3,7 +3,7 @@ import type { RouteContext } from '@/http/types';
 import { userIdSchema } from '@/modules/users/users.schemas';
 
 export async function userIdParam(route: RouteContext<{ user_id: string }>): Promise<number> {
-  const parsed = userIdSchema.safeParse((await route.params).user_id);
+  const parsed = userIdSchema.safeParse((route.params).user_id);
   if (!parsed.success) throw new ProductError(422, 'INVALID_INPUT', 'Invalid user id', false, { kind: 'validation' });
   return parsed.data;
 }

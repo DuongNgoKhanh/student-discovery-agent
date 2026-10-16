@@ -4,7 +4,7 @@ export interface RequestContext {
   traceId: string;
 }
 
-/** Next 15 route context: dynamic params are a Promise. */
+/** URL parameters supplied by the HTTP router. */
 export interface RouteContext<P = Record<string, never>> {
-  params: Promise<P>;
+  params: P;
 }

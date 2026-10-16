@@ -10,8 +10,6 @@ ajv.addFormat('date-time', true);
 ajv.addSchema({ $id: 'common', components: common.components });
 export const validateEnvelope = ajv.compile({ $ref: 'common#/components/schemas/ApiResponse' });
 
-export const route = { params: Promise.resolve({}) };
-export const idRoute = (id: number | string) => ({ params: Promise.resolve({ user_id: String(id) }) });
 
 export function call(method: string, path: string, token?: string, body?: unknown) {
   const headers: Record<string, string> = {};

@@ -117,4 +117,3 @@ describe('issue*Token (Python-compatible claims)', () => {
     expect(await verifyToken(refresh, 'refresh')).toMatchObject({ sub: '9', type: 'refresh' });
   });
 });
-
