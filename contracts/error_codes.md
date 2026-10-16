@@ -33,6 +33,7 @@ All error codes follow the pattern: `PREFIX_CODE`
 | `401` | Unauthorized | Authentication required or failed | Missing/invalid/expired token |
 | `403` | Forbidden | Authenticated but insufficient permissions | No access to resource |
 | `404` | Not Found | Resource does not exist | Invalid resource ID |
+| `415` | Unsupported Media Type | Request body is not JSON | Body sent without `Content-Type: application/json` (or `application/*+json`) |
 | `422` | Unprocessable Entity | Validation errors or business rule violations | Invalid input data |
 | `500` | Internal Server Error | Server error occurred | Unexpected server-side errors |
 | `503` | Service Unavailable | Service temporarily unavailable | Maintenance or overload |
@@ -176,6 +177,13 @@ Occur when input validation fails or business rules violated.
 |---------|-------------|-----|
 | `Message content cannot be empty` | Empty message | Provide message content |
 | `Message content exceeds maximum length` | Too many characters | Keep message concise |
+
+#### Request Body Validation
+
+| Code | HTTP | Message | Description | Fix |
+|------|------|---------|-------------|-----|
+| `VAL_INVALID_REQUEST` | 400 | `Request body is required` / `Malformed JSON body` | Missing or unparsable JSON body | Send a valid JSON body |
+| `VAL_UNSUPPORTED_MEDIA_TYPE` | 415 | `Content-Type must be application/json` | Non-empty body without a JSON content type (`application/json`, optional `; charset=...`, or `application/*+json`). CSRF hardening: cross-site "simple" requests (`text/plain`, form, multipart) are rejected before any side effect, so no cookies are set | Send `Content-Type: application/json` |
 
 #### Bulk Operation Validation
 

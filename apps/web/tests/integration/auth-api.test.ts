@@ -230,6 +230,24 @@ describe('POST /auth/login', () => {
   });
 });
 
+describe('JSON content type is required (CSRF hardening)', () => {
+  it('text/plain POST to /auth/login -> 415 without cookies, even with valid credentials', async () => {
+    const addr = email();
+    expect((await register(post('/auth/register', { email: addr, password: STRONG }), route)).status).toBe(200);
+    const res = await login(
+      new Request('http://localhost/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify({ email: addr, password: STRONG }),
+      }),
+      route,
+    );
+    expect(res.status).toBe(415);
+    expect((await json(res)).error.code).toBe('VAL_UNSUPPORTED_MEDIA_TYPE');
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+});
+
 describe('POST /auth/refresh', () => {
   it('body refresh_token: returns access only, sets access cookie, leaves refresh cookie untouched', async () => {
     const token = await issueRefreshToken('42');

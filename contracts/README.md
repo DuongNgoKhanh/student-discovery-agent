@@ -112,5 +112,10 @@ Trạng thái parity giữa contract và triển khai hiện tại (backend Pyth
 | `/conversations*`, `/activities/{id}/result`, `/results/{id}/share-card` | future | Chat anonymous, chưa triển khai. |
 | `/admin/experiences*`, `/admin/experience-releases*`, `/admin/experience-previews*`, `/admin/audit-logs*` | future | Studio, chưa triển khai. |
 
+Mọi endpoint Product `/api/v1` nhận JSON body (Next route handlers) yêu cầu `Content-Type: application/json`
+(cho phép `; charset=...` hoặc `application/*+json`); body không rỗng với content type khác trả `415`
+`VAL_UNSUPPORTED_MEDIA_TYPE` và không set cookie (chống CSRF qua request "simple" cross-site). Body tùy chọn
+để trống (ví dụ `/auth/refresh` dùng cookie) không cần content type. Mã lỗi xem [error_codes.md](error_codes.md).
+
 Mismatch chung: ID user ở JSON là integer, còn type UI hiện tại là `string` (xử lý ở Task 7); login/register theo
 `AuthResponse` phẳng trong `data`.
