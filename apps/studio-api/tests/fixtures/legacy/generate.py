@@ -1,15 +1,9 @@
 """Generate legacy-compat fixtures (auth.json, schema.sql) with the ACTUAL old Python libs.
 
-Regenerate from the repo root (needs network for pip; add -e http_proxy/https_proxy if behind a proxy):
-
-  docker run --rm --network host \
-    -v "$PWD":/repo:ro \
-    -v "$PWD/apps/web/tests/fixtures/legacy":/out \
-    -e PYTHONDONTWRITEBYTECODE=1 \
-    python:3.11 bash -c '
-      pip install -q passlib==1.7.4 argon2-cffi==25.1.0 argon2-cffi-bindings==25.1.0 \
-        bcrypt==4.0.1 pyjwt==2.15.1 sqlalchemy==2.1.4 sqlmodel==0.0.48 pytz==2025.2 &&
-      PYTHONPATH=/repo python -I -c "import runpy,sys; sys.path.insert(0,\"/repo\"); runpy.run_path(\"/repo/apps/web/tests/fixtures/legacy/generate.py\", run_name=\"__main__\")"'
+Historical generator: requires a checkout of the Python backend before its removal.
+This file moved with the fixtures into apps/studio-api; it is not runnable against
+current source, which no longer contains app.models or the old Python services.
+To regenerate, use that historical checkout and direct /out to this directory.
 
 Notes:
 - Only `app.models.user` / `app.models.version` are imported (they pull `app.models.base`

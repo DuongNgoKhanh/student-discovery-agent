@@ -18,5 +18,7 @@ Import type trong module, ví dụ:
 
 ```ts
 import type { paths, components } from '@/generated/api/user-api';
-type User = components['schemas']['UserResponse'];
+type User = components['schemas']['UserProfile'];
 ```
+
+Contracts nằm tại root repository. Mỗi app sinh types độc lập bằng lệnh trên từ thư mục app; không import source/generated types của app khác.

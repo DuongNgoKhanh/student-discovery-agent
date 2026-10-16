@@ -3,7 +3,7 @@ import { accessTokenTtlSeconds, refreshTokenTtlSeconds } from '@/modules/auth/to
 
 // ---------------------------------------------------------------------------
 // Product (/api/v1) cookie helpers: operate on the route's own Request/Response,
-// never via next/headers mutation or by fetching the app itself.
+// without framework-specific cookie mutation or fetching the app itself.
 // ---------------------------------------------------------------------------
 
 function serialize(name: string, value: string, maxAge: number): string {

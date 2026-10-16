@@ -93,22 +93,23 @@ Các lựa chọn còn ở trạng thái Proposed vẫn cần chốt trước im
 
 ## Kiểm tra contract và bảng parity
 
-Server local của mọi YAML là web `http://localhost:3000/api/v1`. Chạy `pnpm --dir apps/web contracts:check`
-(`@redocly/cli lint`, cấu hình `apps/web/redocly.yaml`) trên hai mục lục `user-api.yaml`/`admin-api.yaml`;
+Public gateway origin local của mọi YAML là `http://localhost:3000/api/v1`. Chạy `pnpm --dir apps/studio-api contracts:check`
+(`@redocly/cli lint`, cấu hình `apps/studio-api/redocly.yaml`) trên hai mục lục `user-api.yaml`/`admin-api.yaml`;
 lệnh fail khi `$ref` không resolve được hoặc schema sai cấu trúc OpenAPI 3.0.
 
-Trạng thái parity giữa contract và triển khai hiện tại (Product API là Next route handlers ở
-`apps/web/src/app/api/v1`; backend Python cũ đã được gỡ).
+Trạng thái parity giữa contract và triển khai hiện tại (Product API là Hono routes ở
+`apps/studio-api/src/modules`; backend Python cũ đã được gỡ).
 
 | Endpoint | Trạng thái | Ghi chú |
 | --- | --- | --- |
-| `/auth/register`, `/auth/login`, `/auth/refresh` | implemented (Next `/api/v1`) | `AuthResponse` phẳng trong `data`. |
-| `/auth/logout` | implemented (Next `/api/v1/auth/logout`) | Response `data: {ok:true}`. |
-| `/admin/auth/login` | implemented (Next `/api/v1`) | Không có mật khẩu mặc định; cần `ADMIN_PASSWORD`. |
-| `/me`, `/users`, `/admin/users*` (CRUD, restore, bulk) | implemented (Next `/api/v1`) | `/users` yêu cầu Bearer; bulk create thất bại trả `user_id: null`. |
-| `/users/avatar/upload`, `/users/{user_id}/avatar` | implemented (Next `/api/v1`) | Avatar quá lớn trả 413. |
-| `/versions` (GET, POST 201) | implemented (Next `/api/v1`) | Public, không RBAC. |
-| `/download` | implemented (Next `/api/v1`) | Chỉ bucket avatar công khai; bucket khác hoặc `..` trả 404. |
+| `/auth/register`, `/auth/login`, `/auth/refresh` | implemented (studio-api `/api/v1`) | `AuthResponse` phẳng trong `data`. |
+| `/auth/session` | implemented (studio-api `/api/v1`) | Read-only verified metadata `{userId,isAdmin}`; access invalid/expired trả 401. |
+| `/auth/logout` | implemented (studio-api `/api/v1/auth/logout`) | Response `data: {ok:true}`. |
+| `/admin/auth/login` | implemented (studio-api `/api/v1`) | Không có mật khẩu mặc định; cần `ADMIN_PASSWORD`. |
+| `/me`, `/users`, `/admin/users*` (CRUD, restore, bulk) | implemented (studio-api `/api/v1`) | `/users` yêu cầu Bearer; bulk create thất bại trả `user_id: null`. |
+| `/users/avatar/upload`, `/users/{user_id}/avatar` | implemented (studio-api `/api/v1`) | Avatar quá lớn trả 413. |
+| `/versions` (GET, POST 201) | implemented (studio-api `/api/v1`) | Public, không RBAC. |
+| `/download` | implemented (studio-api `/api/v1`) | Chỉ bucket avatar công khai; bucket khác hoặc `..` trả 404. |
 | `/conversations*`, `/activities/{id}/result`, `/results/{id}/share-card` | future | Chat anonymous, chưa triển khai. |
 | `/admin/experiences*`, `/admin/experience-releases*`, `/admin/experience-previews*`, `/admin/audit-logs*` | future | Studio, chưa triển khai. |
 
@@ -119,7 +120,7 @@ Quyết định có chủ đích: `requireAdmin` trả 401 khi thiếu/sai token
 không có mật khẩu mặc định (cần `ADMIN_PASSWORD`, thiếu thì 401); body không phải JSON trả 415; avatar quá
 lớn trả 413.
 
-Mọi endpoint Product `/api/v1` nhận JSON body (Next route handlers) yêu cầu `Content-Type: application/json`
+Mọi endpoint Product `/api/v1` nhận JSON body (Studio API/Hono) yêu cầu `Content-Type: application/json`
 (cho phép `; charset=...` hoặc `application/*+json`); body không rỗng với content type khác trả `415`
 `VAL_UNSUPPORTED_MEDIA_TYPE` và không set cookie (chống CSRF qua request "simple" cross-site). Body tùy chọn
 để trống (ví dụ `/auth/refresh` dùng cookie) không cần content type. Mã lỗi xem [error_codes.md](error_codes.md).

@@ -13,10 +13,11 @@ pnpm test:watch   # watch mode
 
 | Nên test | Ví dụ trong repo |
 |---|---|
-| Zod schema (biên hợp lệ/không hợp lệ) | `features/users/schemas/auth.test.ts` |
+| Zod schema (biên hợp lệ/không hợp lệ) | `features/auth/schemas/auth.test.ts` |
 | Util thuần | `lib/utils/cn.test.ts` |
-| Logic hạ tầng | `lib/api/response.test.ts` (unwrap envelope), `lib/auth/jwt.test.ts` |
+| Logic hạ tầng | `lib/api/response.test.ts` (unwrap envelope), `lib/auth/jwt-decode.test.ts` |
 | API client (mock `fetch`) | `lib/api/client.test.ts` |
+| SSR session HTTP (Node project) | `lib/api/session.server.test.ts`: Cookie forwarding, 401, unavailable API |
 | Component có nhánh hiển thị | render + assert theo hành vi người dùng |
 
 Không cần test: code chỉ forward props, style thuần, hoặc wrapper Query 1 dòng.
@@ -49,3 +50,5 @@ it('hiển thị tiêu đề', () => {
 ```
 
 Hook dùng Query → bọc `QueryClientProvider` trong `render` (tạo helper `renderWithProviders` khi cần).
+
+Product unit/integration tests thuộc `apps/studio-api`; UI không chạy DB/migration fixtures. Kiểm tra UI độc lập bằng `pnpm gen:api && pnpm typecheck && pnpm lint && pnpm test && pnpm build`.

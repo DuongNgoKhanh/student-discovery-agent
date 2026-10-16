@@ -4,14 +4,16 @@ Cách gọi API backend nhất quán, an toàn token, xử lý envelope chuẩn 
 
 ## 1. Kiến trúc gọi API (same-origin `/api/v1`)
 
-Token nằm ở **httpOnly cookie**; browser chỉ gọi Product API cùng origin (route handlers trong `src/app/api/v1`).
+Token nằm ở **httpOnly cookie**; browser gọi API cùng origin qua gateway (production) hoặc Next rewrite (dev). Product routes và nghiệp vụ thuộc `apps/studio-api`.
 
 ```
-Client component ──▶ api (src/lib/api/client.ts) ──▶ /api/v1/<path> (route handler, src/server/<domain>)
-Auth (login/register/refresh/logout) ──▶ /api/v1/auth/* (route handler set/clear cookie)
+Client component → api (src/lib/api/client.ts) → /api/v1/<path> → gateway/dev rewrite → studio-api
+Server Component → session.server.ts → STUDIO_API_ORIGIN/api/v1/auth/session
+Auth (login/register/refresh/logout) → studio-api set/clear cookie
 ```
 
-- Code server nằm ở `src/server/<domain>` (server-only); code client ở `src/features/<domain>`; type sinh từ OpenAPI ở `src/generated/api`.
+- UI feature code ở `src/features/<domain>`; DTO sinh từ contracts chung vào `src/generated/api`. UI không giữ DB/JWT signing key/S3 credentials.
+- SSR session chỉ forward Cookie và request/trace ID tới origin API cố định trong env, không cache. Chỉ 401 trả null; network/5xx là lỗi không khả dụng, không diễn giải thành logout.
 - **KHÔNG** `fetch('http://localhost:3000/...')` từ client. Luôn qua `api.*`.
 - `path` truyền vào `api` là phần sau `/api/v1`, ví dụ `api.get('me')`, `api.get('admin/users?page=1')`.
 
@@ -75,5 +77,5 @@ const mutation = useMutation({
 
 ## 6. Auth flow
 
-- Đăng nhập/đăng ký: gọi hàm `login`/`register` trong `features/users/api/auth.ts` (chúng POST tới `/api/v1/auth/*`, nơi set cookie). KHÔNG tự set token phía client.
+- Đăng nhập/đăng ký: gọi hàm `login`/`register` trong `features/auth/api/auth.ts` (chúng POST tới `/api/v1/auth/*`, nơi set cookie). KHÔNG tự set token phía client.
 - Refresh: tự động ở `src/lib/api/client.ts`: gặp 401 thì gọi `/api/v1/auth/refresh` một lần rồi retry request. Không cần xử lý refresh thủ công ở UI.

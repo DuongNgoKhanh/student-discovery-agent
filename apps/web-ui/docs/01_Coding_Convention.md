@@ -53,9 +53,9 @@ Luôn dùng alias `@/*` cho import xuyên thư mục; chỉ dùng `../` trong n�
 
 - **Mặc định là Server Component.** Không thêm `'use client'` nếu không cần.
 - Thêm `'use client'` chỉ khi cần: `useState`/`useEffect`, event handler, hook trình duyệt, TanStack Query hook, React Hook Form.
-- Đọc dữ liệu ở server → gọi trực tiếp hàm trong `src/server/<domain>` (server-only) từ Server Component.
+- Server Component gọi backend qua HTTP; session dùng `src/lib/api/session.server.ts`. Nghiệp vụ/DB thuộc `apps/studio-api`, không import source chéo app.
 - Đọc dữ liệu ở client → dùng hook trong `src/features/<domain>` (bọc `api` của `src/lib/api/client.ts`).
-- KHÔNG import `next/headers`, `cookies`, `src/server/*`, `src/config/env` vào client component.
+- KHÔNG import `next/headers`, `cookies`, `src/config/env` vào client component.
 
 ## 5. TypeScript
 
