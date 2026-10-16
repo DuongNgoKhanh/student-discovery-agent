@@ -1,0 +1,128 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery - Admin Authentication
+  version: 1.0.0
+  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md
+    để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+tags:
+  - name: Admin-Auth
+    description: Admin authentication and token management
+paths:
+  /admin/auth/login:
+    post:
+      tags:
+        - Admin-Auth
+      summary: Authenticate admin user
+      description: Authenticate an admin user with username and password and return a JWT access token.
+      operationId: adminLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+      responses:
+        '200':
+          description: Admin authenticated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAuthResponse'
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/BadRequestError
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: admin-user-api.yaml#/components/responses/ForbiddenError
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/InternalServerError
+components:
+  schemas:
+    AdminLoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: Admin username
+          example: admin
+        password:
+          type: string
+          description: Admin password
+          example: strongpassword123
+    AdminTokenResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+          description: JWT access token for admin
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          example: bearer
+        expires_in:
+          type: integer
+          description: Expiration time in seconds
+          example: 3600
+    AdminAuthResponse:
+      type: object
+      required:
+        - success
+        - data
+        - status
+        - error
+        - meta
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Login successful
+          nullable: true
+        data:
+          $ref: '#/components/schemas/AdminTokenResponse'
+        status:
+          type: integer
+          description: HTTP status; inspect success even for HTTP 200.
+        error:
+          anyOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/ErrorDetail
+            - type: object
+              nullable: true
+              enum:
+                - null
+        meta:
+          $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+  responses:
+    UnauthorizedError:
+      description: Unauthorized - Invalid, missing, or expired authentication token
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/common.yaml#/components/schemas/ErrorResponse
+          example:
+            status: 401
+            success: false
+            message: Authentication required or token invalid
+            data: null
+            error:
+              code: AUTH_INVALID_TOKEN
+              message: Authentication required or token invalid
+              details: null
+              retryable: false
+            meta:
+              request_id: req-example
+              trace_id: trace-example
+              timestamp: '2026-10-12T03:00:00Z'

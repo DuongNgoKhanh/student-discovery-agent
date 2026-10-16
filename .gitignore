@@ -219,7 +219,6 @@ plan.md
 # Firebase service account keys
 config/keys/*.json
 config/*.json
-app/static/*
 
 checkpoints/*
 AGENTS.md
@@ -232,3 +231,11 @@ docs/presentations
 docs/superpowers
 
 docs/Nghiep_vu
+
+# Per-app Node build output / dependencies
+apps/*/node_modules/
+apps/*/.next/
+apps/*/out/
+apps/*/coverage/
+apps/*/*.tsbuildinfo
+apps/*/.venv/

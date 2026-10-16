@@ -1,0 +1,54 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery - Download
+  version: 1.0.0
+  description: Contract theo resource. Quy ước chung nằm trong user-api.yaml; xem README.md. Endpoint công khai tải object
+    từ object storage, chỉ cho phép bucket avatar công khai.
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+tags:
+  - name: Download
+    description: Public object download
+paths:
+  /download:
+    get:
+      tags:
+        - Download
+      summary: Download an object as an attachment
+      description: |
+        Public (no authentication). `object_name` has the form `<bucket>/<key>`.
+        Only the public avatar bucket is allowed (decided policy change, implemented in Task 6):
+        any other bucket, or a key containing `..`, returns 404, as does a missing object.
+        Success returns the raw bytes as `application/octet-stream` with
+        `Content-Disposition: attachment; filename=<key's last segment>`.
+      operationId: downloadFile
+      parameters:
+        - name: object_name
+          in: query
+          required: true
+          description: Object path `<bucket>/<key>`.
+          schema:
+            type: string
+          example: sda-public/avatar_1.png
+      responses:
+        '200':
+          description: Binary object content
+          headers:
+            Content-Disposition:
+              description: attachment; filename=<file name>
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: profile-api.yaml#/components/responses/NotFoundError
+        '422':
+          $ref: ../schemas/common.yaml#/components/responses/ValidationError
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/InternalServerError

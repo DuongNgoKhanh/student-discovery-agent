@@ -1,0 +1,313 @@
+openapi: 3.0.3
+info:
+  title: Backend API - User Management
+  description: |
+    User management and authentication endpoints for Backend API.
+
+    Supports:
+    - Email/password authentication flow
+    - User profile management (CRUD)
+    - User avatar management
+    - Token refresh mechanism
+
+    Chat-first contract theo docs/prd/chat_first_assessment_api_proposal.md (Proposed, 12/10/2026).
+    Conversation → Activities → Results; resource model rộng hơn MVP 6 câu/card trong SRS v0.3.
+    MVP chỉ personality_assessment; các loại career_interest/skill/career_exploration là extension sau.
+    Conversation pin Agent Release; activity pin Experience Release. Structured option interaction không bắt buộc gọi LLM.
+    Natural text đi qua Agent; start_activity và answer mapping chỉ là validated commands, Engine giữ state/scoring correctness.
+    Runtime sở hữu conversation/messages/activity/result; Studio/Product sở hữu definition/draft/release/audit; không ghi chéo bảng.
+
+    Wire choices đề xuất để define docs: synchronous JSON (chưa SSE); persisted committed messages/blocks;
+    immutable result_id mới mỗi snapshot + result_revision tăng theo activity; :end/:activate/:rollback dùng nhất quán custom methods.
+    Các lựa chọn này cần baseline theo §9 proposal trước implementation. Không tự thêm API server render ảnh.
+    expected_revision của public turn/end thuộc conversation; activity và result có revision riêng.
+    Option/text phải thuộc current question; proposal binds activity/question/activity revision.
+    General chat không tự tăng progress hoặc invalidate result. Completion activity không đóng conversation.
+    Commit parent/activity/state/messages/outcome nguyên tử; LLM ngoài transaction chỉ commit khi captured guards còn đúng và chưa đóng/hết hạn.
+    Owner/lifecycle kiểm trước replay; committed replay trước stale revision; collision payload không chạy lại.
+    Client giữ state revision mới hơn khi response đến muộn; retry/auth refresh giữ nguyên body/key/revision.
+
+    DEC-01: edit option ở in_progress/completed, bỏ suffix sau k và invalidate proposal/result cũ; tên no digits/emoji và không đổi sau bước tên.
+    DEC-02: summary.v1 share PNG/demo, full share qua projection version riêng; layout/limits/assets còn mở.
+    DEC-03: read-after-close/TTL/retention còn mở; end/expiry không đồng nghĩa xóa ngay và không resume.
+    DEC-04 hoãn rules/scoring/coverage/tie/golden outcomes; JSON structure hợp lệ không đủ để publish.
+    DEC-05 text auto-accept khi policy đã duyệt/membership/revision hợp lệ, mơ hồ hỏi lại.
+    DEC-06 LLM từ phase đầu; provider/model/budget còn mở. DEC-07 học sinh chat anonymous; POST /conversations
+    tự cấp owner cookie khi thiếu, không cần login/bootstrap API riêng. Admin login/RBAC; CSRF/token format/TTL/proof còn mở.
+    DEC-08 workload/rate/input limits/benchmark chốt sau; không có default số production tự đặt.
+
+    Public output có thể thêm optional fields; requests/share allowlist strict. Unknown block/type/version có controlled incompatibility.
+    Các block có stable block_id/type/schema_version; messages/turns có IDs ổn định để replay/history không duplicate.
+    Timestamp UTC Z, safe integer revisions, SHA-256 canonical JSON RFC8785 cho snapshot hash.
+    Envelope status/success/data/error/meta. Chat/Studio mới dùng 409 conflict/stale, 422 semantic invalid; scaffold cũ giữ HTTP mapping hiện hữu.
+
+
+    Mục lục tổng hợp: mỗi resource có YAML riêng; xem README.md.
+    Schema/response/example dùng $ref tới định nghĩa gốc; không sửa bản alias ở đây.
+  version: 1.0.0
+  contact:
+    name: Backend API Team
+    email: support@example.com
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+tags:
+  - name: Authentication
+    description: Email/password auth and token management
+  - name: User
+    description: User profile and information management
+  - name: User Avatar
+    description: User avatar upload and retrieval
+  - name: Version
+    description: Application version tracking
+  - name: Download
+    description: Public object download
+  - name: Conversations
+    description: Unified chat lifecycle/history/turns.
+  - name: Activity Results
+    description: Latest valid activity result and revisioned share projection.
+paths:
+  /auth/register:
+    $ref: auth-api.yaml#/paths/~1auth~1register
+  /auth/login:
+    $ref: auth-api.yaml#/paths/~1auth~1login
+  /auth/refresh:
+    $ref: auth-api.yaml#/paths/~1auth~1refresh
+  /me:
+    $ref: profile-api.yaml#/paths/~1me
+  /users:
+    $ref: profile-api.yaml#/paths/~1users
+  /users/avatar/upload:
+    $ref: avatar-api.yaml#/paths/~1users~1avatar~1upload
+  /users/{user_id}/avatar:
+    $ref: avatar-api.yaml#/paths/~1users~1{user_id}~1avatar
+  /auth/logout:
+    $ref: auth-api.yaml#/paths/~1auth~1logout
+  /versions:
+    $ref: versions-api.yaml#/paths/~1versions
+  /download:
+    $ref: download-api.yaml#/paths/~1download
+  /conversations:
+    $ref: conversation-api.yaml#/paths/~1conversations
+  /conversations/{conversation_id}:
+    $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}
+  /conversations/{conversation_id}/messages:
+    $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}~1messages
+  /conversations/{conversation_id}/turns:
+    $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}~1turns
+  /conversations/{conversation_id}:end:
+    $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}:end
+  /activities/{activity_id}/result:
+    $ref: activity-api.yaml#/paths/~1activities~1{activity_id}~1result
+  /results/{result_id}/share-card:
+    $ref: result-api.yaml#/paths/~1results~1{result_id}~1share-card
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token required for protected endpoints
+    AnonymousOwner:
+      type: apiKey
+      in: cookie
+      name: sda_owner
+      description: |-
+        Anonymous owner cookie, không phải đăng nhập học sinh. POST /conversations cấp cookie khi chưa có;
+        khi có cookie phải xác minh credential. Các API đọc/thao tác conversation/activity/result yêu cầu cookie hợp lệ.
+        Credential scoped/TTL-bound; resource IDs hoặc idempotency_key không cấp quyền truy cập.
+        CSRF, token format và TTL còn chờ DEC-07.
+      x-decision-status: accepted-anonymous-bootstrap
+  schemas:
+    ApiResponse:
+      $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
+    ResponseMeta:
+      $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+    ErrorDetail:
+      $ref: ../schemas/common.yaml#/components/schemas/ErrorDetail
+    PaginationMeta:
+      $ref: profile-api.yaml#/components/schemas/PaginationMeta
+    ErrorResponse:
+      $ref: ../schemas/common.yaml#/components/schemas/ErrorResponse
+    RefreshTokenRequest:
+      $ref: auth-api.yaml#/components/schemas/RefreshTokenRequest
+    LoginRequest:
+      $ref: auth-api.yaml#/components/schemas/LoginRequest
+    RegisterRequest:
+      $ref: auth-api.yaml#/components/schemas/RegisterRequest
+    TokenRefreshResponse:
+      $ref: auth-api.yaml#/components/schemas/TokenRefreshResponse
+    AuthResponse:
+      $ref: auth-api.yaml#/components/schemas/AuthResponse
+    UserProfile:
+      $ref: profile-api.yaml#/components/schemas/UserProfile
+    UserInfoResponse:
+      $ref: profile-api.yaml#/components/schemas/UserInfoResponse
+    UserUpdateRequest:
+      $ref: profile-api.yaml#/components/schemas/UserUpdateRequest
+    PaginatedUsersResponse:
+      $ref: profile-api.yaml#/components/schemas/PaginatedUsersResponse
+    LogoutResponse:
+      $ref: auth-api.yaml#/components/schemas/LogoutResponse
+    VersionCreate:
+      $ref: versions-api.yaml#/components/schemas/VersionCreate
+    VersionResponse:
+      $ref: versions-api.yaml#/components/schemas/VersionResponse
+    VersionApiResponse:
+      $ref: versions-api.yaml#/components/schemas/VersionApiResponse
+    AvatarUploadResponse:
+      $ref: avatar-api.yaml#/components/schemas/AvatarUploadResponse
+    AssessmentProgress:
+      $ref: ../schemas/activity.yaml#/components/schemas/AssessmentProgress
+    AssessmentOption:
+      $ref: ../schemas/activity.yaml#/components/schemas/AssessmentOption
+    AssessmentQuestion:
+      $ref: ../schemas/activity.yaml#/components/schemas/AssessmentQuestion
+    ClarificationCandidate:
+      $ref: ../schemas/activity.yaml#/components/schemas/ClarificationCandidate
+    ActivityClarification:
+      $ref: ../schemas/activity.yaml#/components/schemas/ActivityClarification
+    ActivityAnswer:
+      $ref: ../schemas/activity.yaml#/components/schemas/ActivityAnswer
+    ActivityResultRef:
+      $ref: ../schemas/activity.yaml#/components/schemas/ActivityResultRef
+    ActivityView:
+      $ref: ../schemas/activity.yaml#/components/schemas/ActivityView
+    ConversationView:
+      $ref: ../schemas/chat.yaml#/components/schemas/ConversationView
+    CreateConversationInput:
+      $ref: conversation-api.yaml#/components/schemas/CreateConversationInput
+    MessageTurnInput:
+      $ref: ../schemas/chat.yaml#/components/schemas/MessageTurnInput
+    SetNameInteraction:
+      $ref: ../schemas/chat.yaml#/components/schemas/SetNameInteraction
+    SubmitAnswerInteraction:
+      $ref: ../schemas/chat.yaml#/components/schemas/SubmitAnswerInteraction
+    ConfirmAnswerInteraction:
+      $ref: ../schemas/chat.yaml#/components/schemas/ConfirmAnswerInteraction
+    EditAnswerInteraction:
+      $ref: ../schemas/chat.yaml#/components/schemas/EditAnswerInteraction
+    InteractionTurnInput:
+      $ref: ../schemas/chat.yaml#/components/schemas/InteractionTurnInput
+    ConversationTurnInput:
+      $ref: ../schemas/chat.yaml#/components/schemas/ConversationTurnInput
+    EndConversationInput:
+      $ref: conversation-api.yaml#/components/schemas/EndConversationInput
+    HouseIdentity:
+      $ref: ../schemas/typed-blocks.yaml#/components/schemas/HouseIdentity
+    PersonalityCardData:
+      $ref: ../schemas/typed-blocks.yaml#/components/schemas/PersonalityCardData
+    ResultView:
+      $ref: activity-api.yaml#/components/schemas/ResultView
+    ShareHouse:
+      $ref: result-api.yaml#/components/schemas/ShareHouse
+    ShareBranding:
+      $ref: result-api.yaml#/components/schemas/ShareBranding
+    ShareCard:
+      $ref: result-api.yaml#/components/schemas/ShareCard
+    TextBlock:
+      $ref: ../schemas/typed-blocks.yaml#/components/schemas/TextBlock
+    AssessmentQuestionBlock:
+      $ref: ../schemas/typed-blocks.yaml#/components/schemas/AssessmentQuestionBlock
+    AssessmentClarificationBlock:
+      $ref: ../schemas/typed-blocks.yaml#/components/schemas/AssessmentClarificationBlock
+    PersonalityCardBlock:
+      $ref: ../schemas/typed-blocks.yaml#/components/schemas/PersonalityCardBlock
+    TypedBlock:
+      $ref: ../schemas/typed-blocks.yaml#/components/schemas/TypedBlock
+    ConversationCreated:
+      $ref: conversation-api.yaml#/components/schemas/ConversationCreated
+    ConversationTurnResult:
+      $ref: ../schemas/chat.yaml#/components/schemas/ConversationTurnResult
+    StoredInteraction:
+      $ref: conversation-api.yaml#/components/schemas/StoredInteraction
+    MessageView:
+      $ref: conversation-api.yaml#/components/schemas/MessageView
+    MessagePage:
+      $ref: conversation-api.yaml#/components/schemas/MessagePage
+    ChatResponseMeta:
+      $ref: ../schemas/common.yaml#/components/schemas/ChatResponseMeta
+    RevisionConflictDetails:
+      $ref: ../schemas/common.yaml#/components/schemas/RevisionConflictDetails
+    StaleResultDetails:
+      $ref: ../schemas/common.yaml#/components/schemas/StaleResultDetails
+    SnapshotConflictDetails:
+      $ref: ../schemas/common.yaml#/components/schemas/SnapshotConflictDetails
+    ValidationIssue:
+      $ref: ../schemas/common.yaml#/components/schemas/ValidationIssue
+    ValidationDetails:
+      $ref: ../schemas/common.yaml#/components/schemas/ValidationDetails
+    DomainError:
+      $ref: ../schemas/common.yaml#/components/schemas/DomainError
+    SuccessEnvelope:
+      $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+    ErrorEnvelope:
+      $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    ConversationCreatedEnvelope:
+      $ref: conversation-api.yaml#/components/schemas/ConversationCreatedEnvelope
+    ConversationEnvelope:
+      $ref: conversation-api.yaml#/components/schemas/ConversationEnvelope
+    MessagePageEnvelope:
+      $ref: conversation-api.yaml#/components/schemas/MessagePageEnvelope
+    ConversationTurnEnvelope:
+      $ref: ../schemas/chat.yaml#/components/schemas/ConversationTurnEnvelope
+    ActivityResultEnvelope:
+      $ref: activity-api.yaml#/components/schemas/ActivityResultEnvelope
+    ShareCardEnvelope:
+      $ref: result-api.yaml#/components/schemas/ShareCardEnvelope
+  responses:
+    BadRequestError:
+      $ref: ../schemas/common.yaml#/components/responses/BadRequestError
+    UnauthorizedError:
+      $ref: auth-api.yaml#/components/responses/UnauthorizedError
+    NotFoundError:
+      $ref: profile-api.yaml#/components/responses/NotFoundError
+    ValidationError:
+      $ref: ../schemas/common.yaml#/components/responses/ValidationError
+    InternalServerError:
+      $ref: ../schemas/common.yaml#/components/responses/InternalServerError
+    ChatError400:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError400
+    ChatError401:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError401
+    ChatError403:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError403
+    ChatError404:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError404
+    ChatError409:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError409
+    ChatError410:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError410
+    ChatError413:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError413
+    ChatError422:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError422
+    ChatError429:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError429
+    ChatError500:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError500
+    ChatError503:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError503
+    ChatError504:
+      $ref: ../schemas/common.yaml#/components/responses/ChatError504
+  examples:
+    CreateConversation:
+      $ref: conversation-api.yaml#/components/examples/CreateConversation
+    ConversationCreated:
+      $ref: conversation-api.yaml#/components/examples/ConversationCreated
+    NaturalMessage:
+      $ref: conversation-api.yaml#/components/examples/NaturalMessage
+    SubmitOption:
+      $ref: conversation-api.yaml#/components/examples/SubmitOption
+    SubmitText:
+      $ref: conversation-api.yaml#/components/examples/SubmitText
+    QuestionTurn:
+      $ref: conversation-api.yaml#/components/examples/QuestionTurn
+    CompletedTurn:
+      $ref: conversation-api.yaml#/components/examples/CompletedTurn
+    ShareSummary:
+      $ref: result-api.yaml#/components/examples/ShareSummary
+    RevisionConflict:
+      $ref: ../schemas/common.yaml#/components/examples/RevisionConflict

@@ -1,0 +1,122 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery - Versions
+  version: 1.0.0
+  description: Contract theo resource. Quy ước chung nằm trong user-api.yaml; xem README.md. Endpoint công khai của scaffold,
+    không yêu cầu xác thực và không có RBAC.
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+tags:
+  - name: Version
+    description: Application version tracking
+paths:
+  /versions:
+    get:
+      tags:
+        - Version
+      summary: Get current application version
+      description: Return the single version marked as current. No authentication required.
+      operationId: getCurrentVersion
+      responses:
+        '200':
+          description: Current version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionApiResponse'
+        '404':
+          $ref: profile-api.yaml#/components/responses/NotFoundError
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/InternalServerError
+    post:
+      tags:
+        - Version
+      summary: Create and register a new version
+      description: |
+        Validate the semantic version (x.x.x), mark the previous current version as deprecated and
+        make the new version current. No authentication required. Responds 201 on success;
+        400 when the version already exists.
+      operationId: createVersion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionCreate'
+      responses:
+        '201':
+          description: Version created and set as current
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionApiResponse'
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/BadRequestError
+        '422':
+          $ref: ../schemas/common.yaml#/components/responses/ValidationError
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/InternalServerError
+components:
+  schemas:
+    VersionCreate:
+      type: object
+      required:
+        - version
+      properties:
+        version:
+          type: string
+          minLength: 5
+          maxLength: 50
+          pattern: '^\d+\.\d+\.\d+$'
+          description: Semantic version (x.x.x format)
+          example: 1.2.3
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+          description: Version description or release notes
+          example: Initial release
+    VersionResponse:
+      type: object
+      required:
+        - id
+        - version
+        - description
+        - is_current
+        - is_deprecated
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          example: 1
+        version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+          example: 1.2.3
+        description:
+          type: string
+          nullable: true
+        is_current:
+          type: boolean
+        is_deprecated:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+    VersionApiResponse:
+      allOf:
+        - $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
+        - type: object
+          required:
+            - data
+          properties:
+            data:
+              $ref: '#/components/schemas/VersionResponse'
