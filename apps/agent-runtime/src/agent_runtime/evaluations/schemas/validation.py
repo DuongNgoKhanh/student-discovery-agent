@@ -1,8 +1,8 @@
 """Validation and Evaluation Schemas matching OpenAPI specifications.
 
 Conforms to:
-- docs/openapi/schemas/common.yaml (ValidationIssue, ValidationDetails)
-- docs/openapi/experience-validation-api.yaml (ValidationReport, SnapshotCommandInput)
+- contracts/openapi/schemas/common.yaml (ValidationIssue, ValidationDetails)
+- contracts/openapi/public/experience-validation-api.yaml (ValidationReport, SnapshotCommandInput)
 """
 
 from datetime import datetime, timezone

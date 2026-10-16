@@ -12,7 +12,7 @@ Implements DEC-04 registration check and profile capability validation:
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from app.modules.evaluations.schemas.validation import ValidationIssue, ValidationStatus
+from agent_runtime.evaluations.schemas.validation import ValidationIssue, ValidationStatus
 
 
 @dataclass(frozen=True)
@@ -141,7 +141,7 @@ class CompatibilityChecker:
                 )
             )
 
-        allowed_slots = ALLOWED_RULE_SCHEMAS_BY_SLOT.get(schema_version, {})
+        allowed_slots = ALLOWED_RULE_SCHEMAS_BY_SLOT.get(schema_version, {}) if isinstance(schema_version, str) else {}
         has_unsupported_rules = False
 
         for slot in ["selection_rules", "scoring_rules", "coverage_rules", "tie_policy"]:
@@ -151,6 +151,17 @@ class CompatibilityChecker:
 
             rule_ref = rule_doc.get("rule_schema_ref")
             rule_eng = rule_doc.get("engine_version")
+
+            for field, value in [("rule_schema_ref", rule_ref), ("engine_version", rule_eng)]:
+                if not isinstance(value, str) or not value.strip():
+                    issues.append(
+                        ValidationIssue(
+                            path=f"{slot}.{field}",
+                            code="VAL_INVALID_TYPE",
+                            message=f"Rule document {field} must be a non-empty string.",
+                            rule_id="RULE_SCHEMA_COMPATIBILITY",
+                        )
+                    )
 
             # Check rule document engine_version matches root engine_version
             if isinstance(rule_eng, str) and rule_eng != engine_version:

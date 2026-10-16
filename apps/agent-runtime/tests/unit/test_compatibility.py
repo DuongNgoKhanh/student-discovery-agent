@@ -5,8 +5,8 @@ Verifies engine capability registry, schema support, and DEC-04 rule schema regi
 
 import pytest
 
-from app.modules.evaluations.schemas.validation import ValidationStatus
-from app.modules.evaluations.services.compatibility import (
+from agent_runtime.evaluations.schemas.validation import ValidationStatus
+from agent_runtime.evaluations.services.compatibility import (
     ALLOWED_RULE_SCHEMAS_BY_SLOT,
     CompatibilityChecker,
     DEFAULT_ENGINE_REGISTRY,

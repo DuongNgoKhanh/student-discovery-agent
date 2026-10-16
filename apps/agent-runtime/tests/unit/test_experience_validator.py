@@ -12,19 +12,20 @@ import json
 from pathlib import Path
 import pytest
 
-from app.modules.evaluations.schemas.experience import ExperienceDefinitionDocument
-from app.modules.evaluations.schemas.validation import ValidationStatus
-from app.modules.evaluations.services.compatibility import (
+from agent_runtime.evaluations.schemas.experience import ExperienceDefinitionDocument
+from agent_runtime import evaluations
+from agent_runtime.evaluations.schemas.validation import ValidationStatus
+from agent_runtime.evaluations.services.compatibility import (
     CompatibilityChecker,
     PILOT_ENGINE_REGISTRY,
 )
-from app.modules.evaluations.services.validator import (
+from agent_runtime.evaluations.services.validator import (
     ExperienceValidator,
     calculate_content_hash,
     validate_experience_definition,
 )
 
-FIXTURES_DIR = Path(__file__).resolve().parent.parent.parent / "app" / "modules" / "evaluations" / "fixtures"
+FIXTURES_DIR = Path(evaluations.__file__).parent / "fixtures"
 
 
 @pytest.fixture
@@ -56,11 +57,11 @@ class TestExperienceValidator:
         assert report.mandatory_passed is False
         assert any(i.code == "VAL_UNSUPPORTED_ENGINE_VERSION" and i.path == "engine_version" for i in report.issues)
 
-    def test_valid_definition_v1_passes(self, validator, valid_v1_doc):
+    def test_definition_v1_requires_registered_payload_validation(self, validator, valid_v1_doc):
         report = validator.validate(valid_v1_doc)
-        assert report.status == ValidationStatus.PASSED
-        assert report.mandatory_passed is True
-        assert len(report.issues) == 0
+        assert report.status == ValidationStatus.UNSUPPORTED
+        assert report.mandatory_passed is False
+        assert any(i.code == "VAL_UNSUPPORTED_RULE_PAYLOAD" for i in report.issues)
         assert report.definition_schema_version == "1.0"
         assert report.content_hash.startswith("sha256:")
         assert len(report.content_hash) == 7 + 64
@@ -339,35 +340,35 @@ class TestExperienceValidator:
         doc1 = copy.deepcopy(valid_v1_doc)
         doc1["questions"] = {"not": "a list"}
         report1 = validator.validate(doc1)
-        assert report1.status == ValidationStatus.FAILED
+        assert report1.status == ValidationStatus.UNSUPPORTED
         assert any(i.code == "VAL_INVALID_TYPE" and i.path == "questions" for i in report1.issues)
 
         # Questions with non-dict elements
         doc2 = copy.deepcopy(valid_v1_doc)
         doc2["questions"] = [1, 2, 3, 4, 5, 6]
         report2 = validator.validate(doc2)
-        assert report2.status == ValidationStatus.FAILED
+        assert report2.status == ValidationStatus.UNSUPPORTED
         assert any(i.code == "VAL_INVALID_TYPE" and i.path == "questions[0]" for i in report2.issues)
 
         # Duplicate question IDs in v1
         doc3 = copy.deepcopy(valid_v1_doc)
         doc3["questions"][1]["question_id"] = doc3["questions"][0]["question_id"]
         report3 = validator.validate(doc3)
-        assert report3.status == ValidationStatus.FAILED
+        assert report3.status == ValidationStatus.UNSUPPORTED
         assert any(i.code == "VAL_DUPLICATE_QUESTION_ID" and i.path == "questions[1].question_id" for i in report3.issues)
 
         # Empty choices in v1
         doc4 = copy.deepcopy(valid_v1_doc)
         doc4["questions"][0]["choices"] = []
         report4 = validator.validate(doc4)
-        assert report4.status == ValidationStatus.FAILED
+        assert report4.status == ValidationStatus.UNSUPPORTED
         assert any(i.code == "VAL_INVALID_CHOICE_COUNT" and i.path == "questions[0].choices" for i in report4.issues)
 
         # Empty rule payload in v1
         doc5 = copy.deepcopy(valid_v1_doc)
         doc5["selection_rules"]["payload"] = {}
         report5 = validator.validate(doc5)
-        assert report5.status == ValidationStatus.FAILED
+        assert report5.status == ValidationStatus.UNSUPPORTED
         assert any(i.code == "VAL_MISSING_RULE_FIELD" and i.path == "selection_rules.payload" for i in report5.issues)
 
     def test_evaluation_cases_and_approval_refs_validation(self, validator, valid_v2_doc):

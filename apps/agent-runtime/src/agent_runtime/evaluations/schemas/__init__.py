@@ -1,11 +1,11 @@
-from app.modules.evaluations.schemas.validation import (
+from agent_runtime.evaluations.schemas.validation import (
     SnapshotCommandInput,
     ValidationDetails,
     ValidationIssue,
     ValidationReport,
     ValidationStatus,
 )
-from app.modules.evaluations.schemas.experience import (
+from agent_runtime.evaluations.schemas.experience import (
     AssessmentDefinitionOption,
     AssessmentDefinitionQuestion,
     AssessmentGoldenAnswer,

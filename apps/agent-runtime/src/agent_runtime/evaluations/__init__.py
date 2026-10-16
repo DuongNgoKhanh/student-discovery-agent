@@ -6,18 +6,18 @@ Responsible for:
 - ValidationReport and EvaluationReport generation
 """
 
-from app.modules.evaluations.schemas.experience import (
+from agent_runtime.evaluations.schemas.experience import (
     ExperienceDefinitionDocument,
 )
-from app.modules.evaluations.schemas.validation import (
+from agent_runtime.evaluations.schemas.validation import (
     ValidationIssue,
     ValidationReport,
     ValidationStatus,
 )
-from app.modules.evaluations.services.compatibility import (
+from agent_runtime.evaluations.services.compatibility import (
     CompatibilityChecker,
 )
-from app.modules.evaluations.services.validator import (
+from agent_runtime.evaluations.services.validator import (
     ExperienceValidator,
     calculate_content_hash,
     validate_experience_definition,

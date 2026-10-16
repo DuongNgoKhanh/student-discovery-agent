@@ -16,25 +16,28 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 import uuid
 
 from pydantic import BaseModel
 
-from app.modules.evaluations.schemas.experience import ExperienceDefinitionDocument
-from app.modules.evaluations.schemas.validation import (
+from agent_runtime.evaluations.schemas.experience import ExperienceDefinitionDocument
+from agent_runtime.evaluations.schemas.validation import (
     ValidationIssue,
     ValidationReport,
     ValidationStatus,
 )
-from app.modules.evaluations.services.compatibility import (
+from agent_runtime.evaluations.services.compatibility import (
     CompatibilityChecker,
     DEFAULT_ENGINE_REGISTRY,
 )
 
 EXPECTED_HOUSES = {"house_r", "house_i", "house_a", "house_s", "house_e", "house_c"}
 ID_REGEX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+REPORT_ID_REGEX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+MAX_REVISION = 9007199254740991
 
 # Allowed root keys (OpenAPI additionalProperties: false)
 ROOT_ALLOWED_KEYS = {
@@ -135,7 +138,7 @@ class ExperienceValidator:
 
         # 1. Sanitize caller inputs to guarantee ValidationReport construction cannot fail
         rep_exp_id = "unknown_experience"
-        if isinstance(experience_id, str) and ID_REGEX.match(experience_id):
+        if isinstance(experience_id, str) and REPORT_ID_REGEX.fullmatch(experience_id):
             rep_exp_id = experience_id
         else:
             issues.append(
@@ -148,14 +151,14 @@ class ExperienceValidator:
             )
 
         rep_draft_revision = 0
-        if is_strict_int(draft_revision) and draft_revision >= 0:
+        if is_strict_int(draft_revision) and 0 <= draft_revision <= MAX_REVISION:
             rep_draft_revision = draft_revision
         else:
             issues.append(
                 ValidationIssue(
                     path="draft_revision",
                     code="VAL_INVALID_DRAFT_REVISION",
-                    message=f"Caller draft_revision '{draft_revision}' must be a non-negative integer.",
+                    message=f"Caller draft_revision '{draft_revision}' must be an integer in 0..{MAX_REVISION}.",
                     rule_id="INPUT_SANITY",
                 )
             )
@@ -233,6 +236,18 @@ class ExperienceValidator:
             self._validate_definition_v2(doc, issues)
         elif raw_schema_ver == "1.0":
             self._validate_definition_v1(doc, issues)
+            # Legacy payload schemas differ from the adaptive pilot and have not
+            # been registered with semantic validators. Structural checks alone
+            # must never certify a legacy definition for execution/publication.
+            compat_status = ValidationStatus.UNSUPPORTED
+            issues.append(
+                ValidationIssue(
+                    path="schema_version",
+                    code="VAL_UNSUPPORTED_RULE_PAYLOAD",
+                    message="Definition 1.0 rule payload validation is not registered; only structural diagnostics are available.",
+                    rule_id="RULE_SCHEMA_COMPATIBILITY",
+                )
+            )
         else:
             if "schema_version" in doc and doc["schema_version"] is not None:
                 issues.append(
@@ -603,6 +618,18 @@ class ExperienceValidator:
                         )
                     )
 
+            for field in ["rule_schema_ref", "engine_version"]:
+                value = rule_doc.get(field)
+                if value is not None and (not isinstance(value, str) or not value.strip()):
+                    issues.append(
+                        ValidationIssue(
+                            path=f"{key}.{field}",
+                            code="VAL_INVALID_TYPE",
+                            message=f"{field} must be a non-empty string.",
+                            rule_id="RULE_DOCUMENT_STRUCTURE",
+                        )
+                    )
+
             payload = rule_doc.get("payload")
             if payload is not None and not isinstance(payload, dict):
                 issues.append(
@@ -813,6 +840,15 @@ class ExperienceValidator:
                                     code="VAL_DUPLICATE_OPTION_ID",
                                     message=f"Duplicate option_id '{opt_id}' in question '{qid}'.",
                                     rule_id="CHOICE_INTEGRITY",
+                                )
+                            )
+                        if not ID_REGEX.fullmatch(opt_id):
+                            issues.append(
+                                ValidationIssue(
+                                    path=f"{opt_path}.option_id",
+                                    code="VAL_INVALID_IDENTIFIER_FORMAT",
+                                    message="option_id must match the identifier pattern.",
+                                    rule_id="IDENTIFIER_FORMAT",
                                 )
                             )
                         seen_opt_ids.add(opt_id)
@@ -1049,6 +1085,15 @@ class ExperienceValidator:
                                     code="VAL_DUPLICATE_OPTION_ID",
                                     message=f"Duplicate option_id '{opt_id}' in question '{qid}'.",
                                     rule_id="RATING_SCALE_INTEGRITY",
+                                )
+                            )
+                        if not ID_REGEX.fullmatch(opt_id):
+                            issues.append(
+                                ValidationIssue(
+                                    path=f"{opt_path}.option_id",
+                                    code="VAL_INVALID_IDENTIFIER_FORMAT",
+                                    message="option_id must match the identifier pattern.",
+                                    rule_id="IDENTIFIER_FORMAT",
                                 )
                             )
                         seen_opt_ids.add(opt_id)
@@ -1463,6 +1508,17 @@ class ExperienceValidator:
                     qid = ans.get("question_id")
                     opt_id = ans.get("option_id")
 
+                    for field in ans:
+                        if field not in {"question_id", "option_id"}:
+                            issues.append(
+                                ValidationIssue(
+                                    path=f"{ans_path}.{field}",
+                                    code="VAL_UNEXPECTED_FIELD",
+                                    message=f"Unexpected field '{field}' in golden answer.",
+                                    rule_id="SCHEMA_NO_ADDITIONAL_PROPERTIES",
+                                )
+                            )
+
                     if not isinstance(qid, str) or qid not in q_bank:
                         issues.append(
                             ValidationIssue(
@@ -1527,6 +1583,27 @@ class ExperienceValidator:
                         )
                     )
 
+                elif isinstance(qids, list):
+                    for idx, qid in enumerate(qids):
+                        if not isinstance(qid, str) or not ID_REGEX.fullmatch(qid) or qid not in q_bank:
+                            issues.append(
+                                ValidationIssue(
+                                    path=f"{case_path}.expected.question_ids[{idx}]",
+                                    code="VAL_INVALID_GOLDEN_ANSWER",
+                                    message="Expected question ID must identify a question in the bank.",
+                                    rule_id="EVALUATION_CASES_INTEGRITY",
+                                )
+                            )
+                    if isinstance(answers, list) and qids != [a.get("question_id") if isinstance(a, dict) else None for a in answers]:
+                        issues.append(
+                            ValidationIssue(
+                                path=f"{case_path}.expected.question_ids",
+                                code="VAL_INVALID_GOLDEN_ANSWERS_COUNT",
+                                message="Expected question sequence must match the supplied golden answers.",
+                                rule_id="EVALUATION_CASES_INTEGRITY",
+                            )
+                        )
+
                 scores = expected.get("scores")
                 if scores is not None and not isinstance(scores, dict):
                     issues.append(
@@ -1537,15 +1614,26 @@ class ExperienceValidator:
                             rule_id="EVALUATION_CASES_INTEGRITY",
                         )
                     )
-                elif isinstance(scores, dict) and schema_version == "2.0" and len(scores) != 6:
-                    issues.append(
-                        ValidationIssue(
-                            path=f"{case_path}.expected.scores",
-                            code="VAL_INVALID_TYPE",
-                            message="expected.scores in Definition 2.0 must map all 6 house IDs to scores.",
-                            rule_id="EVALUATION_CASES_INTEGRITY",
+                elif isinstance(scores, dict):
+                    if set(scores) != EXPECTED_HOUSES:
+                        issues.append(
+                            ValidationIssue(
+                                path=f"{case_path}.expected.scores",
+                                code="VAL_INVALID_TYPE",
+                                message="expected.scores must map exactly the six RIASEC house IDs to numbers.",
+                                rule_id="EVALUATION_CASES_INTEGRITY",
+                            )
                         )
-                    )
+                    for house_id, score in scores.items():
+                        if isinstance(score, bool) or not isinstance(score, (int, float)) or (isinstance(score, float) and not math.isfinite(score)):
+                            issues.append(
+                                ValidationIssue(
+                                    path=f"{case_path}.expected.scores.{house_id}",
+                                    code="VAL_INVALID_TYPE",
+                                    message="Expected score must be a finite number, not a boolean.",
+                                    rule_id="EVALUATION_CASES_INTEGRITY",
+                                )
+                            )
 
                 exp_house = expected.get("house_id")
                 if exp_house is not None and (not isinstance(exp_house, str) or exp_house not in EXPECTED_HOUSES):
@@ -1560,7 +1648,7 @@ class ExperienceValidator:
 
                 if schema_version == "2.0":
                     stopping_reason = expected.get("stopping_reason")
-                    if stopping_reason not in {"bounded_winner", "question_limit"}:
+                    if not isinstance(stopping_reason, str) or stopping_reason not in {"bounded_winner", "question_limit"}:
                         issues.append(
                             ValidationIssue(
                                 path=f"{case_path}.expected.stopping_reason",
