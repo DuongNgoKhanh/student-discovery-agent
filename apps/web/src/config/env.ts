@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z, ZodError } from 'zod';
 
 const nodeEnv = z.enum(['development', 'test', 'production']).default('development');
 const cookieNames = {
@@ -21,7 +21,7 @@ export function parseEnv(source: Record<string, string | undefined>): Env {
 
 /** Đọc env đã validate. CHỈ dùng ở server (route handler / RSC). */
 export function getServerEnv(): Env {
-  return parseEnv(process.env);
+  return configured('server', () => parseEnv(process.env));
 }
 
 // Product DB/auth env: lazily parsed, required only when Product DB/auth starts.
@@ -41,7 +41,7 @@ export function parseProductEnv(source: Record<string, string | undefined>): Pro
 }
 
 export function getProductEnv(): ProductEnv {
-  return parseProductEnv(process.env);
+  return configured('product', () => parseProductEnv(process.env));
 }
 
 // Auth env: token signing/cookies only (no DB), so getSession() works without DATABASE_URL.
@@ -64,7 +64,7 @@ export function parseAuthEnv(source: Record<string, string | undefined>): AuthEn
 }
 
 export function getAuthEnv(): AuthEnv {
-  return parseAuthEnv(process.env);
+  return configured('auth', () => parseAuthEnv(process.env));
 }
 
 // Storage env: parsed only when storage is used. No provider keys live in the web app.
@@ -86,5 +86,18 @@ export function parseStorageEnv(source: Record<string, string | undefined>): Sto
 }
 
 export function getStorageEnv(): StorageEnv {
-  return parseStorageEnv(process.env);
+  return configured('storage', () => parseStorageEnv(process.env));
+}
+
+/** Lazy getters must not leak ZodError (mapped to 422 by the HTTP layer): env problems are server faults. */
+function configured<T>(name: string, parse: () => T): T {
+  try {
+    return parse();
+  } catch (error) {
+    if (error instanceof ZodError) {
+      const vars = error.issues.map((i) => i.path.join('.')).join(', ');
+      throw new Error(`Invalid ${name} environment configuration: ${vars}`);
+    }
+    throw error;
+  }
 }

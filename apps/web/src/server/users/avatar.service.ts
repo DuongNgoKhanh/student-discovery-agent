@@ -21,11 +21,12 @@ function sniff(b: Uint8Array): 'image/png' | 'image/jpeg' | null {
   return null;
 }
 
+export const tooLarge = () => new ProductError(413, 'VAL_PAYLOAD_TOO_LARGE', 'File size exceeds 1MB limit');
 const bad = (msg: string) => new ProductError(400, 'VAL_INVALID_AVATAR', msg);
 
 export async function uploadAvatar(db: ProductDatabase, userId: number, file: File): Promise<{ avatar_url: string }> {
   if (file.size === 0) throw bad('File is empty');
-  if (file.size > MAX_AVATAR_BYTES) throw bad('File size exceeds 1MB limit');
+  if (file.size > MAX_AVATAR_BYTES) throw tooLarge();
   const bytes = new Uint8Array(await file.arrayBuffer());
   const contentType = sniff(bytes);
   if (!contentType) throw bad('Only PNG or JPEG images are allowed');

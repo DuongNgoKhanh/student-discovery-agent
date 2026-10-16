@@ -3,13 +3,15 @@ import { getProductDatabase } from '@/server/db/client';
 import { ProductError } from '@/server/http/errors';
 import { withHandler } from '@/server/http/handler';
 import { success } from '@/server/http/response';
-import { uploadAvatar } from '@/server/users/avatar.service';
+import { MAX_AVATAR_BYTES, tooLarge, uploadAvatar } from '@/server/users/avatar.service';
 
 export const runtime = 'nodejs';
 
 export const POST = withHandler(async (req, ctx) => {
   const db = getProductDatabase();
   const user = await requireUser(req, db);
+  // Reject early (before buffering) when the declared size exceeds 1 MiB + multipart overhead.
+  if (Number(req.headers.get('content-length') ?? 0) > MAX_AVATAR_BYTES + 65536) throw tooLarge();
   let form: FormData;
   try {
     form = await req.formData();

@@ -184,6 +184,7 @@ Occur when input validation fails or business rules violated.
 |------|------|---------|-------------|-----|
 | `VAL_INVALID_REQUEST` | 400 | `Request body is required` / `Malformed JSON body` | Missing or unparsable JSON body | Send a valid JSON body |
 | `VAL_UNSUPPORTED_MEDIA_TYPE` | 415 | `Content-Type must be application/json` | Non-empty body without a JSON content type (`application/json`, optional `; charset=...`, or `application/*+json`). CSRF hardening: cross-site "simple" requests (`text/plain`, form, multipart) are rejected before any side effect, so no cookies are set | Send `Content-Type: application/json` |
+| `VAL_PAYLOAD_TOO_LARGE` | 413 | `File size exceeds 1MB limit` | Avatar upload larger than 1048576 bytes | Upload a smaller image |
 | `RES_USER_NOT_FOUND` | 404 | `User not found` | No user (or, for non-restore operations, no non-deleted user) with that id | Check the id |
 
 #### Bulk Operation Validation

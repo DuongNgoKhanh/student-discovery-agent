@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { parseAuthEnv, parseEnv, parseProductEnv, parseStorageEnv } from './env';
+import { describe, it, expect, vi } from 'vitest';
+import { ZodError } from 'zod';
+import { failure } from '@/server/http/response';
+import { getStorageEnv, parseAuthEnv, parseEnv, parseProductEnv, parseStorageEnv } from './env';
 
 describe('parseEnv', () => {
   it('parse hợp lệ + áp default', () => {
@@ -70,5 +72,28 @@ describe('parseAuthEnv', () => {
     expect(e.REFRESH_TOKEN_EXPIRE_MINUTES).toBe(43200);
     expect(e.ADMIN_USERNAME).toBe('admin');
     expect(e.ADMIN_PASSWORD).toBeUndefined();
+  });
+});
+
+describe('lazy getters', () => {
+  it('missing env throws a plain Error and the HTTP response is a generic 500', async () => {
+    vi.stubEnv('S3_ENDPOINT', '');
+    vi.stubEnv('S3_ACCESS_KEY', '');
+    let thrown: unknown;
+    try {
+      getStorageEnv();
+    } catch (e) {
+      thrown = e;
+    }
+    vi.unstubAllEnvs();
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown).not.toBeInstanceOf(ZodError);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = failure(thrown, { requestId: 'r', traceId: 't' });
+    spy.mockRestore();
+    const text = await res.text();
+    expect(res.status).toBe(500);
+    expect(text).toContain('INTERNAL_ERROR');
+    expect(text).not.toContain('S3_');
   });
 });

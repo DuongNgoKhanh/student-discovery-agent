@@ -90,7 +90,7 @@ describe('avatar + download', () => {
     const big = new Uint8Array(1048577);
     big.set(PNG);
     const res = await upload(uploadReq(big, token), route);
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(413);
     expect((await findUserById(getProductDatabase(), row.id))?.avatar_url).toBeNull();
   });
 
