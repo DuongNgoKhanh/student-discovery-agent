@@ -113,6 +113,8 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
         data = exc.data
     elif isinstance(exc.detail, dict):
         message = exc.detail.get("message", str(exc.detail))
+        error_code = exc.detail.get("error_code")
+        details = exc.detail.get("details") or exc.detail.get("current_state")
         data = exc.detail.get("data")
 
     logger.error(
