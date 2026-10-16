@@ -25,7 +25,21 @@ Nếu đã có ruleset bảo vệ nhánh mặc định, kiểm tra và cập nh�
 
 ## CI và quyền truy cập
 
-Chưa yêu cầu status checks vì lúc tạo file repo chưa có `.github/workflows`. Khi thêm CI, chờ workflow chạy thành công rồi bổ sung đúng tên check vào ruleset trên GitHub. Chưa bắt buộc CODEOWNERS hoặc commit signature vì chưa thiết lập các quy trình đó.
+Workflow [CI](../workflows/ci.yml) chạy khi mở/cập nhật PR vào `main`, push lên `main` và chạy thủ công qua **Actions → CI → Run workflow**. Ba job độc lập kiểm tra:
+
+| Check | Nội dung |
+| --- | --- |
+| `Web UI` | Generate API types, typecheck, lint, unit tests và build |
+| `Studio API` | Generate API types, kiểm tra contract, typecheck, lint, unit tests và build |
+| `Agent Runtime` | Toàn bộ pytest trong app |
+
+CI dùng Node 22, pnpm 9.15.9 và Python theo `apps/agent-runtime/.python-version`, có cache dependencies và hủy lượt chạy cũ khi cùng PR/nhánh có cập nhật mới. Workflow không cần secrets, không deploy và chưa chạy integration tests cần DB/MinIO.
+
+Việc tải dependencies dùng retry có sẵn của pnpm/pip; lỗi test, lint, typecheck hoặc build làm job thất bại ngay. Để thử lại khi lỗi hạ tầng/mạng, mở lượt chạy trong **Actions** và chọn **Re-run failed jobs**. CI không tự retry toàn bộ job.
+
+File `main-protection.json` hiện chưa yêu cầu status checks. Sau khi workflow chạy thành công trên GitHub, vào ruleset bảo vệ `main`, bật **Require status checks to pass**, thêm ba check `Web UI`, `Studio API`, `Agent Runtime` từ lượt chạy thực tế rồi lưu. Thêm workflow vào repo không tự bật quy tắc chặn merge này.
+
+Chưa bắt buộc CODEOWNERS hoặc commit signature vì chưa thiết lập các quy trình đó.
 
 Ruleset quản lý nhánh, không cấp quyền cho thành viên và không chặn file theo đường dẫn. `.gitignore` cũng không chặn `git add -f`; việc kiểm soát file nhạy cảm cần cơ chế riêng nếu nhóm yêu cầu.
 
