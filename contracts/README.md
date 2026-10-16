@@ -40,6 +40,10 @@ Các API dưới đây thuộc scaffold quản lý tài khoản hiện có, khô
 | [auth-api.yaml](openapi/public/auth-api.yaml) | Đăng ký, đăng nhập, refresh token của scaffold hiện có. |
 | [profile-api.yaml](openapi/public/profile-api.yaml) | Hồ sơ cá nhân và danh sách người dùng của scaffold. |
 | [avatar-api.yaml](openapi/public/avatar-api.yaml) | Upload và đọc avatar của scaffold. |
+| [versions-api.yaml](openapi/public/versions-api.yaml) | Đọc/tạo version ứng dụng (công khai, POST trả 201, version dạng `x.y.z`). |
+| [download-api.yaml](openapi/public/download-api.yaml) | `GET /download?object_name=<bucket>/<key>`, response nhị phân; chỉ bucket avatar công khai, còn lại 404. |
+
+`POST /auth/logout` nằm trong [auth-api.yaml](openapi/public/auth-api.yaml): xóa cookie auth, response envelope `data: {ok: true}`.
 
 ## API Admin
 
@@ -86,3 +90,27 @@ Các lựa chọn còn ở trạng thái Proposed vẫn cần chốt trước im
 
 [error_codes.md](error_codes.md) là tài liệu mã lỗi hiện có; mã lỗi Chat/Studio và HTTP response tương ứng
 được mô tả trong [schemas/common.yaml](openapi/schemas/common.yaml).
+
+## Kiểm tra contract và bảng parity
+
+Server local của mọi YAML là web `http://localhost:3000/api/v1`. Chạy `pnpm --dir apps/web contracts:check`
+(`@redocly/cli lint`, cấu hình `apps/web/redocly.yaml`) trên hai mục lục `user-api.yaml`/`admin-api.yaml`;
+lệnh fail khi `$ref` không resolve được hoặc schema sai cấu trúc OpenAPI 3.0.
+
+Trạng thái parity giữa contract và triển khai hiện tại (backend Python ở `app/`, Next route handlers ở
+`apps/web/src/app/api/`). Task là task port trong plan restructure.
+
+| Endpoint | Trạng thái | Ghi chú |
+| --- | --- | --- |
+| `/auth/register`, `/auth/login`, `/auth/refresh` | implemented (Python) | Port sang Next ở Task 4. |
+| `/auth/logout` | implemented (Next, `/api/auth/logout`) | Chưa nằm dưới `/api/v1`; chuyển ở Task 4. Response `data: {ok:true}`. |
+| `/admin/auth/login` | implemented (Python) | Task 4. |
+| `/me`, `/users`, `/admin/users*` (CRUD, restore, bulk) | implemented (Python) | Task 5. Mismatch: Python `/users` thiếu auth, contract yêu cầu BearerAuth; bulk create thất bại trả `user_id: null`. |
+| `/users/avatar/upload`, `/users/{user_id}/avatar` | implemented (Python) | Task 6. |
+| `/versions` (GET, POST 201) | implemented (Python) | Task 6; public, không RBAC. |
+| `/download` | implemented (Python) | Mismatch có chủ đích: Python cho mọi bucket; contract chỉ cho bucket avatar công khai, còn lại/`..` trả 404 (Task 6). |
+| `/conversations*`, `/activities/{id}/result`, `/results/{id}/share-card` | future | Chat anonymous, chưa triển khai. |
+| `/admin/experiences*`, `/admin/experience-releases*`, `/admin/experience-previews*`, `/admin/audit-logs*` | future | Studio, chưa triển khai. |
+
+Mismatch chung: ID user ở JSON là integer, còn type UI hiện tại là `string` (xử lý ở Task 7); login/register theo
+`AuthResponse` phẳng trong `data`.

@@ -5,7 +5,7 @@ info:
   description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md
     để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
 servers:
-  - url: http://localhost:8000/api/v1
+  - url: http://localhost:3000/api/v1
     description: Local development server
   - url: https://api.example.com/api/v1
     description: Production server
@@ -521,7 +521,15 @@ components:
           example: true
         user_id:
           type: integer
+          nullable: true
+          description: ID of the processed user; null when a create item failed before an ID was assigned.
           example: 1
+        data:
+          type: object
+          nullable: true
+          enum:
+            - null
+          description: Always null; per-item payload is not returned.
         error:
           anyOf:
             - $ref: ../schemas/common.yaml#/components/schemas/ErrorDetail

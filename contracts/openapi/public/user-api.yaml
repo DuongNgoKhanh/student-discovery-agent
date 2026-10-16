@@ -49,7 +49,7 @@ info:
     name: Backend API Team
     email: support@example.com
 servers:
-  - url: http://localhost:8000/api/v1
+  - url: http://localhost:3000/api/v1
     description: Local development server
   - url: https://api.example.com/api/v1
     description: Production server
@@ -60,6 +60,10 @@ tags:
     description: User profile and information management
   - name: User Avatar
     description: User avatar upload and retrieval
+  - name: Version
+    description: Application version tracking
+  - name: Download
+    description: Public object download
   - name: Conversations
     description: Unified chat lifecycle/history/turns.
   - name: Activity Results
@@ -79,6 +83,12 @@ paths:
     $ref: avatar-api.yaml#/paths/~1users~1avatar~1upload
   /users/{user_id}/avatar:
     $ref: avatar-api.yaml#/paths/~1users~1{user_id}~1avatar
+  /auth/logout:
+    $ref: auth-api.yaml#/paths/~1auth~1logout
+  /versions:
+    $ref: versions-api.yaml#/paths/~1versions
+  /download:
+    $ref: download-api.yaml#/paths/~1download
   /conversations:
     $ref: conversation-api.yaml#/paths/~1conversations
   /conversations/{conversation_id}:
@@ -139,6 +149,14 @@ components:
       $ref: profile-api.yaml#/components/schemas/UserUpdateRequest
     PaginatedUsersResponse:
       $ref: profile-api.yaml#/components/schemas/PaginatedUsersResponse
+    LogoutResponse:
+      $ref: auth-api.yaml#/components/schemas/LogoutResponse
+    VersionCreate:
+      $ref: versions-api.yaml#/components/schemas/VersionCreate
+    VersionResponse:
+      $ref: versions-api.yaml#/components/schemas/VersionResponse
+    VersionApiResponse:
+      $ref: versions-api.yaml#/components/schemas/VersionApiResponse
     AvatarUploadResponse:
       $ref: avatar-api.yaml#/components/schemas/AvatarUploadResponse
     AssessmentProgress:

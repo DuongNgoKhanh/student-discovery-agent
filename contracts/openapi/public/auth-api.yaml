@@ -5,7 +5,7 @@ info:
   description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong user-api.yaml; xem README.md
     để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
 servers:
-  - url: http://localhost:8000/api/v1
+  - url: http://localhost:3000/api/v1
     description: Local development server
   - url: https://api.example.com/api/v1
     description: Production server
@@ -89,6 +89,22 @@ paths:
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/InternalServerError
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Log out
+      description: Clear the access and refresh cookies. Always responds with an envelope whose data is {ok:true}.
+      operationId: logoutUser
+      responses:
+        '200':
+          description: Auth cookies cleared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
         '500':
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
 components:
@@ -226,6 +242,22 @@ components:
                 - null
         meta:
           $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+    LogoutResponse:
+      allOf:
+        - $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
+        - type: object
+          required:
+            - data
+          properties:
+            data:
+              type: object
+              required:
+                - ok
+              properties:
+                ok:
+                  type: boolean
+                  enum:
+                    - true
   responses:
     UnauthorizedError:
       description: Unauthorized - Invalid, missing, or expired authentication token

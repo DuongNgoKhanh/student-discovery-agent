@@ -5,7 +5,7 @@ info:
   description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong user-api.yaml; xem README.md
     để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
 servers:
-  - url: http://localhost:8000/api/v1
+  - url: http://localhost:3000/api/v1
     description: Local development server
   - url: https://api.example.com/api/v1
     description: Production server
@@ -60,7 +60,7 @@ paths:
       x-codeSamples:
         - lang: curl
           source: |
-            curl -X POST http://localhost:8000/api/v1/users/avatar/upload \
+            curl -X POST http://localhost:3000/api/v1/users/avatar/upload \
               -H "Authorization: Bearer $ACCESS_TOKEN" \
               -F "file=@avatar.jpg"
   /users/{user_id}/avatar:

@@ -18,8 +18,7 @@ components:
           type: string
           nullable: true
         data:
-          nullable: true
-          description: Endpoint-specific object, array, scalar or null.
+          description: Endpoint-specific object, array, scalar or null (untyped, so null is allowed).
         error:
           anyOf:
             - $ref: '#/components/schemas/ErrorDetail'
