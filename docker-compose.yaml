@@ -1,12 +1,45 @@
-# Local/dev orchestration. Web/db/minio settings are compose-interpolated from shell variables or a
+# Local/dev orchestration. API/db/minio settings are compose-interpolated from shell variables or a
 # root `.env` file (never committed); the defaults below are LOCAL-ONLY. agent-runtime reads its own
 # optional apps/agent-runtime/.env. Do not use these defaults outside a local machine.
 name: sda
 
 services:
-  web:
+  gateway:
+    image: nginx:1.28-alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      web-ui:
+        condition: service_healthy
+      studio-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web-ui:
     build:
-      context: ./apps/web
+      context: ./apps/web-ui
+      additional_contexts:
+        contracts: ./contracts
+      target: runner
+      args:
+        http_proxy: ${http_proxy:-}
+        https_proxy: ${https_proxy:-}
+    environment:
+      STUDIO_API_ORIGIN: http://studio-api:3001
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  studio-api:
+    build:
+      context: ./apps/studio-api
       additional_contexts:
         contracts: ./contracts
       target: runner
@@ -26,15 +59,15 @@ services:
       S3_BUCKET: ${S3_BUCKET:-sda-private}
       MINIO_PUBLIC_BUCKET_NAME: ${MINIO_PUBLIC_BUCKET_NAME:-sda-public}
       PRODUCT_BASE_URL: ${PRODUCT_BASE_URL:-http://localhost:3000}
-    ports:
-      - "3000:3000"
+    expose:
+      - "3001"
     depends_on:
       db:
         condition: service_healthy
       minio:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -88,10 +121,10 @@ services:
     restart: unless-stopped
 
   # Explicit one-shot tools (profile "tools"); never run on startup.
-  product-migrate:
+  studio-api-migrate:
     profiles: [tools]
     build:
-      context: ./apps/web
+      context: ./apps/studio-api
       additional_contexts:
         contracts: ./contracts
       target: migration
@@ -107,7 +140,8 @@ services:
 
   minio-init:
     profiles: [tools]
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    # Reuse the pinned server image, which includes the official mc client.
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     depends_on:
       - minio
     environment:

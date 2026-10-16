@@ -23,7 +23,7 @@ updates:
 
   # npm ecosystem also handles pnpm projects.
   - package-ecosystem: "npm"
-    directory: "/apps/web"
+    directory: "/apps/web-ui"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -55,7 +55,7 @@ updates:
 
   # Dockerfiles.
   - package-ecosystem: "docker"
-    directory: "/apps/web"
+    directory: "/apps/web-ui"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -67,6 +67,36 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/apps/agent-runtime"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Ho_Chi_Minh"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "npm"
+    directory: "/apps/studio-api"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Ho_Chi_Minh"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      studio-api-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "docker"
+    directory: "/apps/studio-api"
     schedule:
       interval: "weekly"
       day: "monday"

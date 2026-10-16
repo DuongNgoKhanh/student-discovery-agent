@@ -17,6 +17,11 @@ export interface ProductDatabaseHandle {
  */
 export function createDatabase(url: string): ProductDatabaseHandle {
   const pool = new Pool({ connectionString: url });
+  // pg removes failed idle clients itself; consume its error event so a DB restart
+  // does not terminate the HTTP process. Active query failures reach withHandler.
+  pool.on('error', (error: Error) => {
+    console.error('[db] idle connection lost', error.message);
+  });
   const db = drizzle(pool, { schema });
   let closed: Promise<void> | undefined;
   return {
@@ -27,7 +32,7 @@ export function createDatabase(url: string): ProductDatabaseHandle {
 }
 
 // Process-wide handle for route handlers, created on first use from DATABASE_URL.
-// Kept on globalThis so Next dev HMR does not leak pools.
+// Kept on globalThis to reuse the pool within this Node process.
 const globalHandle = globalThis as unknown as { __sdaProductDb?: { url: string; handle: ProductDatabaseHandle } };
 
 /** Shared Product DB for route handlers. Re-created if DATABASE_URL changes (tests). */
