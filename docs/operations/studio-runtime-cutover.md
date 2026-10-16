@@ -1,23 +1,20 @@
-# Cutover: backend Python cũ sang Product (Next.js) + agent-runtime
+# Cutover: web-ui / studio-api / agent-runtime
 
-Runbook ngắn. Chưa thực hiện trên DB thật; operator cung cấp `DATABASE_URL`.
-Cấu hình compose lấy từ biến shell hoặc file `.env` ở root repo (compose interpolation), dùng chung cho
-migrate và web; `apps/web/.env` KHÔNG được compose đọc (chỉ dùng cho `pnpm dev` ngoài Docker).
+Runbook cho việc tách Next UI khỏi Product backend. Các thao tác dưới đây do operator chạy với DB/volume thật; kiểm thử refactor chỉ dùng DB/bucket tạm.
 
-Kiểm tra trước khi xóa backend cũ: `rg 'neo4j|graphiti|taskiq|@broker.task|common.utils.minio|common.utils.redis' apps`
-không có consumer nào trong `apps/` (Neo4j/Graphiti/TaskIQ/Redis không còn dùng).
+## Chuyển service
 
-1. **Snapshot DB**: `pg_dump -Fc "$DATABASE_URL" > sda-pre-cutover.dump` (và lưu lại bucket MinIO nếu cần).
-2. **Dừng writer cũ**: dừng container `api` Python (gồm TaskIQ worker) để không còn ghi vào DB.
-3. **Migrate Product** (explicit, không chạy khi khởi động):
-   `DATABASE_URL=<operator-url> docker compose --profile tools run --rm product-migrate`
-   (hoặc đặt `DATABASE_URL` trong `.env` root để migrate và web cùng trỏ một DB).
-   Migration tạo schema `product` (bảng `users`, `versions`, journal `product.__drizzle_migrations`).
-4. **Chạy stack**: `docker compose up -d web agent-runtime` với cùng biến shell/`.env` root (`DATABASE_URL`, `SECRET_KEY`,
-   `ADMIN_PASSWORD`, `S3_*`, `MINIO_PUBLIC_BUCKET_NAME`, `PRODUCT_BASE_URL`). Runtime không nhận credential Product.
-5. **Kiểm tra Product**: `curl /api/health`, đăng nhập, `GET /api/v1/me`, `/api/v1/versions`, tải avatar.
-6. **Chuyển host API cũ**: URL avatar cũ `/users/{id}/avatar` (và `/download`) trỏ sang web
-   `/api/v1/users/{id}/avatar` (reverse proxy/redirect), rồi đóng backend cũ.
+1. Ghi lại cấu hình/volume đang dùng và snapshot DB theo quy trình vận hành. Giữ cùng `DATABASE_URL`, `SECRET_KEY`, cookie config và S3 bucket/credentials; đặt chúng trong shell hoặc `.env` root. Giữ cùng Compose project name để nhận đúng named volumes. Không chạy `down --volumes`.
+2. Build image mới: `docker compose -f docker-compose.yaml build web-ui studio-api agent-runtime studio-api-migrate`. UI không nhận credential Product; runtime dùng env riêng.
+3. Nếu đã migrate Product ở đợt trước, **không có schema migration mới chỉ vì đổi thư mục**. Tool chuyển sang `studio-api-migrate`, SQL/journal giữ nguyên. Chỉ khi DB mới hoặc còn migration thiếu, chạy thủ công: `docker compose -f docker-compose.yaml --profile tools run --rm studio-api-migrate`. Tool dùng cùng `DATABASE_URL` với API, giữ journal `product.__drizzle_migrations`; không bootstrap/reset lại DB đã migrated.
+4. Dừng service `web` cũ theo cấu hình cũ để nhả cổng 3000, giữ volume. Chạy `docker compose -f docker-compose.yaml up -d gateway web-ui studio-api agent-runtime`. Xóa orphan container `web` khi đã xác minh đúng container; không xóa volume.
+5. Kiểm tra `/healthz` (UI), `/api/health` (API), login/session, `/api/v1/me`, admin, refresh/logout, upload/read avatar và `/download`. Cookie browser vẫn cùng public origin. `PRODUCT_BASE_URL` là public gateway origin, mặc định local `http://localhost:3000`.
+6. UI SSR gọi `STUDIO_API_ORIGIN=http://studio-api:3001`. Gateway định tuyến `/api/*` và `/download` tới API, còn lại tới UI. Không publish runtime hoặc cấp DB/JWT secret của Product cho runtime.
 
-**Rollback**: sau khi schema đã chuyển, chỉ Git revert là không đủ. Dừng web, restore snapshot
-(`pg_restore --clean`), khởi động lại backend cũ từ tag/commit trước refactor.
+Migration không tự chạy khi image build hoặc app khởi động. `/healthz`, `/api/health`, runtime `/health` là liveness, không xác nhận DB/storage đã sẵn sàng. `minio-init` vẫn là tool thủ công cho bucket/policy; không cần chạy lại chỉ vì tách UI/API.
+
+## Rollback
+
+Rollback riêng đợt tách UI/API: dừng gateway/UI/API mới rồi chạy image/config `web` trước refactor với cùng volume/env. Schema, journal, object keys và token không đổi; không restore DB chỉ vì đổi thư mục.
+
+**Lịch sử đợt Python → Product:** đợt trước chuyển ownership sang schema `product` và gỡ backend Python cũ. Nếu rollback xuyên qua mốc schema đó, cần dừng writer và restore snapshot tương ứng theo quy trình vận hành; Git revert riêng lẻ không đủ. Runtime FastAPI hiện tại là tầng thực thi Agent, không thay thế Product API.

@@ -2,58 +2,87 @@
 
 **SDA** là dự án trợ lý AI tư vấn hướng nghiệp cho học sinh THPT lớp 10–12 tại Đồng bằng sông Cửu Long, phục vụ **IHRD GenZ Career Agent**. Sản phẩm hướng đến trải nghiệm chat trên thiết bị di động, tích hợp vào `ihrd.vn` và tư vấn trong mạng lưới 12 trường liên kết.
 
-Repository hiện chứa **Product web (Next.js, gồm Product API `/api/v1`)**, **agent-runtime (FastAPI)** và tài liệu thiết kế cho Agent cùng SDA Studio.
+Repository gồm ba ứng dụng độc lập:
 
-> **Trạng thái hiện tại:** bộ khung Product (xác thực, người dùng, quản trị, versions, avatar/download) chạy trên Next.js; `agent-runtime` là khung FastAPI cho tầng thực thi AI. Luồng tư vấn, Agent Harness và SDA Studio chưa hoàn thiện.
+| Ứng dụng | Trách nhiệm | Công nghệ |
+| --- | --- | --- |
+| `apps/web-ui` | Giao diện, render SSR, HTTP client | Next.js 15 / React 19 |
+| `apps/studio-api` | Backend Studio/Product: auth, users, admin, versions, storage, migrations | TypeScript / Hono / Node |
+| `apps/agent-runtime` | Tầng thực thi Agent | Python 3.11 / FastAPI |
+
+Hiện auth, quản lý người dùng và avatar/download đã có scaffold. Studio editor, luồng tư vấn và kết nối thực thi API → runtime chưa được triển khai.
 
 ## Cấu trúc repository
 
 ```text
 student-discovery-agent/
 ├── apps/
-│   ├── web/             # Next.js 15: UI + Product API (/api/v1), Drizzle migrations, docs React/TS
-│   └── agent-runtime/   # FastAPI (package agent_runtime), Dockerfile riêng, docs Python
-├── contracts/           # OpenAPI công khai + mã lỗi (nguồn cho gen:api)
+│   ├── web-ui/          # UI, không giữ DB/JWT signing key/S3 credentials
+│   ├── studio-api/      # Product API, nghiệp vụ, DB/storage, migration SQL
+│   └── agent-runtime/   # Agent execution, env/dependencies/image riêng
+├── contracts/           # OpenAPI chung; mỗi app tự sinh DTO
+├── infra/nginx/         # Gateway cùng origin cho browser
 ├── docs/
-│   ├── conventions/     # Quy ước API dùng chung (naming/response/error/timeout)
-│   └── operations/      # Runbook (cutover/rollback)
-├── compose.yaml         # web, agent-runtime, db (PostgreSQL 16), minio; profile tools
+│   ├── conventions/     # Quy ước API dùng chung
+│   └── operations/      # Runbook cutover/rollback
+├── docker-compose.yaml
 └── .github/
 ```
 
-Backend Python cũ ở root (`app/`, `main.py`, Neo4j/Graphiti/TaskIQ/Redis) đã được gỡ. Browser gọi
-Product API cùng origin; không còn `API_BASE_URL`/BFF proxy.
+Browser gọi `/api/*` và `/download` cùng origin. Gateway chuyển các đường dẫn này tới `studio-api:3001`, còn các trang tới `web-ui:3000`. UI SSR lấy session đã xác minh qua HTTP nội bộ; Python runtime ở cổng 8000 nội bộ, chưa có API thực thi công khai.
 
 ## Chạy bằng Docker Compose
 
-Cần Docker Compose v2. Cấu hình web/db/minio đặt trong biến shell hoặc file `.env` ở **root repo**
-(compose interpolation, không commit): `DATABASE_URL`, `SECRET_KEY`, `ADMIN_PASSWORD`, `S3_*`,
-`MINIO_PUBLIC_BUCKET_NAME`, `PRODUCT_BASE_URL`, `POSTGRES_PASSWORD` (xem `apps/web/.env.example`). Mặc định
-là giá trị local-only (db/minio của compose). `apps/web/.env` KHÔNG được compose đọc; nó chỉ dành cho
-`pnpm dev` ngoài Docker. `agent-runtime` đọc `apps/agent-runtime/.env` (tùy chọn).
-Thiếu `SECRET_KEY` thì layout được bảo vệ trả 500 (lỗi cấu hình) thay vì redirect; admin login cần
-`ADMIN_PASSWORD` (không có mật khẩu mặc định).
+Cần Docker Compose v2 hỗ trợ `build.additional_contexts` và `env_file.required`. Đặt biến trong shell hoặc `.env` **ở root repo**: `DATABASE_URL`, `SECRET_KEY`, `ADMIN_PASSWORD`, `S3_*`, `MINIO_PUBLIC_BUCKET_NAME`, `PRODUCT_BASE_URL`, `POSTGRES_PASSWORD`. Xem [API env example](apps/studio-api/.env.example). Defaults trong Compose chỉ dùng local; admin không có mật khẩu mặc định. Các file `.env` riêng của UI/API không được Compose đọc. Runtime đọc `apps/agent-runtime/.env` nếu có.
 
 ```bash
-docker compose up -d --build            # web :3000, agent-runtime (nội bộ :8000), db, minio
-docker compose --profile tools run --rm product-migrate   # migrate Product, chạy thủ công
-docker compose --profile tools run --rm minio-init        # tạo bucket MinIO (tùy chọn)
+docker compose -f docker-compose.yaml up -d --build
+# Chỉ chạy thủ công cho DB mới hoặc migration còn thiếu:
+docker compose -f docker-compose.yaml --profile tools run --rm studio-api-migrate
+# Tạo bucket và public download policy cho bucket avatar:
+docker compose -f docker-compose.yaml --profile tools run --rm minio-init
+curl http://localhost:3000/healthz
 curl http://localhost:3000/api/health
 ```
 
-`agent-runtime` không publish port ra host và không nhận credential DB/JWT của Product.
-Migration không bao giờ tự chạy khi khởi động. Build sau proxy: `http_proxy`/`https_proxy` trong shell
-được truyền làm build args (không nằm trong image cuối).
+Gateway publish `localhost:3000`; UI/API/runtime không publish port host. MinIO console local ở `127.0.0.1:9001`. Migration không tự chạy khi build/start và không thay đổi SQL/journal vì đổi thư mục. Giữ nguyên volume, DB URL và JWT secret khi chuyển từ service cũ. `minio-init` dùng client `mc` có sẵn trong image MinIO được pin cùng server.
+
+UI chỉ nhận `STUDIO_API_ORIGIN=http://studio-api:3001`; API nhận DB/auth/storage env; runtime không nhận credential Product. `PRODUCT_BASE_URL` phải là origin công khai của gateway để avatar URL đúng. Build sau proxy có thể truyền `http_proxy`/`https_proxy` từ shell làm build args.
 
 ## Chạy trực tiếp và kiểm thử
 
-```bash
-# Web (Node >=20, pnpm 9)
-cd apps/web && pnpm install && pnpm gen:api && pnpm dev
-pnpm lint && pnpm typecheck && pnpm test        # contracts:check, test:integration (cần Docker)
+Node 22, pnpm 9.15.9; chạy UI và API ở hai terminal:
 
-# Agent runtime (Python 3.11)
-cd apps/agent-runtime && pip install -r requirements.txt && pip install -e . && pytest
+```bash
+# UI: copy .env.example thành .env.local nếu cần chỉnh API origin.
+cd apps/web-ui
+pnpm install && pnpm gen:api
+pnpm dev                       # :3000; dev rewrite /api/* và /download tới API
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
+```
+
+```bash
+cd apps/studio-api
+pnpm install && pnpm gen:api
+# Copy .env.example thành .env, điền cấu hình thật ở local.
+# Node/tsx không tự đọc .env; nạp rõ file bằng Node 22:
+node --env-file=.env --import tsx --watch src/main.ts  # :3001
+# Hoặc export env từ shell rồi chạy pnpm dev.
+pnpm contracts:check && pnpm typecheck && pnpm lint && pnpm test
+pnpm test:integration          # cần Docker, DB/MinIO fixture tạm
+pnpm build
+node --env-file=.env dist/main.js
+# Migration thủ công khi cần: pnpm exec tsx --env-file=.env src/infrastructure/db/migrate.ts
+```
+
+`pnpm start` của UI ở production cần gateway để định tuyến browser API; rewrite chỉ bật trong dev. Liveness UI/API build và chạy không cần DB/JWT/S3. Trang bảo vệ cần API session: 401 chuyển login, API/network lỗi hiển thị trạng thái không khả dụng.
+
+```bash
+cd apps/agent-runtime
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e '.[dev]'
+pytest
 uvicorn agent_runtime.main:app --port 8000
 ```
 
@@ -61,13 +90,13 @@ uvicorn agent_runtime.main:app --port 8000
 
 | Tài liệu | Nội dung |
 | --- | --- |
-| [User API](contracts/openapi/public/user-api.yaml), [Admin API](contracts/openapi/public/admin-api.yaml) | Hợp đồng API |
+| [Contracts](contracts/README.md) | OpenAPI và trạng thái endpoint |
 | [Mã lỗi](contracts/error_codes.md) | Danh mục lỗi |
 | [Quy ước chung](docs/conventions/README.md) | API naming/response/error/timeout |
-| [Docs web](apps/web/docs/README.md), [Docs runtime](apps/agent-runtime/docs/01_Coding_Convention.md) | Quy ước theo ứng dụng |
-| [Runbook cutover](docs/operations/studio-runtime-cutover.md) | Migrate, cutover, rollback |
+| [UI docs](apps/web-ui/docs/README.md), [API docs](apps/studio-api/docs/README.md), [Runtime docs](apps/agent-runtime/docs/01_Coding_Convention.md) | Quy ước theo ứng dụng |
+| [Runbook](docs/operations/studio-runtime-cutover.md) | Chuyển service và rollback |
 
-Commit theo dạng `<type>(scope): subject`, chi tiết trong [hướng dẫn commit](.github/commit_guide.instructions.md).
+Commit theo dạng `<type>(scope): subject`, xem [hướng dẫn commit](.github/commit_guide.instructions.md).
 
 ## Giấy phép
 

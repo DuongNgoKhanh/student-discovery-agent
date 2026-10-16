@@ -65,6 +65,8 @@ tags:
   - name: Studio Audit
     description: Server-authorized administrative audit.
 paths:
+  /auth/session:
+    $ref: auth-api.yaml#/paths/~1auth~1session
   /admin/auth/login:
     $ref: admin-auth-api.yaml#/paths/~1admin~1auth~1login
   /admin/users:
@@ -109,12 +111,18 @@ paths:
     $ref: audit-api.yaml#/paths/~1admin~1experiences~1{id}~1audit-logs
 components:
   securitySchemes:
+    AccessCookie:
+      $ref: auth-api.yaml#/components/securitySchemes/AccessCookie
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
       description: Admin JWT access token required for protected admin endpoints
   schemas:
+    SessionMetadata:
+      $ref: auth-api.yaml#/components/schemas/SessionMetadata
+    SessionResponse:
+      $ref: auth-api.yaml#/components/schemas/SessionResponse
     ApiResponse:
       $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
     ResponseMeta:
