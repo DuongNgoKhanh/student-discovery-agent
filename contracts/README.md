@@ -97,8 +97,8 @@ Server local của mọi YAML là web `http://localhost:3000/api/v1`. Chạy `pn
 (`@redocly/cli lint`, cấu hình `apps/web/redocly.yaml`) trên hai mục lục `user-api.yaml`/`admin-api.yaml`;
 lệnh fail khi `$ref` không resolve được hoặc schema sai cấu trúc OpenAPI 3.0.
 
-Trạng thái parity giữa contract và triển khai hiện tại (backend Python ở `app/`, Next route handlers ở
-`apps/web/src/app/api/`). Task là task port trong plan restructure.
+Trạng thái parity giữa contract và triển khai hiện tại (Product API là Next route handlers ở
+`apps/web/src/app/api/v1`; backend Python cũ đã được gỡ). Task là task port trong plan restructure.
 
 | Endpoint | Trạng thái | Ghi chú |
 | --- | --- | --- |

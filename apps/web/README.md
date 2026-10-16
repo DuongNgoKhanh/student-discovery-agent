@@ -1,6 +1,6 @@
 # SDA Frontend
 
-Frontend template cho **Student Discovery Agent (SDA)**, ghép đôi với backend FastAPI (Python, ở thư mục gốc repo cho đến khi được chuyển).
+Frontend template cho **Student Discovery Agent (SDA)**, chứa cả UI và Product API (`/api/v1`, Drizzle + PostgreSQL, S3/MinIO).
 
 ## Tech stack
 
@@ -12,19 +12,17 @@ Frontend template cho **Student Discovery Agent (SDA)**, ghép đôi với backe
 
 ## Kiến trúc chính
 
-- **Auth BFF-lite**: token lưu ở **httpOnly cookie**. Browser luôn gọi same-origin:
-  - `/api/auth/*` — login/register/refresh/logout (set/xoá cookie)
-  - `/api/bff/[...path]` — proxy tới FastAPI, gắn Bearer, tự refresh khi 401
+- **Auth**: token lưu ở **httpOnly cookie**; browser gọi same-origin Product API `/api/v1/*` (route handlers trong `src/app/api/v1`), không còn proxy BFF.
 - `src/middleware.ts` gác `/dashboard/*` và `/admin/*` theo cookie + flag `admin` trong JWT.
 - **Feature theo domain**: code client chia theo domain trong `src/features/<domain>` (`api/hooks/schemas/types` + `index.ts` là public surface); code chỉ chạy server nằm ở `src/server/<domain>` và import `server-only`.
 
-Xem chi tiết quy ước trong [`templates/`](./templates/README.md).
+Xem chi tiết quy ước trong [`docs/`](./docs/README.md).
 
 ## Cấu trúc thư mục
 
 ```
 src/
-├─ app/              # App Router: (auth) (app) (admin) + api/{auth,bff}
+├─ app/              # App Router: (auth) (app) (admin) + api/v1
 ├─ features/         # code client theo domain: auth, users
 ├─ server/           # code chỉ chạy server (server-only): auth, ...
 ├─ components/       # ui (shadcn) + shared
@@ -54,18 +52,16 @@ pnpm dev                       # http://localhost:3000
 | `pnpm test` / `test:watch` | Vitest |
 | `pnpm gen:api` | Sinh lại type TS từ OpenAPI backend |
 
-## Chạy bằng Docker (ghép mạng backend)
+## Docker và migration
+
+Chạy từ thư mục gốc repo bằng `compose.yaml` (build context là `apps/web`, contracts qua `additional_contexts`):
 
 ```bash
-# Chạy từ thư mục gốc repo.
-# 1) Khởi động backend trước (tạo network "sda-network")
-docker compose -f docker-compose.local.yml up -d
-
-# 2) Khởi động frontend
-cd apps/web && docker compose -f docker-compose.local.yml up --build
+docker compose up -d --build web db
+docker compose --profile tools run --rm product-migrate   # Drizzle migrations; pnpm db:migrate khi chạy local
 ```
 
 ## Convention
 
 - Commit: `<type>(scope): subject` — xem [`.github/commit_guide.instructions.md`](./.github/commit_guide.instructions.md).
-- Trước khi mở PR: chạy `pnpm lint && pnpm typecheck && pnpm test`, đối chiếu [`templates/07_PR_Review_Checklist.md`](./templates/07_PR_Review_Checklist.md).
+- Trước khi mở PR: chạy `pnpm lint && pnpm typecheck && pnpm test`, đối chiếu [`docs/07_PR_Review_Checklist.md`](./docs/07_PR_Review_Checklist.md).
