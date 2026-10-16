@@ -1,6 +1,6 @@
 /**
  * Map error code của backend sang thông điệp hiển thị (tiếng Việt).
- * Seed từ `sda-backend/docs/openapi/error_codes.md`. Bổ sung code cụ thể khi BE thêm.
+ * Seed từ `contracts/error_codes.md`. Bổ sung code cụ thể khi BE thêm.
  */
 const MESSAGES: Record<string, string> = {
   AUTH_401: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.',

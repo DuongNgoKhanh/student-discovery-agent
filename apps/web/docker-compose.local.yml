@@ -1,4 +1,4 @@
-# Chạy frontend ghép chung mạng với backend (sda-backend/docker-compose.local.yml).
+# Chạy frontend ghép chung mạng với backend (docker-compose.local.yml ở thư mục gốc repo).
 # Backend đã tạo network external tên "sda-network" và service "api".
 #
 # Khởi động BE trước (để network tồn tại), rồi:

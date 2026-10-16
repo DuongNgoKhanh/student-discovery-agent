@@ -1,6 +1,6 @@
 # SDA Frontend
 
-Frontend template cho **Student Discovery Agent (SDA)**, ghép đôi với backend FastAPI (`../sda-backend`).
+Frontend template cho **Student Discovery Agent (SDA)**, ghép đôi với backend FastAPI (Python, ở thư mục gốc repo cho đến khi được chuyển).
 
 ## Tech stack
 
@@ -16,7 +16,7 @@ Frontend template cho **Student Discovery Agent (SDA)**, ghép đôi với backe
   - `/api/auth/*` — login/register/refresh/logout (set/xoá cookie)
   - `/api/bff/[...path]` — proxy tới FastAPI, gắn Bearer, tự refresh khi 401
 - `src/middleware.ts` gác `/dashboard/*` và `/admin/*` theo cookie + flag `admin` trong JWT.
-- **Feature-module**: mỗi feature là 1 module độc lập trong `src/modules/<feature>` (`api/components/hooks/schemas/types` + `index.ts` là public surface).
+- **Feature theo domain**: code client chia theo domain trong `src/features/<domain>` (`api/hooks/schemas/types` + `index.ts` là public surface); code chỉ chạy server nằm ở `src/server/<domain>` và import `server-only`.
 
 Xem chi tiết quy ước trong [`templates/`](./templates/README.md).
 
@@ -25,10 +25,11 @@ Xem chi tiết quy ước trong [`templates/`](./templates/README.md).
 ```
 src/
 ├─ app/              # App Router: (auth) (app) (admin) + api/{auth,bff}
-├─ modules/          # feature-module: users, admin, ...
+├─ features/         # code client theo domain: auth, users
+├─ server/           # code chỉ chạy server (server-only): auth, ...
 ├─ components/       # ui (shadcn) + shared
-├─ lib/              # api, auth, query, utils
-├─ types/api/        # type sinh từ OpenAPI (pnpm gen:api)
+├─ lib/              # helper thuần (client + server): api, auth, query, utils
+├─ generated/api/    # type sinh từ OpenAPI (pnpm gen:api, không commit .d.ts)
 ├─ config/           # env (validate bằng zod)
 └─ middleware.ts
 ```
@@ -57,8 +58,9 @@ Backend chạy riêng (docker expose cổng 8081) → `.env.local` để `API_BA
 ## Chạy bằng Docker (ghép mạng backend)
 
 ```bash
+# Chạy từ thư mục gốc repo.
 # 1) Khởi động backend trước (tạo network "sda-network")
-cd ../sda-backend && docker compose -f docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml up -d
 
 # 2) Khởi động frontend
 cd apps/web && docker compose -f docker-compose.local.yml up --build
