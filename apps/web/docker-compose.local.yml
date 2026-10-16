@@ -12,8 +12,6 @@ services:
     ports:
       - '3000:3000'
     environment:
-      # Trong mạng docker, gọi backend qua service name "api" cổng nội bộ 8000.
-      - API_BASE_URL=http://api:8000/api/v1
       - AUTH_COOKIE_ACCESS=sda_access
       - AUTH_COOKIE_REFRESH=sda_refresh
       - NODE_ENV=production

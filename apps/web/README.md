@@ -38,12 +38,11 @@ src/
 
 ```bash
 pnpm install
-cp .env.example .env.local     # sửa API_BASE_URL nếu cần
+cp .env.example .env.local
 pnpm gen:api                   # sinh type từ ../../contracts/openapi/public/*.yaml
 pnpm dev                       # http://localhost:3000
 ```
 
-Backend chạy riêng (docker expose cổng 8081) → `.env.local` để `API_BASE_URL=http://localhost:8081/api/v1`.
 
 ## Scripts
 

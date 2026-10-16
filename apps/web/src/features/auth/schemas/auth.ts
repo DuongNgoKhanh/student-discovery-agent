@@ -10,3 +10,9 @@ export const registerSchema = loginSchema.extend({
   name: z.string().min(1, 'Vui lòng nhập tên').optional(),
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
+
+export const adminLoginSchema = z.object({
+  username: z.string().min(1, 'Vui lòng nhập tên đăng nhập'),
+  password: z.string().min(1, 'Vui lòng nhập mật khẩu'),
+});
+export type AdminLoginInput = z.infer<typeof adminLoginSchema>;

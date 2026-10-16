@@ -22,11 +22,6 @@ const eslintConfig = [
     files: ['src/features/**/*.{ts,tsx}', 'src/components/**/*.{ts,tsx}', 'src/lib/**/*.{ts,tsx}'],
     rules: { 'no-restricted-imports': ['error', serverBoundary] },
   },
-  {
-    // Server-only helper temporarily living in lib/; removed in Task 7.
-    files: ['src/lib/api/server.ts'],
-    rules: { 'no-restricted-imports': 'off' },
-  },
 ];
 
 export default eslintConfig;

@@ -6,9 +6,8 @@ const cookieNames = {
   AUTH_COOKIE_REFRESH: z.string().default('sda_refresh'),
 };
 
-// Legacy BFF schema (API_BASE_URL is used until Task 7 removes the BFF).
+// Cookie-name env shared by session helpers.
 const schema = z.object({
-  API_BASE_URL: z.string().url(),
   ...cookieNames,
   NODE_ENV: nodeEnv,
 });

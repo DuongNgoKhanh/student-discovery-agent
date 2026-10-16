@@ -5,11 +5,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { loginSchema, type LoginInput, useLogin } from '@/features/auth';
+import { safeNext } from '@/lib/auth/safe-next';
 import { Button } from '@/components/ui/button';
 
 export function LoginForm() {
   const router = useRouter();
-  const next = useSearchParams().get('next') ?? '/dashboard';
+  const next = safeNext(useSearchParams().get('next'));
   const {
     register,
     handleSubmit,
