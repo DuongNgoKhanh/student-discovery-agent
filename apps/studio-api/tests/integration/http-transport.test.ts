@@ -64,6 +64,9 @@ it('preserves two auth cookies and binary avatar bytes over the Node adapter', a
   expect(login.headers.getSetCookie()).toHaveLength(2);
   const cookie = login.headers.getSetCookie().map((line) => line.split(';')[0]).join('; ');
   const { data } = await login.json();
+  const session = await fetch(`${origin}/api/v1/auth/session`, { headers: { cookie } });
+  expect(session.status).toBe(200);
+  expect((await session.json()).data).toEqual({ userId: String(data.user.id), isAdmin: false });
   const form = new FormData();
   form.set('file', new File([png], 'avatar.png', { type: 'image/png' }));
   const uploaded = await fetch(`${origin}/api/v1/users/avatar/upload`, { method: 'POST', headers: { cookie }, body: form });

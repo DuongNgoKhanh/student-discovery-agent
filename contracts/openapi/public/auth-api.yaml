@@ -13,6 +13,27 @@ tags:
   - name: Authentication
     description: Email/password auth and token management
 paths:
+  /auth/session:
+    get:
+      tags:
+        - Authentication
+      summary: Read verified session metadata
+      description: Read the current user or admin access session without refreshing tokens or setting cookies.
+      operationId: readSession
+      security:
+        - BearerAuth: []
+        - AccessCookie: []
+      responses:
+        '200':
+          description: Verified session metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/InternalServerError
   /auth/register:
     post:
       tags:
@@ -108,7 +129,37 @@ paths:
         '500':
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    AccessCookie:
+      type: apiKey
+      in: cookie
+      name: sda_access
+      description: HttpOnly access cookie; name may be configured by deployment.
   schemas:
+    SessionMetadata:
+      type: object
+      required:
+        - userId
+        - isAdmin
+      properties:
+        userId:
+          type: string
+          description: JWT subject; numeric user ID as a string, or admin.
+        isAdmin:
+          type: boolean
+    SessionResponse:
+      allOf:
+        - $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
+        - type: object
+          required:
+            - data
+          properties:
+            data:
+              $ref: '#/components/schemas/SessionMetadata'
     RefreshTokenRequest:
       type: object
       required:

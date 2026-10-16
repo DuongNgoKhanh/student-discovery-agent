@@ -98,7 +98,7 @@ function extractToken(req: Request): string | undefined {
   return readRequestCookie(req, getAuthEnv().AUTH_COOKIE_ACCESS);
 }
 
-async function requireAccessClaims(req: Request): Promise<TokenClaims> {
+export async function requireAccessClaims(req: Request): Promise<TokenClaims> {
   const token = extractToken(req);
   if (!token) throw invalidToken();
   return verifyToken(token, 'access');

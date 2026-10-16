@@ -69,6 +69,8 @@ tags:
   - name: Activity Results
     description: Latest valid activity result and revisioned share projection.
 paths:
+  /auth/session:
+    $ref: auth-api.yaml#/paths/~1auth~1session
   /auth/register:
     $ref: auth-api.yaml#/paths/~1auth~1register
   /auth/login:
@@ -105,6 +107,8 @@ paths:
     $ref: result-api.yaml#/paths/~1results~1{result_id}~1share-card
 components:
   securitySchemes:
+    AccessCookie:
+      $ref: auth-api.yaml#/components/securitySchemes/AccessCookie
     BearerAuth:
       type: http
       scheme: bearer
@@ -121,6 +125,10 @@ components:
         CSRF, token format và TTL còn chờ DEC-07.
       x-decision-status: accepted-anonymous-bootstrap
   schemas:
+    SessionMetadata:
+      $ref: auth-api.yaml#/components/schemas/SessionMetadata
+    SessionResponse:
+      $ref: auth-api.yaml#/components/schemas/SessionResponse
     ApiResponse:
       $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
     ResponseMeta:
