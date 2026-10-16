@@ -1,0 +1,15 @@
+node_modules
+.next
+out
+build
+.env
+.env.local
+.env*.local
+coverage
+*.log
+.DS_Store
+next-env.d.ts
+
+# Generated API types (pnpm gen:api); keep src/generated/api/README.md tracked
+src/generated/api/*.d.ts
+*.tsbuildinfo

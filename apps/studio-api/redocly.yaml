@@ -1,0 +1,9 @@
+# Used by `pnpm contracts:check`. Structural validation only: OpenAPI structure + $ref resolution.
+telemetry: off
+extends:
+  - minimal
+rules:
+  struct: error
+  no-unresolved-refs: error
+  no-invalid-media-type-examples: off
+  security-defined: off

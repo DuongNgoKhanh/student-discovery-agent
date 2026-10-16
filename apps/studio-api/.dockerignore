@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.env
+.env*
+coverage
+docs
+tests
+src/**/*.test.ts
+src/generated/api/*.d.ts
+*.tsbuildinfo
+Dockerfile
+.dockerignore

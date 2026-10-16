@@ -94,7 +94,7 @@ flowchart TD
    - `experience.release.activate`: Cho phép đổi active release / rollback.
    - `experience.audit.read`: Cho phép xem lịch sử log.
 
-   Tên quyền thống nhất theo `x-required-permission` trong OpenAPI (`docs/openapi/*.yaml`).
+   Tên quyền thống nhất theo `x-required-permission` trong OpenAPI (`contracts/openapi/public/*.yaml`).
 
 #### C. Giao tiếp Service-to-Service: TypeScript $\rightarrow$ Python Execution Layer
 1. Python Execution Layer **không mở public trực tiếp ra Internet**; chỉ nhận request từ tầng TS (qua mạng nội bộ hoặc Docker network).
@@ -192,5 +192,5 @@ sequenceDiagram
    - **Ticket A-01:** Triển khai TS DB migration và Service lưu trữ Draft/Release.
    - **Ticket A-04:** Triển khai middleware quản lý Cookie `sda_owner` và ký Header nội bộ tại tầng BFF.
    - **Ticket B-01:** Triển khai middleware xác thực caller context và owner binding phía FastAPI.
-   - Hoàn tất tài liệu chi tiết contract schemas tương ứng trong `docs/openapi/`.
+   - Hoàn tất tài liệu chi tiết contract schemas tương ứng trong `contracts/openapi/`.
 

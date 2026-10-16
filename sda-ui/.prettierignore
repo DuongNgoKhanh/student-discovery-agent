@@ -1,5 +1,0 @@
-.next
-node_modules
-pnpm-lock.yaml
-coverage
-src/types/api

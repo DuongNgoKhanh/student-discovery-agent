@@ -2,232 +2,101 @@
 
 **SDA** là dự án trợ lý AI tư vấn hướng nghiệp cho học sinh THPT lớp 10–12 tại Đồng bằng sông Cửu Long, phục vụ **IHRD GenZ Career Agent**. Sản phẩm hướng đến trải nghiệm chat trên thiết bị di động, tích hợp vào `ihrd.vn` và tư vấn trong mạng lưới 12 trường liên kết.
 
-Repository hiện chứa **backend FastAPI**, **frontend Next.js** và tài liệu thiết kế cho Agent cùng SDA Studio.
+Repository gồm ba ứng dụng độc lập:
 
-> **Trạng thái hiện tại:** bộ khung ứng dụng đã có xác thực, quản lý người dùng, quản trị và các tiện ích hạ tầng. Luồng tư vấn hướng nghiệp, Agent Harness, SDA Studio, scoring/matching và kho tri thức chuyên biệt chưa được triển khai thành sản phẩm hoàn chỉnh.
+| Ứng dụng | Trách nhiệm | Công nghệ |
+| --- | --- | --- |
+| `apps/web-ui` | Giao diện, render SSR, HTTP client | Next.js 15 / React 19 |
+| `apps/studio-api` | Backend Studio/Product: auth, users, admin, versions, storage, migrations | TypeScript / Hono / Node |
+| `apps/agent-runtime` | Tầng thực thi Agent | Python 3.11 / FastAPI |
 
-## Mục lục
-
-- [Phạm vi và định hướng](#phạm-vi-và-định-hướng)
-- [Công nghệ](#công-nghệ)
-- [Cấu trúc repository](#cấu-trúc-repository)
-- [Chạy backend bằng Docker](#chạy-backend-bằng-docker)
-- [Chạy backend trực tiếp](#chạy-backend-trực-tiếp)
-- [Chạy frontend](#chạy-frontend)
-- [API và tài liệu](#api-và-tài-liệu)
-- [Kiểm tra và đóng góp](#kiểm-tra-và-đóng-góp)
-- [Giấy phép](#giấy-phép)
-
-## Phạm vi và định hướng
-
-### Thành phần đã có
-
-- **Xác thực:** đăng ký, đăng nhập bằng email/mật khẩu, JWT và refresh token.
-- **Người dùng:** xem/cập nhật hồ sơ, quản lý avatar.
-- **Quản trị:** đăng nhập admin, quản lý người dùng và thao tác hàng loạt.
-- **Tiện ích chung:** chuẩn hóa phản hồi/lỗi, theo dõi request, timeout, logging và tích hợp Redis/MinIO/LLM.
-- **Hạ tầng:** PostgreSQL, Redis, MinIO, TaskIQ worker và API quản lý phiên bản.
-- **Frontend:** bộ khung Next.js với proxy API và token lưu trong cookie httpOnly.
-
-### Định hướng đang thiết kế
-
-SDA Studio quản lý hành trình tư vấn, prompt, luật nghiệp vụ, dữ liệu và phiên bản phát hành. Agent Harness điều phối thực thi dựa trên hồ sơ có bằng chứng trong phiên; các engine nghiệp vụ thực hiện chấm điểm, matching, so sánh và tính chi phí bằng code xác định. LLM hỗ trợ hiểu và diễn đạt; dữ liệu tư vấn phải có nguồn và được kiểm tra trước khi gửi đến người học.
-
-Thiết kế mới phân chia **TypeScript cho tầng sản phẩm/quản trị** và **Python cho tầng thực thi AI/Agent**, trao đổi qua API và JSON Schema có phiên bản. Đây là định hướng kiến trúc, chưa phản ánh đầy đủ cấu trúc code hiện tại.
-
-Xem [thiết kế Agent](docs/superpowers/specs/2026-09-23-ihrd-career-agent-architecture.md) và [tổng quan SDA Studio](docs/superpowers/specs/2026-10-06-sda-studio-architecture-overview.md).
-
-## Công nghệ
-
-| Thành phần | Công nghệ hiện tại |
-| --- | --- |
-| Backend | Python **3.11**, FastAPI, Uvicorn |
-| Dependency Python | `requirements.txt` với phiên bản cố định |
-| ORM và cơ sở dữ liệu | SQLAlchemy, SQLModel, PostgreSQL 16; hỗ trợ cấu hình kết nối Supabase |
-| Cache và hàng đợi | Redis 7, TaskIQ, taskiq-redis |
-| Lưu trữ tệp | MinIO |
-| Tích hợp AI | Agno, Gemini qua `google-genai` |
-| Xác thực | JWT, thư viện băm mật khẩu Argon2/bcrypt |
-| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS, shadcn/ui |
-| Kiểm thử frontend | Vitest, Testing Library |
-
-**Neo4j/Graphiti:** dependency, tiện ích và service Neo4j vẫn còn trong bộ khung hiện tại. Thiết kế Agent đã loại bỏ hướng GraphRAG này; không xem đây là kiến trúc đích. PostgreSQL với pgvector/full-text là hướng truy hồi đang được đề xuất, chưa triển khai.
+Hiện auth, quản lý người dùng và avatar/download đã có scaffold. Studio editor, luồng tư vấn và kết nối thực thi API → runtime chưa được triển khai.
 
 ## Cấu trúc repository
 
 ```text
 student-discovery-agent/
-├── app/
-│   ├── constants/          # Thông báo và hằng số dùng chung
-│   ├── core/               # Cấu hình, xác thực và nạp cấu hình Vault
-│   ├── db/                 # Kết nối, session và khởi tạo database
-│   ├── exception_handlers/ # Xử lý lỗi và middleware
-│   ├── jobs/               # TaskIQ broker
-│   ├── models/             # Model dữ liệu
-│   └── modules/            # admin, users, common, version
+├── apps/
+│   ├── web-ui/          # UI, không giữ DB/JWT signing key/S3 credentials
+│   ├── studio-api/      # Product API, nghiệp vụ, DB/storage, migration SQL
+│   └── agent-runtime/   # Agent execution, env/dependencies/image riêng
+├── contracts/           # OpenAPI chung; mỗi app tự sinh DTO
+├── infra/nginx/         # Gateway cùng origin cho browser
 ├── docs/
-│   ├── openapi/            # Đặc tả API và mã lỗi
-│   ├── mockup/             # Mockup và hội thoại mẫu
-│   ├── presentations/      # Tài liệu trình bày kiến trúc
-│   ├── superpowers/        # Thiết kế và kế hoạch
-│   └── templates/          # Quy ước code, API và review
-├── sda-ui/                 # Frontend Next.js, chạy riêng
-├── .env.example            # Cấu hình backend mẫu
-├── .python-version         # Python 3.11
-├── docker-compose.local.yml
-├── Dockerfile
-├── main.py                 # FastAPI entrypoint
-├── pytest.ini
-├── requirements.txt
-└── start.sh                # Khởi động Uvicorn và TaskIQ worker
+│   ├── conventions/     # Quy ước API dùng chung
+│   └── operations/      # Runbook cutover/rollback
+├── docker-compose.yaml
+└── .github/
 ```
 
-Các module backend tổ chức theo `crud/`, `routes/`, `schemas/`, `services/` và `utils/`. API nghiệp vụ sử dụng tiền tố `/api/v1`.
+Browser gọi `/api/*` và `/download` cùng origin. Gateway chuyển các đường dẫn này tới `studio-api:3001`, còn các trang tới `web-ui:3000`. UI SSR lấy session đã xác minh qua HTTP nội bộ; Python runtime ở cổng 8000 nội bộ, chưa có API thực thi công khai.
 
-## Chạy backend bằng Docker
+## Chạy bằng Docker Compose
 
-### 1. Chuẩn bị môi trường
+Cần Docker Compose v2 hỗ trợ `build.additional_contexts` và `env_file.required`. Đặt biến trong shell hoặc `.env` **ở root repo**: `DATABASE_URL`, `SECRET_KEY`, `ADMIN_PASSWORD`, `S3_*`, `MINIO_PUBLIC_BUCKET_NAME`, `PRODUCT_BASE_URL`, `POSTGRES_PASSWORD`. Xem [API env example](apps/studio-api/.env.example). Defaults trong Compose chỉ dùng local; admin không có mật khẩu mặc định. Các file `.env` riêng của UI/API không được Compose đọc. Runtime đọc `apps/agent-runtime/.env` nếu có.
 
-Cần Docker và Docker Compose v2. Chạy các lệnh từ thư mục gốc repository.
-
-```powershell
-Copy-Item .env.example .env
+```bash
+docker compose -f docker-compose.yaml up -d --build
+# Chỉ chạy thủ công cho DB mới hoặc migration còn thiếu:
+docker compose -f docker-compose.yaml --profile tools run --rm studio-api-migrate
+# Tạo bucket và public download policy cho bucket avatar:
+docker compose -f docker-compose.yaml --profile tools run --rm minio-init
+curl http://localhost:3000/healthz
+curl http://localhost:3000/api/health
 ```
 
-Trên Linux/macOS, dùng `cp .env.example .env`. Nếu đã có `.env`, chỉnh sửa file hiện có.
+Gateway publish `localhost:3000`; UI/API/runtime không publish port host. MinIO console local ở `127.0.0.1:9001`. Migration không tự chạy khi build/start và không thay đổi SQL/journal vì đổi thư mục. Giữ nguyên volume, DB URL và JWT secret khi chuyển từ service cũ. `minio-init` dùng client `mc` có sẵn trong image MinIO được pin cùng server.
 
-Cấu hình các nhóm biến sau trước khi khởi động:
+UI chỉ nhận `STUDIO_API_ORIGIN=http://studio-api:3001`; API nhận DB/auth/storage env; runtime không nhận credential Product. `PRODUCT_BASE_URL` phải là origin công khai của gateway để avatar URL đúng. Build sau proxy có thể truyền `http_proxy`/`https_proxy` từ shell làm build args.
 
-| Nhóm | Biến cần kiểm tra |
-| --- | --- |
-| Xác thực | `SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` |
-| PostgreSQL | `POSTGRES_SERVER`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
-| Redis | `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB` |
-| MinIO | `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, tên bucket |
-| Neo4j hiện tại | `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` |
-| Frontend | `BACKEND_CORS_ORIGINS` chứa origin của frontend |
-| Gemini, khi sử dụng | `GOOGLE_API_KEY` |
+## Chạy trực tiếp và kiểm thử
 
-Thay các giá trị mẫu `change-me`. Với Docker Compose, giữ hostname nội bộ `db`, `redis`, `minio` và `neo4j`.
+Node 22, pnpm 9.15.9; chạy UI và API ở hai terminal:
 
-**MinIO:** thêm `MINIO_ROOT_USER` và `MINIO_ROOT_PASSWORD` vào `.env` để cấu hình tài khoản server local; đặt chúng tương ứng với `MINIO_ACCESS_KEY` và `MINIO_SECRET_KEY` của ứng dụng. File mẫu hiện chưa khai báo hai biến này.
-
-`DATABASE_URL`, nếu có giá trị, được ưu tiên hơn nhóm `POSTGRES_*` cho kết nối ứng dụng. Khi dùng Vertex AI, cần cấu hình project/location, thông tin xác thực Google Cloud và bật chế độ Vertex trong client; chỉ đặt biến môi trường không tự chuyển chế độ.
-
-### 2. Khởi động
-
-```powershell
-docker compose -f docker-compose.local.yml up -d --build
-docker compose -f docker-compose.local.yml ps
+```bash
+# UI: copy .env.example thành .env.local nếu cần chỉnh API origin.
+cd apps/web-ui
+pnpm install && pnpm gen:api
+pnpm dev                       # :3000; dev rewrite /api/* và /download tới API
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
 ```
 
-Compose khởi động `api`, `db`, `redis`, `minio`, `neo4j` và `adminer`. Container `api` chạy cả Uvicorn và TaskIQ worker qua `start.sh`. Backend tạo các bảng từ model khi khởi động.
-
-### 3. Truy cập
-
-| Dịch vụ | Địa chỉ local |
-| --- | --- |
-| Backend | http://localhost:8081 |
-| Swagger UI | http://localhost:8081/docs |
-| ReDoc | http://localhost:8081/redoc |
-| OpenAPI JSON | http://localhost:8081/openapi.json |
-| Health check | http://localhost:8081/health |
-| Adminer | http://localhost:8080 |
-| MinIO API / Console | http://localhost:9000 / http://localhost:9001 |
-| Neo4j Browser | http://localhost:7474 |
-
-Xem log hoặc dừng dịch vụ:
-
-```powershell
-docker compose -f docker-compose.local.yml logs -f api
-docker compose -f docker-compose.local.yml down
+```bash
+cd apps/studio-api
+pnpm install && pnpm gen:api
+# Copy .env.example thành .env, điền cấu hình thật ở local.
+# Node/tsx không tự đọc .env; nạp rõ file bằng Node 22:
+node --env-file=.env --import tsx --watch src/main.ts  # :3001
+# Hoặc export env từ shell rồi chạy pnpm dev.
+pnpm contracts:check && pnpm typecheck && pnpm lint && pnpm test
+pnpm test:integration          # cần Docker, DB/MinIO fixture tạm
+pnpm build
+node --env-file=.env dist/main.js
+# Migration thủ công khi cần: pnpm exec tsx --env-file=.env src/infrastructure/db/migrate.ts
 ```
 
-Dữ liệu PostgreSQL, MinIO và Neo4j được lưu trong named volumes; lệnh `down` ở trên giữ lại các volume này.
+`pnpm start` của UI ở production cần gateway để định tuyến browser API; rewrite chỉ bật trong dev. Liveness UI/API build và chạy không cần DB/JWT/S3. Trang bảo vệ cần API session: 401 chuyển login, API/network lỗi hiển thị trạng thái không khả dụng.
 
-## Chạy backend trực tiếp
-
-Cần **Python 3.11** và các dịch vụ hạ tầng đang chạy. Có thể khởi động riêng chúng bằng Compose:
-
-```powershell
-docker compose -f docker-compose.local.yml up -d db redis minio neo4j
-py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```bash
+cd apps/agent-runtime
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e '.[dev]'
+pytest
+uvicorn agent_runtime.main:app --port 8000
 ```
 
-Đổi hostname trong `.env` thành địa chỉ truy cập từ máy host:
-
-```dotenv
-POSTGRES_SERVER=localhost
-REDIS_HOST=localhost
-MINIO_ENDPOINT=localhost:9000
-NEO4J_URI=bolt://localhost:7687
-```
-
-Sau đó chạy API:
-
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-Swagger UI ở http://localhost:8000/docs. Nếu dùng frontend, đổi `API_BASE_URL` thành `http://localhost:8000/api/v1`.
-
-Khi cần xử lý tác vụ nền, mở terminal riêng tại thư mục gốc:
-
-```powershell
-.\.venv\Scripts\python.exe -m taskiq worker app.jobs.taskiq_broker:broker
-```
-
-Trên Linux/macOS, tạo môi trường bằng `python3.11 -m venv .venv` và dùng `.venv/bin/python` thay cho `.\.venv\Scripts\python.exe`. Vault không bắt buộc khi chạy local; ứng dụng bỏ qua nếu không có file cấu hình được inject.
-
-## Chạy frontend
-
-Cần **Node.js ≥20** và **pnpm 9**. Frontend chạy độc lập với backend.
-
-```powershell
-Set-Location sda-ui
-Copy-Item .env.example .env.local
-pnpm install
-pnpm gen:api
-pnpm dev
-```
-
-Truy cập http://localhost:3000. Cấu hình mặc định `API_BASE_URL=http://localhost:8081/api/v1` phù hợp với backend Docker. Các lệnh frontend trong README này chạy từ thư mục `sda-ui/`.
-
-Browser gọi API cùng origin qua route handler của Next.js; backend URL và token được xử lý phía server. Chi tiết ở [README frontend](sda-ui/README.md).
-
-## API và tài liệu
+## Tài liệu
 
 | Tài liệu | Nội dung |
 | --- | --- |
-| [User API](docs/openapi/user-api.yaml) | Xác thực và quản lý người dùng |
-| [Admin API](docs/openapi/admin-api.yaml) | Xác thực admin và quản lý người dùng |
-| [Mã lỗi](docs/openapi/error_codes.md) | Danh mục lỗi API |
-| [Thiết kế Agent](docs/superpowers/specs/2026-09-23-ihrd-career-agent-architecture.md) | Hồ sơ, năng lực, tri thức và kiểm soát đầu ra |
-| [Tổng quan SDA Studio](docs/superpowers/specs/2026-10-06-sda-studio-architecture-overview.md) | Thành phần hệ thống và phân chia TypeScript/Python |
-| [Thiết kế SDA Studio](docs/superpowers/specs/2026-10-06-sda-studio-design.md) | Cấu hình, hành trình, phát hành và thực thi |
-| [Hội thoại mẫu](docs/mockup/hoi-thoai-mau.html) | Minh họa trải nghiệm tư vấn |
-| [Bản ghi mẫu](docs/mockup/tools/steps.json) | Hội thoại 41 bước dùng làm tham chiếu hành vi |
+| [Contracts](contracts/README.md) | OpenAPI và trạng thái endpoint |
+| [Mã lỗi](contracts/error_codes.md) | Danh mục lỗi |
+| [Quy ước chung](docs/conventions/README.md) | API naming/response/error/timeout |
+| [UI docs](apps/web-ui/docs/README.md), [API docs](apps/studio-api/docs/README.md), [Runtime docs](apps/agent-runtime/docs/01_Coding_Convention.md) | Quy ước theo ứng dụng |
+| [Runbook](docs/operations/studio-runtime-cutover.md) | Chuyển service và rollback |
 
-Các tài liệu kiến trúc mô tả hướng phát triển; đối chiếu trạng thái của từng tài liệu trước khi dùng làm đặc tả triển khai. Swagger/OpenAPI do ứng dụng sinh khi chạy phản ánh các route đã đăng ký.
-
-## Kiểm tra và đóng góp
-
-Backend đã có cấu hình [pytest.ini](pytest.ini), nhưng chưa có bộ test trong `tests/` và `pytest` chưa nằm trong dependency runtime. Khi bổ sung test, cài công cụ và chạy từ thư mục gốc:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install pytest
-.\.venv\Scripts\python.exe -m pytest
-```
-
-Frontend có các bài kiểm thử Vitest. Chạy từ `sda-ui/`:
-
-```powershell
-pnpm typecheck
-pnpm test
-```
-
-Tham khảo [quy ước backend](docs/templates/01_Coding_Convention.md), [quy ước frontend](sda-ui/templates/README.md) và [checklist review](docs/templates/07_TL_QA_review_checklist.md). Commit theo dạng `<type>(scope): subject`, chi tiết trong [hướng dẫn commit](.github/commit_guide.instructions.md).
+Commit theo dạng `<type>(scope): subject`, xem [hướng dẫn commit](.github/commit_guide.instructions.md).
 
 ## Giấy phép
 
