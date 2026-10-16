@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: 3.1152.0
+        version: 3.1152.0
       '@hookform/resolvers':
         specifier: ^3.9.1
         version: 3.10.0(react-hook-form@7.90.0(@types/react@19.3.0)(react@19.3.1))
@@ -63,9 +66,6 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
-      '@aws-sdk/client-s3':
-        specifier: 3.1152.0
-        version: 3.1152.0
       '@eslint/eslintrc':
         specifier: 3.3.7
         version: 3.3.7

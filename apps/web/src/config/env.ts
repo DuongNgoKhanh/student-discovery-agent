@@ -74,6 +74,9 @@ const storageSchema = z.object({
   S3_SECRET_KEY: z.string().min(1),
   S3_BUCKET: z.string().min(1),
   S3_REGION: z.string().min(1).default('us-east-1'),
+  // Legacy MINIO_PUBLIC_BUCKET_NAME (avatars) and absolute Product origin; required only by avatar/download code.
+  MINIO_PUBLIC_BUCKET_NAME: z.string().min(1).optional(),
+  PRODUCT_BASE_URL: z.string().url().optional(),
 });
 
 export type StorageEnv = z.infer<typeof storageSchema>;
