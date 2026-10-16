@@ -3,6 +3,7 @@
 Supports:
 - Definition 1.0 (PR #13 baseline legacy format)
 - Definition 2.0 (ADR-002 adaptive RIASEC bank, stopping bounds, rating 1..5)
+All models strictly enforce extra='forbid' per OpenAPI additionalProperties: false.
 """
 
 from typing import Any, Dict, List, Optional
@@ -10,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class AssessmentDefinitionOption(BaseModel):
-    """Option choice within an assessment question."""
+    """Option choice within an assessment question (general)."""
 
     option_id: str = Field(
         ...,
@@ -25,11 +26,43 @@ class AssessmentDefinitionOption(BaseModel):
         description="Rating value 1-5 for Likert scale (Definition 2.0)",
     )
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
+
+
+class AssessmentDefinitionOptionV1(BaseModel):
+    """Option choice for Definition 1.0 (strictly option_id and label)."""
+
+    option_id: str = Field(
+        ...,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        description="Unique identifier for the option within the question",
+    )
+    label: str = Field(..., min_length=1, description="Display label for the option")
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class AssessmentDefinitionOptionV2(BaseModel):
+    """Option choice for Definition 2.0 (strictly option_id, label, rating)."""
+
+    option_id: str = Field(
+        ...,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        description="Unique identifier for the option within the question",
+    )
+    label: str = Field(..., min_length=1, description="Display label for the option")
+    rating: int = Field(
+        ...,
+        ge=1,
+        le=5,
+        description="Rating value 1-5 for Likert scale (ADR-002 §7.4)",
+    )
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class AssessmentDefinitionQuestion(BaseModel):
-    """Question item within an assessment definition."""
+    """Question item within an assessment definition (general)."""
 
     question_id: str = Field(
         ...,
@@ -52,7 +85,7 @@ class AssessmentDefinitionQuestion(BaseModel):
         description="Sequential item order (1..5) within the house (Definition 2.0)",
     )
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
 
 class AssessmentHouseMetadata(BaseModel):
@@ -85,7 +118,7 @@ class AssessmentHouseMetadata(BaseModel):
     )
     quote: str = Field(..., min_length=1, description="Signature motivational quote for the House")
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
 
 class AssessmentRuleDocument(BaseModel):
@@ -103,7 +136,7 @@ class AssessmentRuleDocument(BaseModel):
         ..., description="Rule-specific configuration payload"
     )
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
 
 class AssessmentGoldenAnswer(BaseModel):
@@ -112,7 +145,7 @@ class AssessmentGoldenAnswer(BaseModel):
     question_id: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
     option_id: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
 
 class AssessmentGoldenExpected(BaseModel):
@@ -126,7 +159,7 @@ class AssessmentGoldenExpected(BaseModel):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
         description="Expected primary winning house ID",
     )
-    scores: Optional[Dict[str, Any]] = Field(
+    scores: Optional[Dict[str, float]] = Field(
         default=None, description="Expected score map or mean values"
     )
     stopping_reason: Optional[str] = Field(
@@ -136,7 +169,7 @@ class AssessmentGoldenExpected(BaseModel):
         default=None, description="Whether tie-breaking policy was applied"
     )
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
 
 class AssessmentGoldenCase(BaseModel):
@@ -151,7 +184,7 @@ class AssessmentGoldenCase(BaseModel):
         ..., description="Expected deterministic evaluation outcome"
     )
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
 
 class ExperienceDefinitionDocument(BaseModel):
@@ -184,10 +217,10 @@ class ExperienceDefinitionDocument(BaseModel):
         ..., description="Prompt templates (intro_prompt, clarification_prompt, completion_message)"
     )
     evaluation_cases: List[AssessmentGoldenCase] = Field(
-        default_factory=list, description="Independent golden test cases"
+        ..., min_length=1, description="Independent golden test cases (required by OpenAPI)"
     )
     approval_refs: List[str] = Field(
-        default_factory=list, description="Audit approval references"
+        ..., min_length=1, description="Audit approval references (required by OpenAPI)"
     )
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
