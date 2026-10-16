@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseEnv, parseProductEnv, parseStorageEnv } from './env';
+import { parseAuthEnv, parseEnv, parseProductEnv, parseStorageEnv } from './env';
 
 describe('parseEnv', () => {
   it('parse hợp lệ + áp default', () => {
@@ -59,5 +59,16 @@ describe('parseStorageEnv', () => {
     });
     expect(e.S3_BUCKET).toBe('bk');
     expect(e.S3_REGION).toBe('us-east-1');
+  });
+});
+
+describe('parseAuthEnv', () => {
+  it('needs only SECRET_KEY, applies TTL defaults and has no admin password default', () => {
+    expect(() => parseAuthEnv({})).toThrow();
+    const e = parseAuthEnv({ SECRET_KEY: 's', ACCESS_TOKEN_EXPIRE_MINUTES: '', ADMIN_PASSWORD: '' });
+    expect(e.ACCESS_TOKEN_EXPIRE_MINUTES).toBe(11520);
+    expect(e.REFRESH_TOKEN_EXPIRE_MINUTES).toBe(43200);
+    expect(e.ADMIN_USERNAME).toBe('admin');
+    expect(e.ADMIN_PASSWORD).toBeUndefined();
   });
 });

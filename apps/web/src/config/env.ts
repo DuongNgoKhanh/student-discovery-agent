@@ -44,6 +44,29 @@ export function getProductEnv(): ProductEnv {
   return parseProductEnv(process.env);
 }
 
+// Auth env: token signing/cookies only (no DB), so getSession() works without DATABASE_URL.
+// ADMIN_PASSWORD has NO default: when unset/empty, admin login always fails (security ruling).
+const blankToUndefined = (v: unknown) => (v === '' ? undefined : v);
+const authSchema = z.object({
+  SECRET_KEY: productSchema.shape.SECRET_KEY,
+  ACCESS_TOKEN_EXPIRE_MINUTES: z.preprocess(blankToUndefined, productSchema.shape.ACCESS_TOKEN_EXPIRE_MINUTES),
+  REFRESH_TOKEN_EXPIRE_MINUTES: z.preprocess(blankToUndefined, productSchema.shape.REFRESH_TOKEN_EXPIRE_MINUTES),
+  ADMIN_USERNAME: z.preprocess(blankToUndefined, z.string().default('admin')),
+  ADMIN_PASSWORD: z.preprocess(blankToUndefined, z.string().optional()),
+  ...cookieNames,
+  NODE_ENV: nodeEnv,
+});
+
+export type AuthEnv = z.infer<typeof authSchema>;
+
+export function parseAuthEnv(source: Record<string, string | undefined>): AuthEnv {
+  return authSchema.parse(source);
+}
+
+export function getAuthEnv(): AuthEnv {
+  return parseAuthEnv(process.env);
+}
+
 // Storage env: parsed only when storage is used. No provider keys live in the web app.
 const storageSchema = z.object({
   S3_ENDPOINT: z.string().url(),
