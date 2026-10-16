@@ -21,7 +21,7 @@ Mặc định cho state chỉ 1 component quan tâm: input đang gõ, modal mở
 Mọi dữ liệu từ API đi qua TanStack Query, **không** copy vào `useState`/Context:
 
 - `useQuery` cho đọc, `useMutation` cho ghi.
-- Bọc trong hook module (`modules/<f>/hooks`), key lấy từ `lib/query/keys.ts`.
+- Bọc trong hook module (`features/<f>/hooks`), key lấy từ `lib/query/keys.ts`.
 - Cache/refetch/loading/error do Query lo. Đồng bộ lại bằng `invalidateQueries`.
 
 ❌ Sai: `const [users, setUsers] = useState([]); useEffect(fetch...)`
@@ -36,7 +36,7 @@ Quy tắc: **không để server-state trong Context**. Nếu dữ liệu có th
 
 ## 4. Form state — React Hook Form
 
-Form dùng React Hook Form + `zodResolver`; không quản field bằng `useState` rời rạc. Schema Zod đặt ở `modules/<f>/schemas`.
+Form dùng React Hook Form + `zodResolver`; không quản field bằng `useState` rời rạc. Schema Zod đặt ở `features/<f>/schemas`.
 
 ## 5. URL state
 

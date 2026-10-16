@@ -13,7 +13,7 @@ pnpm test:watch   # watch mode
 
 | Nên test | Ví dụ trong repo |
 |---|---|
-| Zod schema (biên hợp lệ/không hợp lệ) | `modules/users/schemas/auth.test.ts` |
+| Zod schema (biên hợp lệ/không hợp lệ) | `features/users/schemas/auth.test.ts` |
 | Util thuần | `lib/utils/cn.test.ts` |
 | Logic hạ tầng | `lib/api/response.test.ts` (unwrap envelope), `lib/auth/jwt.test.ts` |
 | API client (mock `fetch`) | `lib/api/client.test.ts` |

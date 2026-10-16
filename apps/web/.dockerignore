@@ -7,3 +7,9 @@ coverage
 Dockerfile
 .dockerignore
 npm-debug.log
+.github
+.husky
+docs
+tests
+*.tsbuildinfo
+src/generated/api/*.d.ts

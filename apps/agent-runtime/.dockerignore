@@ -1,4 +1,5 @@
 .env
+.env.*
 .venv/
 __pycache__/
 *.pyc
@@ -7,3 +8,6 @@ __pycache__/
 build/
 dist/
 tests/
+docs/
+Dockerfile
+.dockerignore

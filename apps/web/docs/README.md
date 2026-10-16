@@ -1,6 +1,6 @@
 # SDA Frontend — Bộ Standards
 
-Bộ quy ước dùng chung cho team frontend, mirror tinh thần `templates/` bên `sda-backend`.
+Bộ quy ước dùng chung cho team frontend, mirror tinh thần `docs/conventions/` ở root repo.
 Đọc theo thứ tự khi onboard:
 
 | File | Nội dung |

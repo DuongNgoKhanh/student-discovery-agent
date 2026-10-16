@@ -1,6 +1,6 @@
 # 06 — README template cho mỗi module
 
-Copy khung dưới đây vào `src/modules/<feature>/README.md` khi tạo module mới.
+Copy khung dưới đây vào `src/features/<feature>/README.md` khi tạo module mới.
 
 ---
 
@@ -24,7 +24,7 @@ Những gì module export ra ngoài — nơi khác chỉ dùng các mục này:
 
 ## Ví dụ dùng
 ```tsx
-import { useMe } from '@/modules/users';
+import { useMe } from '@/features/users';
 const { data } = useMe();
 ```
 

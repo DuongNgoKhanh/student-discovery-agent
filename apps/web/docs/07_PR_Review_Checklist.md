@@ -4,7 +4,7 @@ Reviewer tick từng mục trước khi approve. Author tự kiểm trước khi
 
 ## Convention & cấu trúc
 - [ ] Đặt tên file/folder/component/hook đúng `01_Coding_Convention.md`.
-- [ ] Code đặt đúng chỗ (feature → `modules/<f>`; dùng chung → `components/shared` / `ui`).
+- [ ] Code đặt đúng chỗ (feature → `features/<f>`; dùng chung → `components/shared` / `ui`).
 - [ ] Import qua barrel module, không import sâu vào internals module khác.
 - [ ] `'use client'` chỉ ở nơi thực sự cần; phần còn lại là Server Component.
 
@@ -16,7 +16,7 @@ Reviewer tick từng mục trước khi approve. Author tự kiểm trước khi
 
 ## State & form
 - [ ] Server-state dùng TanStack Query (không nhét vào useState/Context).
-- [ ] Form dùng React Hook Form + Zod; schema ở `modules/<f>/schemas`.
+- [ ] Form dùng React Hook Form + Zod; schema ở `features/<f>/schemas`.
 
 ## Type & test
 - [ ] Không `any` vô cớ; type request/response khớp OpenAPI (`pnpm gen:api` nếu BE đổi).

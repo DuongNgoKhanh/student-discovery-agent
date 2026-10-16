@@ -45,7 +45,7 @@ Thêm code mới → cập nhật `src/lib/api/error-map.ts` (seed từ `error_c
 
 ## 4. Loading / error state (qua hook module)
 
-Luôn bọc call trong hook TanStack Query trong `modules/<f>/hooks`:
+Luôn bọc call trong hook TanStack Query trong `features/<f>/hooks`:
 
 ```ts
 export function useMe() {
@@ -75,5 +75,5 @@ const mutation = useMutation({
 
 ## 6. Auth flow
 
-- Đăng nhập/đăng ký: gọi hàm `login`/`register` trong `modules/users/api/auth.ts` (chúng POST tới `/api/auth/*`, nơi set cookie). KHÔNG tự set token phía client.
+- Đăng nhập/đăng ký: gọi hàm `login`/`register` trong `features/users/api/auth.ts` (chúng POST tới `/api/auth/*`, nơi set cookie). KHÔNG tự set token phía client.
 - Refresh: tự động ở BFF proxy khi gặp 401 → xoay cookie → retry. Không cần xử lý refresh thủ công ở UI.

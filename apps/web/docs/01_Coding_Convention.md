@@ -19,10 +19,10 @@ Quy ước code để cả team viết giống nhau, không phải bàn cãi m�
 
 ## 2. Cấu trúc thư mục feature-module
 
-Mỗi feature là 1 module độc lập trong `src/modules/<feature>/`:
+Mỗi feature là 1 module độc lập trong `src/features/<feature>/`:
 
 ```
-modules/users/
+features/users/
 ├─ api/       # hàm gọi API (dùng lib/api/client hoặc route handler auth)
 ├─ components/# UI riêng của feature
 ├─ hooks/     # bọc TanStack Query (useQuery/useMutation)
@@ -31,7 +31,7 @@ modules/users/
 └─ index.ts   # PUBLIC SURFACE — nơi khác chỉ import từ đây
 ```
 
-**Quy tắc ranh giới:** module khác chỉ import qua `@/modules/<feature>` (barrel `index.ts`), KHÔNG import sâu vào `modules/x/hooks/...`. Component dùng chung → `components/ui` (shadcn) hoặc `components/shared`.
+**Quy tắc ranh giới:** module khác chỉ import qua `@/features/<feature>` (barrel `index.ts`), KHÔNG import sâu vào `features/x/hooks/...`. Component dùng chung → `components/ui` (shadcn) hoặc `components/shared`.
 
 ## 3. Thứ tự import
 
@@ -42,7 +42,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/client';
 import { queryKeys } from '@/lib/query/keys';
 // 3. module khác (qua barrel)
-import type { User } from '@/modules/users';
+import type { User } from '@/features/users';
 // 4. tương đối trong cùng module
 import { adminApi } from '../api/user-admin';
 ```

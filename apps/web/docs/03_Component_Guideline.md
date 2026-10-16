@@ -6,9 +6,9 @@
 |---|---|
 | `components/ui/` | Primitive từ shadcn/ui (Button, Input, Dialog...). Tái sử dụng toàn app, không chứa business logic. |
 | `components/shared/` | Component ghép nhiều primitive, dùng bởi ≥2 feature (vd `PageHeader`, `DataTable`, `EmptyState`). |
-| `modules/<f>/components/` | UI riêng của 1 feature (vd `UserProfileCard`). Không import chéo sang feature khác. |
+| `features/<f>/components/` | UI riêng của 1 feature (vd `UserProfileCard`). Không import chéo sang feature khác. |
 
-**Quy tắc tạo mới vs tái sử dụng:** trước khi tạo, tìm trong `ui/` và `shared/`. Nếu chỉ khác style → truyền props/variant. Nếu bị dùng ở feature thứ 2 → nâng từ `modules/*/components` lên `components/shared`.
+**Quy tắc tạo mới vs tái sử dụng:** trước khi tạo, tìm trong `ui/` và `shared/`. Nếu chỉ khác style → truyền props/variant. Nếu bị dùng ở feature thứ 2 → nâng từ `features/*/components` lên `components/shared`.
 
 ## 2. Props convention
 
