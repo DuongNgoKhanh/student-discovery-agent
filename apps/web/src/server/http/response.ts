@@ -32,7 +32,7 @@ export function success<T>(
   extra: Record<string, unknown> = {},
 ): Response {
   return json(
-    { message: null, ...extra, status, success: true, data, error: null, meta: meta(ctx) },
+    { message: null, status, success: true, data, error: null, meta: meta(ctx), ...extra },
     status,
     ctx,
   );

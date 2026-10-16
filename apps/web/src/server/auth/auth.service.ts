@@ -3,8 +3,9 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { getAuthEnv } from '@/config/env';
 import type { ProductDatabase } from '../db/client';
 import { ProductError } from '../http/errors';
-import { findUserByEmail, findUserById, insertUser } from '../users/users.repository';
-import { toUserProfile } from '../users/users.profile';
+import { findUserByEmail, findUserById } from '../users/users.repository';
+import { createUser } from '../users/users.service';
+import { adminToPublic, toUserProfile, type UserProfile } from '../users/users.profile';
 import type { UserRow } from '../users/users.types';
 import type { AdminLoginInput, AdminTokenData, AuthData, LoginInput, RegisterInput, TokenRefreshData } from './auth.schemas';
 import { readRequestCookie } from './cookies';
@@ -16,10 +17,10 @@ const invalidToken = () =>
   new ProductError(401, 'AUTH_INVALID_TOKEN', 'You are not logged in or your session has expired. Please log in again.');
 const emailTaken = () => new ProductError(400, 'VAL_EMAIL_ALREADY_EXISTS', 'Email is already registered');
 
-async function issueUserTokens(user: UserRow): Promise<AuthData> {
+async function issueUserTokens(user: UserProfile): Promise<AuthData> {
   const sub = String(user.id);
   return {
-    user: toUserProfile(user),
+    user,
     access_token: await issueAccessToken(sub),
     refresh_token: await issueRefreshToken(sub),
     token_type: 'bearer',
@@ -27,34 +28,19 @@ async function issueUserTokens(user: UserRow): Promise<AuthData> {
   };
 }
 
-function isUniqueViolation(error: unknown): boolean {
-  for (let e: unknown = error; e && typeof e === 'object'; e = (e as { cause?: unknown }).cause) {
-    if ((e as { code?: unknown }).code === '23505') return true;
-  }
-  return false;
-}
-
 export async function register(db: ProductDatabase, input: RegisterInput): Promise<AuthData> {
   assertPasswordPolicy(input.password);
   if (await findUserByEmail(db, input.email)) throw emailTaken();
   const hashed_password = await hashPassword(input.password);
-  let user: UserRow;
-  try {
-    // Task 5 replaces this with the users `createUser` service.
-    user = await insertUser(db, {
-      email: input.email,
-      hashed_password,
-      name: input.name ?? null,
-      avatar_url: input.avatar_url ?? null,
-      bio: input.bio ?? null,
-      position: input.position ?? null,
-    });
-  } catch (error) {
-    // Concurrent register, or a soft-deleted row still holding the unique email.
-    if (isUniqueViolation(error)) throw emailTaken();
-    throw error;
-  }
-  return issueUserTokens(user);
+  const created = await createUser(db, {
+    email: input.email,
+    hashed_password,
+    name: input.name ?? null,
+    avatar_url: input.avatar_url ?? null,
+    bio: input.bio ?? null,
+    position: input.position ?? null,
+  });
+  return issueUserTokens(adminToPublic(created));
 }
 
 // Burn comparable Argon2 work for unknown emails so response time does not reveal accounts.
@@ -67,7 +53,7 @@ export async function login(db: ProductDatabase, input: LoginInput): Promise<Aut
     throw invalidCredentials();
   }
   if (!(await verifyPassword(input.password, user.hashed_password))) throw invalidCredentials();
-  return issueUserTokens(user);
+  return issueUserTokens(toUserProfile(user));
 }
 
 /** Legacy semantics: no rotation, no DB lookup; a refresh token yields a fresh access token. */
