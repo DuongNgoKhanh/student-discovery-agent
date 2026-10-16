@@ -1,29 +1,8 @@
 """Regression checks for untrusted definition JSON and report inputs."""
 
 import copy
-import json
-from pathlib import Path
 
 import pytest
-
-from agent_runtime import evaluations
-from agent_runtime.evaluations.services.compatibility import (
-    CompatibilityChecker,
-    PILOT_ENGINE_REGISTRY,
-)
-from agent_runtime.evaluations.services.validator import ExperienceValidator
-
-
-@pytest.fixture
-def definition():
-    path = Path(evaluations.__file__).parent / "fixtures" / "valid_definition_v2.json"
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-@pytest.fixture
-def validator():
-    return ExperienceValidator(CompatibilityChecker(PILOT_ENGINE_REGISTRY))
-
 
 @pytest.mark.parametrize("field", ["rule_schema_ref", "engine_version"])
 @pytest.mark.parametrize("value", [[], {}, 1, False, ""])
@@ -83,10 +62,9 @@ def test_answer_extra_fields_are_rejected(validator, definition):
 
 
 @pytest.mark.parametrize("version", ["1.0", "2.0"])
-def test_option_identifier_pattern(validator, definition, version):
+def test_option_identifier_pattern(validator, definition, valid_v1_doc, version):
     if version == "1.0":
-        path = Path(evaluations.__file__).parent / "fixtures" / "valid_definition_v1.json"
-        definition = json.loads(path.read_text(encoding="utf-8"))
+        definition = valid_v1_doc
     definition["questions"][-1]["choices"][-1]["option_id"] = "bad id"
     report = validator.validate(definition)
     assert not report.mandatory_passed
@@ -98,9 +76,8 @@ def test_option_identifier_pattern(validator, definition, version):
     ("scoring_rules", {"weights": {}}),
     ("selection_rules", {"initial_question_id": "q_demo_01", "branches": "invalid"}),
 ])
-def test_legacy_rule_payloads_are_not_certified(validator, slot, payload):
-    path = Path(evaluations.__file__).parent / "fixtures" / "valid_definition_v1.json"
-    definition = json.loads(path.read_text(encoding="utf-8"))
+def test_legacy_rule_payloads_are_not_certified(validator, valid_v1_doc, slot, payload):
+    definition = valid_v1_doc
     definition[slot]["payload"] = copy.deepcopy(payload)
     report = validator.validate(definition)
     assert report.status == "unsupported"

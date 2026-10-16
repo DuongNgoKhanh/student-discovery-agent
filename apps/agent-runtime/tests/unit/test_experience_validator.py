@@ -8,12 +8,9 @@ Verifies:
 """
 
 import copy
-import json
-from pathlib import Path
 import pytest
 
 from agent_runtime.evaluations.schemas.experience import ExperienceDefinitionDocument
-from agent_runtime import evaluations
 from agent_runtime.evaluations.schemas.validation import ValidationStatus
 from agent_runtime.evaluations.services.compatibility import (
     CompatibilityChecker,
@@ -24,27 +21,6 @@ from agent_runtime.evaluations.services.validator import (
     calculate_content_hash,
     validate_experience_definition,
 )
-
-FIXTURES_DIR = Path(evaluations.__file__).parent / "fixtures"
-
-
-@pytest.fixture
-def valid_v1_doc():
-    with open(FIXTURES_DIR / "valid_definition_v1.json", "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-@pytest.fixture
-def valid_v2_doc():
-    with open(FIXTURES_DIR / "valid_definition_v2.json", "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-@pytest.fixture
-def validator():
-    """Validator equipped with PILOT_ENGINE_REGISTRY for testing positive flows."""
-    return ExperienceValidator(CompatibilityChecker(registry=PILOT_ENGINE_REGISTRY))
-
 
 class TestExperienceValidator:
     """Test suite for ExperienceValidator (M-EVL)."""
@@ -110,9 +86,9 @@ class TestExperienceValidator:
         assert report.mandatory_passed is False
         assert any(i.code == "VAL_UNSUPPORTED_ENGINE_VERSION" and i.path == "engine_version" for i in report.issues)
 
-    def test_unsupported_dec04_rule_schema(self, validator):
-        with open(FIXTURES_DIR / "invalid_definition_v2_unsupported_rule.json", "r", encoding="utf-8") as f:
-            doc = json.load(f)
+    def test_unsupported_dec04_rule_schema(self, validator, valid_v2_doc):
+        doc = copy.deepcopy(valid_v2_doc)
+        doc["scoring_rules"]["rule_schema_ref"] = "rule.schema.unregistered.scoring:v9"
         report = validator.validate(doc)
         assert report.status == ValidationStatus.UNSUPPORTED
         assert report.mandatory_passed is False
@@ -161,16 +137,16 @@ class TestExperienceValidator:
         assert report.status == ValidationStatus.FAILED
         assert any(i.code == "VAL_INVALID_QUESTION_COUNT" and i.path == "questions" for i in report.issues)
 
-    def test_invalid_v2_rating_scale(self, validator):
-        with open(FIXTURES_DIR / "invalid_definition_v2_bad_rating.json", "r", encoding="utf-8") as f:
-            doc = json.load(f)
+    def test_invalid_v2_rating_scale(self, validator, valid_v2_doc):
+        doc = copy.deepcopy(valid_v2_doc)
+        doc["questions"][0]["choices"][0]["rating"] = 0
         report = validator.validate(doc)
         assert report.status == ValidationStatus.FAILED
         assert any(i.code in ("VAL_INVALID_RATING", "VAL_INCOMPLETE_RATING_SCALE") for i in report.issues)
 
-    def test_invalid_v2_baseline_order_count(self, validator):
-        with open(FIXTURES_DIR / "invalid_definition_v2_bad_baseline.json", "r", encoding="utf-8") as f:
-            doc = json.load(f)
+    def test_invalid_v2_baseline_order_count(self, validator, valid_v2_doc):
+        doc = copy.deepcopy(valid_v2_doc)
+        doc["selection_rules"]["payload"]["baseline_order"] = doc["selection_rules"]["payload"]["baseline_order"][:2]
         report = validator.validate(doc)
         assert report.status == ValidationStatus.FAILED
         assert any(i.code == "VAL_INVALID_BASELINE_COUNT" and i.path == "selection_rules.payload.baseline_order" for i in report.issues)

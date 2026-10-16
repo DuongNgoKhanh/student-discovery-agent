@@ -2,7 +2,8 @@
 
 The pure validation library lives in `agent_runtime.evaluations`. It does not
 register public routes or import Product database, authentication or storage code.
-JSON fixtures ship with the runtime package; unit tests live in `tests/unit`.
+Unit tests live in `tests/unit` and build minimal inputs in memory. The runtime
+package does not ship sample assessment content.
 
 `ExperienceValidator` returns structural diagnostics and checks registered engine
 capabilities. The production engine registry remains empty until DEC-04 rule
@@ -14,8 +15,7 @@ Definition 1.0 remains readable for structural diagnostics but returns
 `unsupported` with `VAL_UNSUPPORTED_RULE_PAYLOAD`, even under the pilot registry.
 Its branch-tree, cross-weight and staged-tie payload schemas have not been
 registered with semantic validators. A nonempty legacy payload is not sufficient
-evidence to certify execution or publication. The legacy JSON fixture is a
-transport example, not an executable validated definition.
+evidence to certify execution or publication.
 
 Golden-case validation checks structure and bank references. Replaying answers
 and verifying the computed outcome belongs to the evaluator/engine.
