@@ -66,12 +66,14 @@ student-discovery-agent/
 │   ├── models/             # Model dữ liệu
 │   └── modules/            # admin, users, common, version
 ├── docs/
-│   ├── openapi/            # Đặc tả API và mã lỗi
 │   ├── mockup/             # Mockup và hội thoại mẫu
 │   ├── presentations/      # Tài liệu trình bày kiến trúc
 │   ├── superpowers/        # Thiết kế và kế hoạch
 │   └── templates/          # Quy ước code, API và review
-├── sda-ui/                 # Frontend Next.js, chạy riêng
+├── apps/
+│   └── web/                # Frontend Next.js, chạy riêng
+├── contracts/
+│   └── openapi/            # Đặc tả API công khai và mã lỗi
 ├── .env.example            # Cấu hình backend mẫu
 ├── .python-version         # Python 3.11
 ├── docker-compose.local.yml
@@ -185,24 +187,24 @@ Trên Linux/macOS, tạo môi trường bằng `python3.11 -m venv .venv` và d�
 Cần **Node.js ≥20** và **pnpm 9**. Frontend chạy độc lập với backend.
 
 ```powershell
-Set-Location sda-ui
+Set-Location apps/web
 Copy-Item .env.example .env.local
 pnpm install
 pnpm gen:api
 pnpm dev
 ```
 
-Truy cập http://localhost:3000. Cấu hình mặc định `API_BASE_URL=http://localhost:8081/api/v1` phù hợp với backend Docker. Các lệnh frontend trong README này chạy từ thư mục `sda-ui/`.
+Truy cập http://localhost:3000. Cấu hình mặc định `API_BASE_URL=http://localhost:8081/api/v1` phù hợp với backend Docker. Các lệnh frontend trong README này chạy từ thư mục `apps/web/`.
 
-Browser gọi API cùng origin qua route handler của Next.js; backend URL và token được xử lý phía server. Chi tiết ở [README frontend](sda-ui/README.md).
+Browser gọi API cùng origin qua route handler của Next.js; backend URL và token được xử lý phía server. Chi tiết ở [README frontend](apps/web/README.md).
 
 ## API và tài liệu
 
 | Tài liệu | Nội dung |
 | --- | --- |
-| [User API](docs/openapi/user-api.yaml) | Xác thực và quản lý người dùng |
-| [Admin API](docs/openapi/admin-api.yaml) | Xác thực admin và quản lý người dùng |
-| [Mã lỗi](docs/openapi/error_codes.md) | Danh mục lỗi API |
+| [User API](contracts/openapi/public/user-api.yaml) | Xác thực và quản lý người dùng |
+| [Admin API](contracts/openapi/public/admin-api.yaml) | Xác thực admin và quản lý người dùng |
+| [Mã lỗi](contracts/error_codes.md) | Danh mục lỗi API |
 | [Thiết kế Agent](docs/superpowers/specs/2026-09-23-ihrd-career-agent-architecture.md) | Hồ sơ, năng lực, tri thức và kiểm soát đầu ra |
 | [Tổng quan SDA Studio](docs/superpowers/specs/2026-10-06-sda-studio-architecture-overview.md) | Thành phần hệ thống và phân chia TypeScript/Python |
 | [Thiết kế SDA Studio](docs/superpowers/specs/2026-10-06-sda-studio-design.md) | Cấu hình, hành trình, phát hành và thực thi |
@@ -220,14 +222,14 @@ Backend đã có cấu hình [pytest.ini](pytest.ini), nhưng chưa có bộ tes
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-Frontend có các bài kiểm thử Vitest. Chạy từ `sda-ui/`:
+Frontend có các bài kiểm thử Vitest. Chạy từ `apps/web/`:
 
 ```powershell
 pnpm typecheck
 pnpm test
 ```
 
-Tham khảo [quy ước backend](docs/templates/01_Coding_Convention.md), [quy ước frontend](sda-ui/templates/README.md) và [checklist review](docs/templates/07_TL_QA_review_checklist.md). Commit theo dạng `<type>(scope): subject`, chi tiết trong [hướng dẫn commit](.github/commit_guide.instructions.md).
+Tham khảo [quy ước backend](docs/templates/01_Coding_Convention.md), [quy ước frontend](apps/web/templates/README.md) và [checklist review](docs/templates/07_TL_QA_review_checklist.md). Commit theo dạng `<type>(scope): subject`, chi tiết trong [hướng dẫn commit](.github/commit_guide.instructions.md).
 
 ## Giấy phép
 

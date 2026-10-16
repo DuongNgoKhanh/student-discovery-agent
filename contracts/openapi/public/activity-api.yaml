@@ -1,0 +1,161 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery - Activity Results
+  version: 1.0.0
+  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong user-api.yaml; xem README.md
+    để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+tags:
+  - name: Activity Results
+    description: Latest valid activity result and revisioned share projection.
+paths:
+  /activities/{activity_id}/result:
+    get:
+      operationId: readActivityResult
+      tags:
+        - Activity Results
+      summary: Đọc current valid result của activity
+      description: Resolve parent conversation and verify owner/read policy first. Return latest valid immutable
+        snapshot with full card data. Insufficient answers/engine failure → RESULT_NOT_READY; invalidation/mismatch
+        → stale error. Never expose internal scores/evidence or rebuild result using another active release.
+      security:
+        - AnonymousOwner: []
+      responses:
+        '200':
+          description: Validated envelope; status matches HTTP response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityResultEnvelope'
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError400
+        '401':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError409
+        '410':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError410
+        '413':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError413
+        '422':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError422
+        '429':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError503
+        '504':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError504
+      parameters:
+        - name: activity_id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        - name: expected_result_revision
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+          description: Guard against old/invalidated result generation; mismatch → 409 STALE_RESULT_REVISION.
+components:
+  schemas:
+    ResultView:
+      type: object
+      properties:
+        result_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        schema_version:
+          type: integer
+          enum:
+            - 1
+        conversation_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        activity_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        activity_type:
+          type: string
+          enum:
+            - personality_assessment
+        result_revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        experience_release_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        validity:
+          type: string
+          enum:
+            - valid
+        created_at:
+          type: string
+          format: date-time
+          pattern: Z$
+        data:
+          $ref: ../schemas/typed-blocks.yaml#/components/schemas/PersonalityCardData
+      required:
+        - result_id
+        - schema_version
+        - conversation_id
+        - activity_id
+        - activity_type
+        - result_revision
+        - experience_release_id
+        - validity
+        - created_at
+        - data
+      additionalProperties: true
+      description: |-
+        Profile đề xuất: result snapshot immutable, mỗi lần tính lại có result_id mới; result_revision là số thế hệ tăng theo activity.
+        ID cũ không bị ghi đè. Edit làm invalidated snapshot trước; public latest result/share không trả nó như valid.
+        Conversation revision đổi vì chat chung không tự làm result stale. Không trả internal scores/evidence/credentials ra public API.
+        Lựa chọn versioning này theo khuyến nghị proposal, vẫn là quyết định cần baseline trước implementation.
+    ActivityResultEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/ResultView'
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+  securitySchemes:
+    AnonymousOwner:
+      type: apiKey
+      in: cookie
+      name: sda_owner
+      description: |-
+        Anonymous owner cookie, không phải đăng nhập học sinh. POST /conversations cấp cookie khi chưa có;
+        khi có cookie phải xác minh credential. Các API đọc/thao tác conversation/activity/result yêu cầu cookie hợp lệ.
+        Credential scoped/TTL-bound; resource IDs hoặc idempotency_key không cấp quyền truy cập.
+        CSRF, token format và TTL còn chờ DEC-07.
+      x-decision-status: accepted-anonymous-bootstrap

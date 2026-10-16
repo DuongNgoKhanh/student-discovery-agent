@@ -165,7 +165,7 @@ Mục này là nguồn chi tiết của các quyết định ở mục 2; địn
 
 - [Thiết kế hội thoại/card local](../superpowers/specs/2026-10-09-conversation-assessment-card-design.md).
 - [ADR-001](ADR-001-auth-persistence-release-boundary.md) và [contract boundary](CONTRACT_BOUNDARY_SPEC.md), hiện có ở HEAD `fdb15d9`.
-- [Experience OpenAPI](../openapi/experience-api.yaml), [Activity schemas](../openapi/schemas/activity.yaml), [typed blocks](../openapi/schemas/typed-blocks.yaml), [ShareCard](../openapi/result-api.yaml).
+- [Experience OpenAPI](../../contracts/openapi/public/experience-api.yaml), [Activity schemas](../../contracts/openapi/schemas/activity.yaml), [typed blocks](../../contracts/openapi/schemas/typed-blocks.yaml), [ShareCard](../../contracts/openapi/public/result-api.yaml).
 - [SRS local](../srs/conversation-assessment-card/main.tex) và [tracker local](../implementation/conversation-assessment-card-tracker.md): đang untracked lúc viết; dùng làm context, không coi là contract đã được merge/phê duyệt.
 - PR #13, commit `501232d` (cũng là HEAD của PR): spec G0-04, `demo_experience_definition.json`, `verify_simulation.mjs`. Ba file chưa có trên main; phần nào được giữ hoặc thay thế xem mục 5.
 

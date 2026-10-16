@@ -1,0 +1,120 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery - Avatars
+  version: 1.0.0
+  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong user-api.yaml; xem README.md
+    để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+tags:
+  - name: User Avatar
+    description: User avatar upload and retrieval
+paths:
+  /users/avatar/upload:
+    post:
+      tags:
+        - User Avatar
+      summary: Upload user avatar
+      description: |
+        Upload a user avatar image with strict validation.
+        Accepts PNG or JPEG formats only, maximum 1MB file size.
+        Image must contain valid PNG or JPEG magic bytes.
+      operationId: uploadUserAvatar
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file (PNG or JPEG, max 1MB)
+      responses:
+        '200':
+          description: Avatar uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvatarUploadResponse'
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/BadRequestError
+        '401':
+          $ref: auth-api.yaml#/components/responses/UnauthorizedError
+        '413':
+          description: Payload too large - file exceeds maximum size (1MB)
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/common.yaml#/components/schemas/ErrorResponse
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/InternalServerError
+      x-codeSamples:
+        - lang: curl
+          source: |
+            curl -X POST http://localhost:8000/api/v1/users/avatar/upload \
+              -H "Authorization: Bearer $ACCESS_TOKEN" \
+              -F "file=@avatar.jpg"
+  /users/{user_id}/avatar:
+    get:
+      tags:
+        - User Avatar
+      summary: Get user avatar
+      description: Retrieve a user's avatar image (public endpoint, no authentication required)
+      operationId: getUserAvatar
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Avatar image retrieved successfully
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: profile-api.yaml#/components/responses/NotFoundError
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/InternalServerError
+components:
+  schemas:
+    AvatarUploadResponse:
+      allOf:
+        - $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
+        - type: object
+          required:
+            - data
+          properties:
+            data:
+              type: object
+              required:
+                - avatar_url
+              properties:
+                avatar_url:
+                  type: string
+                  format: uri
+                  description: URL of the uploaded avatar
+                  example: https://example.com/avatars/user_1.jpg
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token required for protected endpoints

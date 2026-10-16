@@ -1,0 +1,407 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery - Admin Audit
+  version: 1.0.0
+  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md
+    để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+tags:
+  - name: Studio Audit
+    description: Server-authorized administrative audit.
+paths:
+  /admin/audit-logs:
+    get:
+      operationId: listAuditLogs
+      tags:
+        - Studio Audit
+      summary: Search/filter administrative audit
+      description: Search/filter administrative audit
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Validated envelope; status matches HTTP response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPageEnvelope'
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError400
+        '401':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError409
+        '410':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError410
+        '413':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError413
+        '422':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError422
+        '429':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError503
+        '504':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError504
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+          description: Opaque cursor scoped to resource/snapshot.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+          description: Upper limit from approved runtime policy; no production default chosen here.
+        - name: actor_id
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: Z$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: Z$
+        - name: resource_id
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      x-required-permission: experience.audit.read
+  /admin/audit-logs/{event_id}:
+    get:
+      operationId: readAuditLog
+      tags:
+        - Studio Audit
+      summary: Đọc audit event detail
+      description: Đọc audit event detail
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Validated envelope; status matches HTTP response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventEnvelope'
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError400
+        '401':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError409
+        '410':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError410
+        '413':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError413
+        '422':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError422
+        '429':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError503
+        '504':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError504
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      x-required-permission: experience.audit.read
+  /admin/experiences/{id}/audit-logs:
+    get:
+      operationId: listExperienceAuditLogs
+      tags:
+        - Studio Audit
+      summary: Audit theo experience
+      description: Audit theo experience
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Validated envelope; status matches HTTP response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPageEnvelope'
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError400
+        '401':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError409
+        '410':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError410
+        '413':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError413
+        '422':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError422
+        '429':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError503
+        '504':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError504
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+          description: Opaque cursor scoped to resource/snapshot.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+          description: Upper limit from approved runtime policy; no production default chosen here.
+        - name: actor_id
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: Z$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+            pattern: Z$
+      x-required-permission: experience.audit.read
+components:
+  schemas:
+    AuditEvent:
+      type: object
+      properties:
+        event_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        actor_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        action:
+          type: string
+          minLength: 1
+        resource_type:
+          type: string
+          minLength: 1
+        resource_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        experience_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          nullable: true
+        environment:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          nullable: true
+        before_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          nullable: true
+        after_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          nullable: true
+        before_release_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          nullable: true
+        after_release_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          nullable: true
+        correlation_id:
+          type: string
+          minLength: 1
+        reason:
+          type: string
+          minLength: 1
+          nullable: true
+        outcome:
+          type: string
+          minLength: 1
+        created_at:
+          type: string
+          format: date-time
+          pattern: Z$
+      required:
+        - event_id
+        - actor_id
+        - action
+        - resource_type
+        - resource_id
+        - experience_id
+        - environment
+        - before_revision
+        - after_revision
+        - before_release_id
+        - after_release_id
+        - correlation_id
+        - reason
+        - outcome
+        - created_at
+      additionalProperties: true
+      description: Administrative audit only; redact secrets/raw student text. Permissions checked server-side,
+        separate from anonymous owner access.
+    AuditPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        next_cursor:
+          type: string
+          minLength: 1
+          nullable: true
+      required:
+        - items
+        - next_cursor
+      additionalProperties: true
+    AuditPageEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/AuditPage'
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    AuditEventEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/AuditEvent'
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Admin JWT access token required for protected admin endpoints

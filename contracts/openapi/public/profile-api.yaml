@@ -1,0 +1,320 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery - Profiles
+  version: 1.0.0
+  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong user-api.yaml; xem README.md
+    để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+tags:
+  - name: Authentication
+    description: Email/password auth and token management
+  - name: User
+    description: User profile and information management
+paths:
+  /me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user information
+      description: Retrieve the profile information of the currently authenticated user
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfoResponse'
+        '401':
+          $ref: auth-api.yaml#/components/responses/UnauthorizedError
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/InternalServerError
+    put:
+      tags:
+        - Authentication
+      summary: Update current user information
+      description: Update profile information of the currently authenticated user
+      operationId: updateCurrentUser
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: User information updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfoResponse'
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/BadRequestError
+        '401':
+          $ref: auth-api.yaml#/components/responses/UnauthorizedError
+        '422':
+          $ref: ../schemas/common.yaml#/components/responses/ValidationError
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/InternalServerError
+  /users:
+    get:
+      tags:
+        - User
+      summary: Get users list with pagination and filtering
+      description: Retrieve a paginated list of users with optional filtering and sorting
+      operationId: getUsers
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Page number (starting from 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          required: false
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: order_by
+          in: query
+          required: false
+          description: Field to order results by
+          schema:
+            type: string
+            default: created_at
+            example: created_at
+        - name: dir
+          in: query
+          required: false
+          description: Sort direction
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+            default: desc
+        - name: name
+          in: query
+          required: false
+          description: Filter by user name (partial match - case insensitive)
+          schema:
+            type: string
+        - name: email
+          in: query
+          required: false
+          description: Filter by email address (partial match)
+          schema:
+            type: string
+        - name: position
+          in: query
+          required: false
+          description: Filter by job position
+          schema:
+            type: string
+        - name: created_at_gte
+          in: query
+          required: false
+          description: Filter users created on or after this date (ISO 8601 format)
+          schema:
+            type: string
+            format: date-time
+        - name: created_at_lte
+          in: query
+          required: false
+          description: Filter users created on or before this date (ISO 8601 format)
+          schema:
+            type: string
+            format: date-time
+        - name: project_id
+          in: query
+          required: false
+          description: Filter users by project membership
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Users list retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUsersResponse'
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/BadRequestError
+        '401':
+          $ref: auth-api.yaml#/components/responses/UnauthorizedError
+        '422':
+          $ref: ../schemas/common.yaml#/components/responses/ValidationError
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/InternalServerError
+components:
+  schemas:
+    UserProfile:
+      type: object
+      required:
+        - id
+        - email
+      properties:
+        id:
+          type: integer
+          description: User ID
+          example: 1
+        email:
+          type: string
+          format: email
+          description: User's email address (ASCII only)
+          example: user@example.com
+        name:
+          type: string
+          description: User's full name
+          nullable: true
+          example: John Doe
+        avatar_url:
+          type: string
+          format: uri
+          description: URL to user's avatar image
+          nullable: true
+          example: https://example.com/avatars/user_1.jpg
+        bio:
+          type: string
+          description: User's biography
+          nullable: true
+          example: Software developer with 5 years experience
+        position:
+          type: string
+          description: User's job position
+          nullable: true
+          example: Senior Developer
+        created_at:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+          example: '2024-01-15T10:30:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          nullable: true
+          example: '2024-01-20T14:45:00Z'
+    UserInfoResponse:
+      allOf:
+        - $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
+        - type: object
+          required:
+            - data
+          properties:
+            data:
+              $ref: '#/components/schemas/UserProfile'
+    UserUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: User's full name
+          nullable: true
+          example: John Doe
+        avatar_url:
+          type: string
+          format: uri
+          description: URL to user's avatar image
+          nullable: true
+          example: https://example.com/avatars/user_1.jpg
+        bio:
+          type: string
+          description: User's biography
+          nullable: true
+          example: Software developer with 5 years experience
+        position:
+          type: string
+          description: User's job position
+          nullable: true
+          example: Senior Developer
+    PaginatedUsersResponse:
+      allOf:
+        - $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
+        - type: object
+          required:
+            - data
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/UserProfile'
+            pagination:
+              $ref: '#/components/schemas/PaginationMeta'
+    PaginationMeta:
+      type: object
+      required:
+        - page
+        - limit
+        - total
+        - total_pages
+        - has_next
+        - has_prev
+      properties:
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        limit:
+          type: integer
+          description: Items per page
+          example: 20
+        total:
+          type: integer
+          description: Total number of items
+          example: 150
+        total_pages:
+          type: integer
+          description: Total number of pages
+          example: 8
+        has_next:
+          type: boolean
+          description: Whether there is a next page
+          example: true
+        has_prev:
+          type: boolean
+          description: Whether there is a previous page
+          example: false
+  responses:
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/common.yaml#/components/schemas/ErrorResponse
+          example:
+            status: 404
+            success: false
+            message: User not found
+            data: null
+            error:
+              code: RES_NOT_FOUND
+              message: User not found
+              details: null
+              retryable: false
+            meta:
+              request_id: req-example
+              trace_id: trace-example
+              timestamp: '2026-10-12T03:00:00Z'
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token required for protected endpoints

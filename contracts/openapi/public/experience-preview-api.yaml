@@ -1,0 +1,196 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery - Experience Preview
+  version: 1.0.0
+  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md
+    để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+tags:
+  - name: Studio Experiences
+    description: Metadata/draft, validation/evaluation and isolated preview.
+paths:
+  /admin/experiences/{id}/previews:
+    post:
+      operationId: createExperiencePreview
+      tags:
+        - Studio Experiences
+      summary: Tạo previews trên exact snapshot
+      description: Synchronous report/preview resource in MVP. Capture exact draft revision/hash/schema/engine;
+        report stale if content changes. Unsupported DEC-04 profiles return unsupported, never pass. Preview is
+        isolated and excludes production analytics/results/active pointer. Async report GET endpoints can be added
+        after job protocol is chosen.
+      security:
+        - BearerAuth: []
+      responses:
+        '201':
+          description: Validated envelope; status matches HTTP response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewEnvelope'
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError400
+        '401':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError409
+        '410':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError410
+        '413':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError413
+        '422':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError422
+        '429':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError503
+        '504':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError504
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: experience-validation-api.yaml#/components/schemas/SnapshotCommandInput
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      x-required-permission: experience.config.preview
+  /admin/experience-previews/{preview_id}/turns:
+    post:
+      operationId: submitExperiencePreviewTurn
+      tags:
+        - Studio Experiences
+      summary: Gửi unified turn trong preview cô lập
+      description: Same message/interaction/block protocol as conversation turns; expected_revision is preview conversation
+        revision, activity_id belongs to preview only. Fixed draft snapshot; no writes to student conversations,
+        production results/analytics or active release.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Validated envelope; status matches HTTP response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/chat.yaml#/components/schemas/ConversationTurnEnvelope
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError400
+        '401':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError409
+        '410':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError410
+        '413':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError413
+        '422':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError422
+        '429':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError503
+        '504':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError504
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/chat.yaml#/components/schemas/ConversationTurnInput
+      parameters:
+        - name: preview_id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      x-required-permission: experience.config.preview
+components:
+  schemas:
+    PreviewView:
+      type: object
+      properties:
+        preview_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        experience_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        draft_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        content_hash:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+        conversation:
+          $ref: ../schemas/chat.yaml#/components/schemas/ConversationView
+        blocks:
+          type: array
+          items:
+            $ref: ../schemas/typed-blocks.yaml#/components/schemas/TypedBlock
+          minItems: 1
+      required:
+        - preview_id
+        - experience_id
+        - draft_revision
+        - content_hash
+        - conversation
+        - blocks
+      additionalProperties: true
+      description: Isolated preview namespace/pinned draft snapshot. Same turn/validation protocol; never production
+        analytics/results/active pointer. Later draft edits do not mutate this preview.
+    PreviewEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/PreviewView'
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Admin JWT access token required for protected admin endpoints

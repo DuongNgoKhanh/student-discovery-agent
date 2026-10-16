@@ -1,0 +1,242 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery - Result Sharing
+  version: 1.0.0
+  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong user-api.yaml; xem README.md
+    để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+tags:
+  - name: Activity Results
+    description: Latest valid activity result and revisioned share projection.
+paths:
+  /results/{result_id}/share-card:
+    get:
+      operationId: readResultShareCard
+      tags:
+        - Activity Results
+      summary: Lấy ShareCard đúng immutable result snapshot
+      description: Resolve result → activity → conversation, verify owner/read/export policy and current valid result.
+        Old ID after edit returns 409 even if its own immutable generation matches query. General chat revision
+        changes do not invalidate a valid result. Browser obtains snapshot, waits/renders assets, rechecks expected_result_revision
+        before download. No server image-render API in MVP.
+      security:
+        - AnonymousOwner: []
+      responses:
+        '200':
+          description: Validated envelope; status matches HTTP response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareCardEnvelope'
+              examples:
+                summary:
+                  $ref: '#/components/examples/ShareSummary'
+        '400':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError400
+        '401':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError409
+        '410':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError410
+        '413':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError413
+        '422':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError422
+        '429':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError503
+        '504':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError504
+      parameters:
+        - name: result_id
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        - name: expected_result_revision
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+          description: Guard against old/invalidated result generation; mismatch → 409 STALE_RESULT_REVISION.
+        - name: projection_version
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - summary.v1
+          description: Only summary.v1 in MVP. Future full share must be explicitly negotiated.
+components:
+  schemas:
+    ShareHouse:
+      type: object
+      properties:
+        house_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        name:
+          type: string
+          minLength: 1
+        theme_ref:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        mascot_ref:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      required:
+        - house_id
+        - name
+        - theme_ref
+        - mascot_ref
+      additionalProperties: false
+    ShareBranding:
+      type: object
+      properties:
+        brand_ref:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        label:
+          type: string
+          minLength: 1
+      required:
+        - brand_ref
+        - label
+      additionalProperties: false
+    ShareCard:
+      type: object
+      properties:
+        schema_version:
+          type: integer
+          enum:
+            - 1
+        projection_version:
+          type: string
+          enum:
+            - summary.v1
+        result_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        result_revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        activity_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        display_name:
+          type: string
+          minLength: 1
+          format: normalized-display-name
+          description: Tên đã chuẩn hóa NFC/khoảng trắng, không digit/emoji; giới hạn còn chờ policy.
+        house:
+          $ref: '#/components/schemas/ShareHouse'
+        branding:
+          $ref: '#/components/schemas/ShareBranding'
+        is_demo:
+          type: boolean
+        demo_label:
+          type: string
+          minLength: 1
+          nullable: true
+        template_ref:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      required:
+        - schema_version
+        - projection_version
+        - result_id
+        - result_revision
+        - activity_id
+        - display_name
+        - house
+        - branding
+        - is_demo
+        - demo_label
+        - template_ref
+      additionalProperties: false
+      description: |-
+        Closed allowlist của summary.v1; technical refs không render trong ảnh. is_demo=true bắt buộc demo_label đọc được.
+        Full share phase sau dùng projection/schema/template riêng và explicit negotiation; không tự đổi summary thành full.
+        Đối chiếu current valid result của activity, expected_result_revision và owner/read policy trước xuất; old immutable result cũng có thể invalidated.
+        Browser render PNG từ projection, chờ assets rồi kiểm revision trước download. Pixel/font/filename/fallback limits còn chờ DEC-02.
+    ShareCardEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/ShareCard'
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+  examples:
+    ShareSummary:
+      summary: Summary allowlist; chỉ xuất khi result còn valid.
+      value:
+        status: 200
+        success: true
+        data:
+          schema_version: 1
+          projection_version: summary.v1
+          result_id: res_789
+          result_revision: 1
+          activity_id: act_123
+          display_name: Ngân
+          house:
+            house_id: house_demo
+            name: Chữa Lành
+            theme_ref: theme_demo
+            mascot_ref: mascot_demo
+          branding:
+            brand_ref: ihrd
+            label: IHRD
+          is_demo: true
+          demo_label: Minh họa — chưa thẩm định
+          template_ref: share_summary_v1
+        error: null
+        meta:
+          request_id: req_example
+          trace_id: trace_example
+          timestamp: '2026-10-12T03:00:00Z'
+  securitySchemes:
+    AnonymousOwner:
+      type: apiKey
+      in: cookie
+      name: sda_owner
+      description: |-
+        Anonymous owner cookie, không phải đăng nhập học sinh. POST /conversations cấp cookie khi chưa có;
+        khi có cookie phải xác minh credential. Các API đọc/thao tác conversation/activity/result yêu cầu cookie hợp lệ.
+        Credential scoped/TTL-bound; resource IDs hoặc idempotency_key không cấp quyền truy cập.
+        CSRF, token format và TTL còn chờ DEC-07.
+      x-decision-status: accepted-anonymous-bootstrap
