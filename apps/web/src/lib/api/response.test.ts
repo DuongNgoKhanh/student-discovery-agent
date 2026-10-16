@@ -18,13 +18,15 @@ describe('unwrap', () => {
   });
 
   it('ném ApiError khi lỗi nghiệp vụ (HTTP 200, success:false)', async () => {
-    const res = jsonResponse({
-      success: false,
-      data: null,
-      error: { code: 'REQ_INVALID', message: 'Sai', retryable: false },
-    });
-    await expect(unwrap(res)).rejects.toBeInstanceOf(ApiError);
-    await expect(unwrap(res)).rejects.toMatchObject({ code: 'REQ_INVALID', retryable: false });
+    // Response body chỉ đọc được một lần: mỗi lần gọi unwrap cần Response mới.
+    const makeRes = () =>
+      jsonResponse({
+        success: false,
+        data: null,
+        error: { code: 'REQ_INVALID', message: 'Sai', retryable: false },
+      });
+    await expect(unwrap(makeRes())).rejects.toBeInstanceOf(ApiError);
+    await expect(unwrap(makeRes())).rejects.toMatchObject({ code: 'REQ_INVALID', retryable: false });
   });
 
   it('ném ApiError khi lỗi kỹ thuật 5xx', async () => {
