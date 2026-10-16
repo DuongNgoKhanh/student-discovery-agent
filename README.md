@@ -26,9 +26,13 @@ Product API cùng origin; không còn `API_BASE_URL`/BFF proxy.
 
 ## Chạy bằng Docker Compose
 
-Cần Docker Compose v2. Secrets đặt trong shell hoặc file env theo app (không commit):
-`apps/web/.env` (xem `apps/web/.env.example`: `SECRET_KEY`, `ADMIN_PASSWORD`, `S3_*`, ...) và
-`apps/agent-runtime/.env` (xem `.env.example`). Cả hai là tùy chọn khi chỉ build/smoke.
+Cần Docker Compose v2. Cấu hình web/db/minio đặt trong biến shell hoặc file `.env` ở **root repo**
+(compose interpolation, không commit): `DATABASE_URL`, `SECRET_KEY`, `ADMIN_PASSWORD`, `S3_*`,
+`MINIO_PUBLIC_BUCKET_NAME`, `PRODUCT_BASE_URL`, `POSTGRES_PASSWORD` (xem `apps/web/.env.example`). Mặc định
+là giá trị local-only (db/minio của compose). `apps/web/.env` KHÔNG được compose đọc; nó chỉ dành cho
+`pnpm dev` ngoài Docker. `agent-runtime` đọc `apps/agent-runtime/.env` (tùy chọn).
+Thiếu `SECRET_KEY` thì layout được bảo vệ trả 500 (lỗi cấu hình) thay vì redirect; admin login cần
+`ADMIN_PASSWORD` (không có mật khẩu mặc định).
 
 ```bash
 docker compose up -d --build            # web :3000, agent-runtime (nội bộ :8000), db, minio

@@ -2,17 +2,17 @@
 
 Cách gọi API backend nhất quán, an toàn token, xử lý envelope chuẩn hoá.
 
-## 1. Kiến trúc gọi API (BFF-lite)
+## 1. Kiến trúc gọi API (same-origin `/api/v1`)
 
-Token nằm ở **httpOnly cookie** → **browser không bao giờ gọi thẳng FastAPI**.
+Token nằm ở **httpOnly cookie**; browser chỉ gọi Product API cùng origin (route handlers trong `src/app/api/v1`).
 
 ```
-Client component ──▶ api (lib/api/client) ──▶ /api/bff/<path> ──▶ FastAPI
-Server component ──▶ serverFetch (lib/api/server) ──▶ FastAPI (đọc cookie)
-Auth (login/refresh) ──▶ /api/auth/* (route handler set cookie)
+Client component ──▶ api (src/lib/api/client.ts) ──▶ /api/v1/<path> (route handler, src/server/<domain>)
+Auth (login/register/refresh/logout) ──▶ /api/v1/auth/* (route handler set/clear cookie)
 ```
 
-- **KHÔNG** `fetch('http://localhost:8081/...')` từ client. Luôn qua `api.*`.
+- Code server nằm ở `src/server/<domain>` (server-only); code client ở `src/features/<domain>`; type sinh từ OpenAPI ở `src/generated/api`.
+- **KHÔNG** `fetch('http://localhost:3000/...')` từ client. Luôn qua `api.*`.
 - `path` truyền vào `api` là phần sau `/api/v1`, ví dụ `api.get('me')`, `api.get('admin/users?page=1')`.
 
 ## 2. Dùng client
@@ -75,5 +75,5 @@ const mutation = useMutation({
 
 ## 6. Auth flow
 
-- Đăng nhập/đăng ký: gọi hàm `login`/`register` trong `features/users/api/auth.ts` (chúng POST tới `/api/auth/*`, nơi set cookie). KHÔNG tự set token phía client.
-- Refresh: tự động ở BFF proxy khi gặp 401 → xoay cookie → retry. Không cần xử lý refresh thủ công ở UI.
+- Đăng nhập/đăng ký: gọi hàm `login`/`register` trong `features/users/api/auth.ts` (chúng POST tới `/api/v1/auth/*`, nơi set cookie). KHÔNG tự set token phía client.
+- Refresh: tự động ở `src/lib/api/client.ts`: gặp 401 thì gọi `/api/v1/auth/refresh` một lần rồi retry request. Không cần xử lý refresh thủ công ở UI.

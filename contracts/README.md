@@ -98,24 +98,28 @@ Server local của mọi YAML là web `http://localhost:3000/api/v1`. Chạy `pn
 lệnh fail khi `$ref` không resolve được hoặc schema sai cấu trúc OpenAPI 3.0.
 
 Trạng thái parity giữa contract và triển khai hiện tại (Product API là Next route handlers ở
-`apps/web/src/app/api/v1`; backend Python cũ đã được gỡ). Task là task port trong plan restructure.
+`apps/web/src/app/api/v1`; backend Python cũ đã được gỡ).
 
 | Endpoint | Trạng thái | Ghi chú |
 | --- | --- | --- |
-| `/auth/register`, `/auth/login`, `/auth/refresh` | implemented (Python) | Port sang Next ở Task 4. |
-| `/auth/logout` | implemented (Next, `/api/auth/logout`) | Chưa nằm dưới `/api/v1`; chuyển ở Task 4. Response `data: {ok:true}`. |
-| `/admin/auth/login` | implemented (Python) | Task 4. |
-| `/me`, `/users`, `/admin/users*` (CRUD, restore, bulk) | implemented (Python) | Task 5. Mismatch: Python `/users` thiếu auth, contract yêu cầu BearerAuth; bulk create thất bại trả `user_id: null`. |
-| `/users/avatar/upload`, `/users/{user_id}/avatar` | implemented (Python) | Task 6. |
-| `/versions` (GET, POST 201) | implemented (Python) | Task 6; public, không RBAC. |
-| `/download` | implemented (Python) | Mismatch có chủ đích: Python cho mọi bucket; contract chỉ cho bucket avatar công khai, còn lại/`..` trả 404 (Task 6). |
+| `/auth/register`, `/auth/login`, `/auth/refresh` | implemented (Next `/api/v1`) | `AuthResponse` phẳng trong `data`. |
+| `/auth/logout` | implemented (Next `/api/v1/auth/logout`) | Response `data: {ok:true}`. |
+| `/admin/auth/login` | implemented (Next `/api/v1`) | Không có mật khẩu mặc định; cần `ADMIN_PASSWORD`. |
+| `/me`, `/users`, `/admin/users*` (CRUD, restore, bulk) | implemented (Next `/api/v1`) | `/users` yêu cầu Bearer; bulk create thất bại trả `user_id: null`. |
+| `/users/avatar/upload`, `/users/{user_id}/avatar` | implemented (Next `/api/v1`) | Avatar quá lớn trả 413. |
+| `/versions` (GET, POST 201) | implemented (Next `/api/v1`) | Public, không RBAC. |
+| `/download` | implemented (Next `/api/v1`) | Chỉ bucket avatar công khai; bucket khác hoặc `..` trả 404. |
 | `/conversations*`, `/activities/{id}/result`, `/results/{id}/share-card` | future | Chat anonymous, chưa triển khai. |
 | `/admin/experiences*`, `/admin/experience-releases*`, `/admin/experience-previews*`, `/admin/audit-logs*` | future | Studio, chưa triển khai. |
+
+Normalization đã xử lý: `/users` yêu cầu Bearer; `/download` giới hạn bucket avatar công khai (`..` -> 404);
+ID user là integer; login/register theo `AuthResponse` phẳng; bulk create `user_id` nullable.
+
+Quyết định có chủ đích: `requireAdmin` trả 401 khi thiếu/sai token và 403 khi không phải admin; admin login
+không có mật khẩu mặc định (cần `ADMIN_PASSWORD`, thiếu thì 401); body không phải JSON trả 415; avatar quá
+lớn trả 413.
 
 Mọi endpoint Product `/api/v1` nhận JSON body (Next route handlers) yêu cầu `Content-Type: application/json`
 (cho phép `; charset=...` hoặc `application/*+json`); body không rỗng với content type khác trả `415`
 `VAL_UNSUPPORTED_MEDIA_TYPE` và không set cookie (chống CSRF qua request "simple" cross-site). Body tùy chọn
 để trống (ví dụ `/auth/refresh` dùng cookie) không cần content type. Mã lỗi xem [error_codes.md](error_codes.md).
-
-Mismatch chung: ID user ở JSON là integer, còn type UI hiện tại là `string` (xử lý ở Task 7); login/register theo
-`AuthResponse` phẳng trong `data`.

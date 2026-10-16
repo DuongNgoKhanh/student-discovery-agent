@@ -9,7 +9,7 @@ Reviewer tick từng mục trước khi approve. Author tự kiểm trước khi
 - [ ] `'use client'` chỉ ở nơi thực sự cần; phần còn lại là Server Component.
 
 ## API & bảo mật
-- [ ] Không gọi thẳng FastAPI từ client — luôn qua `api` / route handler.
+- [ ] Không gọi thẳng service ngoài từ client — luôn qua `api` / route handler.
 - [ ] Không đọc/ghi token ở client; không log token; không đưa `.env*` vào commit.
 - [ ] Lỗi API xử lý qua `ApiError` + `mapErrorMessage` (thông điệp tiếng Việt).
 - [ ] Mutation có `invalidateQueries` đúng key khi dữ liệu đổi.

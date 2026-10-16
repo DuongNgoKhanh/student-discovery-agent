@@ -6,23 +6,6 @@ const cookieNames = {
   AUTH_COOKIE_REFRESH: z.string().default('sda_refresh'),
 };
 
-// Cookie-name env shared by session helpers.
-const schema = z.object({
-  ...cookieNames,
-  NODE_ENV: nodeEnv,
-});
-
-export type Env = z.infer<typeof schema>;
-
-export function parseEnv(source: Record<string, string | undefined>): Env {
-  return schema.parse(source);
-}
-
-/** Đọc env đã validate. CHỈ dùng ở server (route handler / RSC). */
-export function getServerEnv(): Env {
-  return configured('server', () => parseEnv(process.env));
-}
-
 // Product DB/auth env: lazily parsed, required only when Product DB/auth starts.
 const productSchema = z.object({
   DATABASE_URL: z.string({ required_error: 'DATABASE_URL is required' }).min(1, 'DATABASE_URL is required'),

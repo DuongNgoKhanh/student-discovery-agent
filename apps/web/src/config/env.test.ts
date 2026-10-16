@@ -1,19 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ZodError } from 'zod';
 import { failure } from '@/server/http/response';
-import { getStorageEnv, parseAuthEnv, parseEnv, parseProductEnv, parseStorageEnv } from './env';
-
-describe('parseEnv', () => {
-  it('parse hợp lệ + áp default', () => {
-    const e = parseEnv({ NODE_ENV: 'test' });
-    expect(e.AUTH_COOKIE_ACCESS).toBe('sda_access');
-    expect(e.AUTH_COOKIE_REFRESH).toBe('sda_refresh');
-  });
-
-  it('does not require DATABASE_URL or SECRET_KEY', () => {
-    expect(() => parseEnv({})).not.toThrow();
-  });
-});
+import { getStorageEnv, parseAuthEnv, parseProductEnv, parseStorageEnv } from './env';
 
 describe('parseProductEnv', () => {
   const ok = { DATABASE_URL: 'postgres://u:p@h:5432/d', SECRET_KEY: 's3cret' };

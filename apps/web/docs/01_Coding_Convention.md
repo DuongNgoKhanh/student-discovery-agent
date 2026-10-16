@@ -11,7 +11,7 @@ Quy ước code để cả team viết giống nhau, không phải bàn cãi m�
 | Hook | `useXxx` | `useMe`, `useLogin` |
 | Biến / hàm | `camelCase` | `mapErrorMessage`, `queryKeys` |
 | Type / Interface | `PascalCase` | `User`, `LoginInput`, `ButtonProps` |
-| Hằng | `UPPER_SNAKE_CASE` | `MESSAGES`, `BFF` |
+| Hằng | `UPPER_SNAKE_CASE` | `MESSAGES`, `API_PREFIX` |
 | Zod schema | `xxxSchema` + type infer | `loginSchema` → `type LoginInput` |
 
 - Props interface: `<Component>Props` (vd `ButtonProps`).
@@ -53,11 +53,11 @@ Luôn dùng alias `@/*` cho import xuyên thư mục; chỉ dùng `../` trong n�
 
 - **Mặc định là Server Component.** Không thêm `'use client'` nếu không cần.
 - Thêm `'use client'` chỉ khi cần: `useState`/`useEffect`, event handler, hook trình duyệt, TanStack Query hook, React Hook Form.
-- Đọc dữ liệu ở server → dùng `serverFetch` (`src/lib/api/server.ts`) trong Server Component.
-- Đọc dữ liệu ở client → dùng hook module (bọc `api` của `src/lib/api/client.ts`).
-- KHÔNG import `next/headers`, `cookies`, `getServerEnv` vào client component.
+- Đọc dữ liệu ở server → gọi trực tiếp hàm trong `src/server/<domain>` (server-only) từ Server Component.
+- Đọc dữ liệu ở client → dùng hook trong `src/features/<domain>` (bọc `api` của `src/lib/api/client.ts`).
+- KHÔNG import `next/headers`, `cookies`, `src/server/*`, `src/config/env` vào client component.
 
 ## 5. TypeScript
 
 - `strict: true`, tránh `any`. Cần "thoát hiểm" thì `unknown` + thu hẹp kiểu.
-- Type request/response ưu tiên dùng type sinh từ OpenAPI (`src/types/api/*`), Zod chỉ cho form + ranh giới cần validate runtime.
+- Type request/response ưu tiên dùng type sinh từ OpenAPI (`src/generated/api`), Zod chỉ cho form + ranh giới cần validate runtime.
