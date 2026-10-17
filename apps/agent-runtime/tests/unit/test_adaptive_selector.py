@@ -15,6 +15,7 @@ Verifies:
 """
 
 import copy
+import random
 from fractions import Fraction
 import pytest
 from pydantic import ValidationError
@@ -50,6 +51,19 @@ def valid_v2_dict(valid_v2_doc):
 @pytest.fixture
 def valid_v1_dict(valid_v1_doc):
     return copy.deepcopy(valid_v1_doc)
+
+
+def _run_path(definition, rate):
+    """Answer every selected question with rate(question) until completion; return each step's result."""
+    selector = AdaptiveQuestionSelector(definition)
+    answers, trace = [], []
+    while True:
+        result = selector.select_next_question(answers, validate_sequence=False)
+        trace.append(result)
+        if result.status == SelectionStatus.COMPLETED:
+            return trace
+        q = result.next_question
+        answers.append({"question_id": q.question_id, "option_id": f"{q.question_id}_opt_{rate(q)}"})
 
 
 class TestAdaptiveQuestionSelectorBaseline:
@@ -295,23 +309,67 @@ class TestAdaptiveQuestionSelectorEdgeCases:
 
         assert len(asked_set) == 30
 
-    def test_challenger_returns_and_is_selected(self, valid_v2_doc):
-        """Verify that a house outside the top-2 is eligible and selected when its gap is widest."""
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
-        # In baseline: house_i gets rating 5, others get rating 2
-        answers = []
-        rules = valid_v2_doc["selection_rules"] if isinstance(valid_v2_doc, dict) else valid_v2_doc.selection_rules
-        payload = rules["payload"] if isinstance(rules, dict) else rules.payload
-        baseline_order = payload["baseline_order"]
-        for qid in baseline_order:
-            h = qid.split("_")[1]
-            rating = 5 if h == "i" else 2
-            answers.append({"question_id": qid, "option_id": f"{qid}_opt_{rating}"})
+    def test_challenger_reenters_candidate_set_and_is_selected(self, valid_v2_doc):
+        """ADR-002 §7.11 challenger: a house dropped from C returns when the leader's lower bound falls.
 
-        # At completed = 12: house_i has mean 5, others have mean 2
-        res12 = selector.select_next_question(answers)
-        assert res12.status == SelectionStatus.NEXT_QUESTION
-        assert res12.next_question is not None
+        Ratings by (house, item_order) are fixed below. Hand-checked bounds:
+        - 14 answers: leader I (5,5,5) lower = 17/5; R (1,1,4) upper = 16/5 < 17/5, so R is out of C.
+        - 19 answers: I answered 2, A (4,5,5) leads with lower = 16/5; R upper 16/5 >= 16/5, so R is back.
+          Gaps of R, A, S, E, C all equal 8/5, so tie order picks R: next question q_r_04.
+        """
+        ratings = {
+            "house_r": [1, 1, 4, 3, 5], "house_i": [5, 5, 5, 2, 3], "house_a": [4, 5, 5, 4, 5],
+            "house_s": [2, 5, 3, 5, 2], "house_e": [4, 2, 4, 1, 4], "house_c": [4, 3, 1, 2, 4],
+        }
+        trace = _run_path(valid_v2_doc, lambda q: ratings[q.house_id][q.item_order - 1])
+
+        assert "house_r" in trace[12].candidate_houses
+        assert "house_r" not in trace[14].candidate_houses
+        assert trace[14].statistics["house_r"].upper.to_fraction() == Fraction(16, 5)
+        assert trace[14].statistics["house_i"].lower.to_fraction() == Fraction(17, 5)
+
+        assert "house_r" in trace[19].candidate_houses
+        assert trace[19].statistics["house_a"].lower.to_fraction() == Fraction(16, 5)
+        assert trace[19].next_question_id == "q_r_04"
+
+        assert trace[-1].stopping_reason == StoppingReason.BOUNDED_WINNER
+        assert trace[-1].primary_house_id == "house_a"
+
+    def test_partial_tie_at_limit_resolved_by_tie_order(self, valid_v2_doc):
+        """A and E tie at mean 4 so bounds never separate them; tie order R,I,A,S,E,C picks A."""
+        trace = _run_path(valid_v2_doc, lambda q: 4 if q.house_id in ("house_a", "house_e") else 2)
+        final = trace[-1]
+        assert final.stopping_reason == StoppingReason.QUESTION_LIMIT
+        assert final.progress.total == 30
+        assert final.primary_house_id == "house_a"
+        assert final.tie_applied is True
+
+    def test_clear_winner_at_limit_does_not_apply_tie(self, valid_v2_dict):
+        """With max_total=13, R (all 5s) hits the limit before bounds separate it, but wins outright."""
+        valid_v2_dict["coverage_rules"]["payload"]["max_total"] = 13
+        trace = _run_path(valid_v2_dict, lambda q: 5 if q.house_id == "house_r" else 1)
+        final = trace[-1]
+        assert final.stopping_reason == StoppingReason.QUESTION_LIMIT
+        assert final.progress.total == 13
+        assert final.primary_house_id == "house_r"
+        assert final.tie_applied is False
+
+    def test_empty_candidate_set_falls_back_to_tie_order_house(self, valid_v2_doc):
+        """ADR-002 §7.7 step 5: R and I exhausted at mean 5 (lower_R = 5 is not > upper_I = 5, so no stop);
+        every other house has upper 13/5 < 5, so C is empty and the selector keeps asking by tie order."""
+        trace = _run_path(valid_v2_doc, lambda q: 5 if q.house_id in ("house_r", "house_i") else 1)
+
+        fallback = trace[22]
+        assert fallback.candidate_houses == []
+        assert fallback.statistics["house_r"].count == 5
+        assert fallback.statistics["house_i"].count == 5
+        assert fallback.next_question_id == "q_a_04"
+        assert any("fallback" in line for line in fallback.decision_log)
+
+        final = trace[-1]
+        assert final.stopping_reason == StoppingReason.QUESTION_LIMIT
+        assert final.primary_house_id == "house_r"
+        assert final.tie_applied is True
 
 
 class TestAdaptiveQuestionSelectorValidationAndFailures:
@@ -605,6 +663,181 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
         assert exc_info.value.code == "REQ_SEQUENCE_MISMATCH"
 
 
+class TestDefinitionIntegrityValidation:
+    """Malformed definitions must fail fast with typed errors, never raw Python errors or silent results."""
+
+    @staticmethod
+    def _select(definition, answers=None):
+        return AdaptiveQuestionSelector().select_next_question(
+            answers=answers or [], definition=definition
+        )
+
+    @pytest.mark.parametrize("slot", ["selection_rules", "scoring_rules", "coverage_rules", "tie_policy"])
+    @pytest.mark.parametrize("version_fixture", ["valid_v2_dict", "valid_v1_dict"])
+    def test_unregistered_rule_schema_in_any_slot_rejected(self, request, version_fixture, slot):
+        definition = request.getfixturevalue(version_fixture)
+        definition[slot]["rule_schema_ref"] = "rule.schema.bogus:v9"
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            self._select(definition)
+        assert exc_info.value.code == "VAL_UNSUPPORTED_RULE_SCHEMA"
+        assert slot in exc_info.value.message
+
+    def test_rule_schema_from_other_version_rejected(self, valid_v2_dict):
+        valid_v2_dict["selection_rules"]["rule_schema_ref"] = "rule.schema.localis.selection:v1"
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == "VAL_UNSUPPORTED_RULE_SCHEMA"
+
+    @pytest.mark.parametrize("bad_house_id", [None, "house_zz"])
+    def test_question_with_missing_or_unknown_house_rejected(self, valid_v2_dict, bad_house_id):
+        q_r_03 = next(q for q in valid_v2_dict["questions"] if q["question_id"] == "q_r_03")
+        q_r_03["house_id"] = bad_house_id
+        with pytest.raises(MissingMappingError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == "VAL_INVALID_HOUSE_REF"
+
+    def test_question_with_missing_item_order_rejected(self, valid_v2_dict):
+        q_r_05 = next(q for q in valid_v2_dict["questions"] if q["question_id"] == "q_r_05")
+        q_r_05["item_order"] = None
+        with pytest.raises(MissingMappingError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == "VAL_INVALID_ITEM_ORDER"
+
+    def test_house_with_fewer_items_than_items_per_house_rejected(self, valid_v2_dict):
+        """Bounds assume items_per_house items exist; a short bank would yield an unprovable winner."""
+        valid_v2_dict["questions"] = [
+            q for q in valid_v2_dict["questions"] if q["question_id"] not in {"q_r_03", "q_r_04", "q_r_05"}
+        ]
+        with pytest.raises(MissingMappingError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == "VAL_HOUSE_QUESTION_COUNT_MISMATCH"
+
+    def test_house_with_duplicate_item_order_rejected(self, valid_v2_dict):
+        q_r_05 = next(q for q in valid_v2_dict["questions"] if q["question_id"] == "q_r_05")
+        q_r_05["item_order"] = 4
+        with pytest.raises(MissingMappingError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == "VAL_HOUSE_ITEM_ORDER_MISMATCH"
+
+    @pytest.mark.parametrize(
+        "baseline_order, code",
+        [
+            ("q_r_01q_i_01", "VAL_INVALID_TYPE"),  # string, not a list
+            (
+                ["q_r_01", "q_nope"] + [f"q_{c}_02" for c in "riasec"] + ["q_a_01", "q_s_01", "q_e_01", "q_c_01"],
+                "VAL_BASELINE_QUESTION_NOT_IN_BANK",
+            ),
+            (["q_r_01"] * 12, "VAL_DUPLICATE_BASELINE_QUESTION"),
+        ],
+        ids=["not_a_list", "unknown_id", "duplicates"],
+    )
+    def test_invalid_baseline_order_rejected(self, valid_v2_dict, baseline_order, code):
+        valid_v2_dict["selection_rules"]["payload"]["baseline_order"] = baseline_order
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == code
+
+    @pytest.mark.parametrize(
+        "key, value, code",
+        [
+            ("items_per_house", 0, "VAL_INVALID_COVERAGE_CONFIG"),
+            ("max_total", "30", "VAL_INVALID_COVERAGE_CONFIG"),
+            ("min_answers_per_house", True, "VAL_INVALID_MIN_ANSWERS"),
+        ],
+    )
+    def test_invalid_coverage_payload_rejected(self, valid_v2_dict, key, value, code):
+        valid_v2_dict["coverage_rules"]["payload"][key] = value
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == code
+
+    def test_v1_initial_question_not_in_bank_rejected(self, valid_v1_dict):
+        valid_v1_dict["selection_rules"]["payload"]["initial_question_id"] = "q_nope"
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            self._select(valid_v1_dict)
+        assert exc_info.value.code == "VAL_INVALID_INITIAL_QUESTION"
+
+    def test_duplicate_question_id_in_bank_rejected(self, valid_v2_dict):
+        """A duplicate ID would silently overwrite the first question in every lookup map."""
+        duplicate = copy.deepcopy(valid_v2_dict["questions"][0])
+        duplicate["house_id"] = "house_c"
+        valid_v2_dict["questions"].append(duplicate)
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == "VAL_DUPLICATE_QUESTION_ID"
+
+    def test_duplicate_option_id_within_question_rejected(self, valid_v2_dict):
+        choices = valid_v2_dict["questions"][0]["choices"]
+        choices[1]["option_id"] = choices[0]["option_id"]
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == "VAL_DUPLICATE_OPTION_ID"
+
+    @pytest.mark.parametrize(
+        "order",
+        [
+            None,  # missing: must not silently fall back to houses order
+            [],
+            ["house_bogus", "house_i", "house_a", "house_s", "house_e", "house_c"],
+            ["house_r", "house_r", "house_a", "house_s", "house_e", "house_c"],
+            ["house_r", "house_i", "house_a", "house_s", "house_e"],
+        ],
+        ids=["missing", "empty", "unknown_house", "duplicate", "incomplete"],
+    )
+    def test_invalid_tie_order_rejected(self, valid_v2_dict, order):
+        payload = valid_v2_dict["tie_policy"]["payload"]
+        if order is None:
+            del payload["order"]
+        else:
+            payload["order"] = order
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == "VAL_INVALID_TIE_ORDER"
+
+    @pytest.mark.parametrize(
+        "key, code",
+        [
+            ("max_total", "VAL_INVALID_COVERAGE_CONFIG"),
+            ("items_per_house", "VAL_INVALID_COVERAGE_CONFIG"),
+            ("min_answers_per_house", "VAL_INVALID_MIN_ANSWERS"),
+        ],
+    )
+    def test_missing_coverage_field_rejected(self, valid_v2_dict, key, code):
+        """Absent coverage fields must not silently default to hard-coded values."""
+        del valid_v2_dict["coverage_rules"]["payload"][key]
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == code
+
+    @pytest.mark.parametrize(
+        "key, value, code",
+        [
+            ("max_total", 11, "VAL_INVALID_COVERAGE_CONFIG"),  # below baseline
+            ("max_total", 31, "VAL_INVALID_COVERAGE_CONFIG"),  # beyond 6 houses x 5 items
+            ("min_answers_per_house", 6, "VAL_INVALID_MIN_ANSWERS"),  # more than items_per_house
+            ("baseline_total", 10, "VAL_INVALID_COVERAGE_CONFIG"),  # ADR-002 pins baseline at 12
+        ],
+    )
+    def test_inconsistent_coverage_values_rejected(self, valid_v2_dict, key, value, code):
+        valid_v2_dict["coverage_rules"]["payload"][key] = value
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            self._select(valid_v2_dict)
+        assert exc_info.value.code == code
+
+    def test_v1_required_count_beyond_bank_rejected(self, valid_v1_dict):
+        valid_v1_dict["coverage_rules"]["payload"]["required_question_count"] = 7
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            self._select(valid_v1_dict)
+        assert exc_info.value.code == "VAL_INVALID_COVERAGE_CONFIG"
+
+    def test_v1_client_supplied_rating_rejected(self, valid_v1_dict):
+        """v1 choices carry no rating, so a client-supplied one must not reach the scorer."""
+        answers = [{"question_id": "q_demo_01", "option_id": "q_demo_01_opt_1", "rating": 5}]
+        with pytest.raises(InvalidPrefixError) as exc_info:
+            self._select(valid_v1_dict, answers)
+        assert exc_info.value.code == "VAL_RATING_MISMATCH"
+
+
 class TestSelectorSchemaInvariants:
     """Schema types must not represent illegal states (zero denominators, contradictory results)."""
 
@@ -678,3 +911,81 @@ class TestSelectorSchemaInvariants:
         mutate(data)
         with pytest.raises(ValidationError):
             SelectionResult.model_validate(data)
+
+
+class TestEarlyStopSoundness:
+    """ADR-002 §7.10: a bounded_winner stop must survive every possible completion of the bank."""
+
+    def test_bounded_winner_survives_worst_case_completion(self, valid_v2_doc):
+        rng = random.Random(20261018)
+        houses = [h["house_id"] for h in valid_v2_doc["houses"]]
+        early_stops = 0
+        for _ in range(300):
+            ratings = {q["question_id"]: rng.randint(1, 5) for q in valid_v2_doc["questions"]}
+            trace = _run_path(valid_v2_doc, lambda q: ratings[q.question_id])
+            final = trace[-1]
+            assert final.progress.total <= 30
+            if final.stopping_reason != StoppingReason.BOUNDED_WINNER:
+                continue
+            early_stops += 1
+            # Worst case: winner gets 1 on every unasked item, every rival gets 5.
+            winner = final.primary_house_id
+            worst = {}
+            for h in houses:
+                s = final.statistics[h]
+                fill = 1 if h == winner else 5
+                worst[h] = Fraction(s.sum + fill * (5 - s.count), 5)
+            assert all(worst[winner] > worst[h] for h in houses if h != winner)
+        assert early_stops > 0
+
+
+class TestRemainingErrorCodes:
+    """Each typed failure path is pinned to its error code."""
+
+    def test_non_definition_payload_code(self):
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            AdaptiveQuestionSelector().select_next_question(answers=[], definition="not-a-dict")
+        assert exc_info.value.code == "VAL_INVALID_TYPE"
+
+    def test_malformed_definition_dict_code(self, valid_v2_dict):
+        del valid_v2_dict["questions"]
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            AdaptiveQuestionSelector(valid_v2_dict)
+        assert exc_info.value.code == "VAL_INVALID_FIELD"
+
+    def test_no_definition_bound_code(self):
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            AdaptiveQuestionSelector().select_next_question(answers=[])
+        assert exc_info.value.code == "VAL_MISSING_REQUIRED_FIELD"
+
+    def test_baseline_length_code(self, valid_v2_dict):
+        valid_v2_dict["selection_rules"]["payload"]["baseline_order"].pop()
+        with pytest.raises(UnsupportedDefinitionError) as exc_info:
+            AdaptiveQuestionSelector(valid_v2_dict).select_next_question([])
+        assert exc_info.value.code == "VAL_INVALID_BASELINE_COUNT"
+
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            {"question_id": "q_r_01", "option_id": "q_r_01_opt_5", "rating": 7},
+            {"question_id": "q_r_01", "option_id": "q_r_01_opt_5", "rating": "5"},
+            {"question_id": "bad id!", "option_id": "q_r_01_opt_5"},
+        ],
+        ids=["rating_out_of_range", "rating_as_string", "bad_id_pattern"],
+    )
+    def test_invalid_answer_schema_code(self, valid_v2_doc, answer):
+        with pytest.raises(InvalidPrefixError) as exc_info:
+            AdaptiveQuestionSelector(valid_v2_doc).select_next_question([answer])
+        assert exc_info.value.code == "VAL_INVALID_FIELD"
+
+    def test_invalid_answer_type_code(self, valid_v2_doc):
+        with pytest.raises(InvalidPrefixError) as exc_info:
+            AdaptiveQuestionSelector(valid_v2_doc).select_next_question(["q_r_01"])
+        assert exc_info.value.code == "VAL_INVALID_TYPE"
+
+    def test_missing_choice_rating_code(self, valid_v2_dict):
+        valid_v2_dict["questions"][0]["choices"][4]["rating"] = None
+        answers = [{"question_id": "q_r_01", "option_id": "q_r_01_opt_5"}]
+        with pytest.raises(MissingMappingError) as exc_info:
+            AdaptiveQuestionSelector(valid_v2_dict).select_next_question(answers)
+        assert exc_info.value.code == "VAL_INVALID_RATING"

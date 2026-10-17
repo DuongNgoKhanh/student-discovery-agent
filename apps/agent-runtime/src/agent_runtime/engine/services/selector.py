@@ -35,10 +35,16 @@ from agent_runtime.evaluations.schemas.experience import (
     AssessmentDefinitionQuestion,
     ExperienceDefinitionDocument,
 )
+from agent_runtime.evaluations.services.compatibility import ALLOWED_RULE_SCHEMAS_BY_SLOT
 
 SUPPORTED_SCHEMA_VERSIONS = {"1.0", "2.0"}
-SUPPORTED_V2_SELECTION_RULES = {"rule.schema.localis.selection.adaptive_bounds:v1"}
-SUPPORTED_V1_SELECTION_RULES = {"rule.schema.localis.selection:v1"}
+BASELINE_TOTAL = 12
+
+RULE_SLOTS = ("selection_rules", "scoring_rules", "coverage_rules", "tie_policy")
+
+# Coverage payload keys the v2 selector requires (no silent defaults).
+V2_COVERAGE_KEYS = ("max_total", "items_per_house", "min_answers_per_house")
+COVERAGE_KEY_ERROR_CODES = {"min_answers_per_house": EngineErrorCode.INVALID_MIN_ANSWERS}
 
 
 class AdaptiveQuestionSelector:
@@ -113,6 +119,8 @@ class AdaptiveQuestionSelector:
                 code=EngineErrorCode.INVALID_SCHEMA_VERSION,
             )
 
+        self._validate_definition(active_def)
+
         # Coerce and validate answers prefix
         normalized_answers, seen_question_ids = self._normalize_and_validate_answers(
             answers, active_def
@@ -133,6 +141,162 @@ class AdaptiveQuestionSelector:
                 seen_question_ids,
                 validate_sequence=validate_sequence,
             )
+
+    # --------------------------------------------------------------------------
+    # Definition Integrity Validation
+    # --------------------------------------------------------------------------
+
+    def _validate_definition(self, definition: ExperienceDefinitionDocument) -> None:
+        """Reject structurally invalid definitions before any selection runs.
+
+        The selector's bounds and fallbacks assume a well-formed bank; a malformed one
+        would otherwise yield a silently wrong result or a raw KeyError/ZeroDivisionError.
+        """
+        allowed_by_slot = ALLOWED_RULE_SCHEMAS_BY_SLOT[definition.schema_version]
+        for slot in RULE_SLOTS:
+            ref = getattr(definition, slot).rule_schema_ref
+            if ref not in allowed_by_slot[slot]:
+                raise UnsupportedDefinitionError(
+                    f"Unsupported {slot} schema '{ref}' for Definition {definition.schema_version}. "
+                    f"Supported: {sorted(allowed_by_slot[slot])}",
+                    code=EngineErrorCode.UNSUPPORTED_RULE_SCHEMA,
+                )
+
+        question_ids: Set[str] = set()
+        for q in definition.questions:
+            if q.question_id in question_ids:
+                raise UnsupportedDefinitionError(
+                    f"Duplicate question_id '{q.question_id}' in question bank",
+                    code=EngineErrorCode.DUPLICATE_QUESTION_ID,
+                )
+            question_ids.add(q.question_id)
+            option_ids = [c.option_id for c in q.choices]
+            if len(set(option_ids)) != len(option_ids):
+                raise UnsupportedDefinitionError(
+                    f"Duplicate option_id in question '{q.question_id}'",
+                    code=EngineErrorCode.DUPLICATE_OPTION_ID,
+                )
+
+        if definition.schema_version == "1.0":
+            self._validate_v1_definition(definition, question_ids)
+        else:
+            self._validate_v2_definition(definition, question_ids)
+
+    @staticmethod
+    def _require_positive_int(payload: Dict[str, Any], key: str, slot: str) -> int:
+        value = payload.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise UnsupportedDefinitionError(
+                f"{slot}.payload.{key} must be a positive integer, got {value!r}",
+                code=COVERAGE_KEY_ERROR_CODES.get(key, EngineErrorCode.INVALID_COVERAGE_CONFIG),
+            )
+        return value
+
+    def _validate_v1_definition(
+        self, definition: ExperienceDefinitionDocument, question_ids: Set[str]
+    ) -> None:
+        initial_q_id = definition.selection_rules.payload.get("initial_question_id")
+        if initial_q_id is not None and initial_q_id not in question_ids:
+            raise UnsupportedDefinitionError(
+                f"initial_question_id '{initial_q_id}' does not exist in the question bank",
+                code=EngineErrorCode.INVALID_INITIAL_QUESTION,
+            )
+
+        coverage_payload = definition.coverage_rules.payload
+        if "required_question_count" in coverage_payload:
+            required = self._require_positive_int(
+                coverage_payload, "required_question_count", "coverage_rules"
+            )
+            if required > len(question_ids):
+                raise UnsupportedDefinitionError(
+                    f"required_question_count {required} exceeds bank size {len(question_ids)}",
+                    code=EngineErrorCode.INVALID_COVERAGE_CONFIG,
+                )
+
+    def _validate_v2_definition(
+        self, definition: ExperienceDefinitionDocument, question_ids: Set[str]
+    ) -> None:
+        house_ids = [h.house_id for h in definition.houses]
+
+        coverage_payload = definition.coverage_rules.payload
+        max_total, items_per_house, min_answers = (
+            self._require_positive_int(coverage_payload, key, "coverage_rules")
+            for key in V2_COVERAGE_KEYS
+        )
+        if not BASELINE_TOTAL <= max_total <= items_per_house * len(house_ids):
+            raise UnsupportedDefinitionError(
+                f"max_total must be within [{BASELINE_TOTAL}, {items_per_house * len(house_ids)}], got {max_total}",
+                code=EngineErrorCode.INVALID_COVERAGE_CONFIG,
+            )
+        if min_answers > items_per_house:
+            raise UnsupportedDefinitionError(
+                f"min_answers_per_house {min_answers} exceeds items_per_house {items_per_house}",
+                code=EngineErrorCode.INVALID_MIN_ANSWERS,
+            )
+        baseline_total = coverage_payload.get("baseline_total", BASELINE_TOTAL)
+        if baseline_total != BASELINE_TOTAL:
+            raise UnsupportedDefinitionError(
+                f"baseline_total is fixed at {BASELINE_TOTAL} by ADR-002, got {baseline_total!r}",
+                code=EngineErrorCode.INVALID_COVERAGE_CONFIG,
+            )
+
+        tie_order = definition.tie_policy.payload.get("order")
+        if not isinstance(tie_order, list) or sorted(tie_order) != sorted(house_ids):
+            raise UnsupportedDefinitionError(
+                f"tie_policy.payload.order must be a permutation of {house_ids}, got {tie_order!r}",
+                code=EngineErrorCode.INVALID_TIE_ORDER,
+            )
+
+        baseline_order = definition.selection_rules.payload.get("baseline_order", [])
+        if not isinstance(baseline_order, list):
+            raise UnsupportedDefinitionError(
+                f"baseline_order must be a list of question IDs, got {type(baseline_order).__name__}",
+                code=EngineErrorCode.INVALID_TYPE,
+            )
+        if len(baseline_order) != BASELINE_TOTAL:
+            raise UnsupportedDefinitionError(
+                f"Definition 2.0 requires exactly {BASELINE_TOTAL} baseline items, found {len(baseline_order)}",
+                code=EngineErrorCode.INVALID_BASELINE_COUNT,
+            )
+        unknown_baseline = [qid for qid in baseline_order if qid not in question_ids]
+        if unknown_baseline:
+            raise UnsupportedDefinitionError(
+                f"baseline_order references questions not in the bank: {unknown_baseline}",
+                code=EngineErrorCode.BASELINE_QUESTION_NOT_IN_BANK,
+            )
+        if len(set(baseline_order)) != len(baseline_order):
+            raise UnsupportedDefinitionError(
+                f"baseline_order must list {BASELINE_TOTAL} distinct questions",
+                code=EngineErrorCode.DUPLICATE_BASELINE_QUESTION,
+            )
+
+        house_item_orders: Dict[str, List[int]] = {house_id: [] for house_id in house_ids}
+        for q in definition.questions:
+            if q.house_id not in house_item_orders:
+                raise MissingMappingError(
+                    f"Question '{q.question_id}' has missing or unknown house_id '{q.house_id}'",
+                    code=EngineErrorCode.INVALID_HOUSE_REF,
+                )
+            if q.item_order is None:
+                raise MissingMappingError(
+                    f"Question '{q.question_id}' is missing item_order",
+                    code=EngineErrorCode.INVALID_ITEM_ORDER,
+                )
+            house_item_orders[q.house_id].append(q.item_order)
+
+        # Bounds assume exactly items_per_house askable items per house (ADR-002 §7.6).
+        expected_orders = list(range(1, items_per_house + 1))
+        for house_id, orders in house_item_orders.items():
+            if len(orders) != items_per_house:
+                raise MissingMappingError(
+                    f"House '{house_id}' must have exactly {items_per_house} questions, found {len(orders)}",
+                    code=EngineErrorCode.HOUSE_QUESTION_COUNT_MISMATCH,
+                )
+            if sorted(orders) != expected_orders:
+                raise MissingMappingError(
+                    f"House '{house_id}' must have item_order exactly {expected_orders}, got {sorted(orders)}",
+                    code=EngineErrorCode.HOUSE_ITEM_ORDER_MISMATCH,
+                )
 
     # --------------------------------------------------------------------------
     # Normalization & Anti-Repeat Validation
@@ -229,6 +393,12 @@ class AdaptiveQuestionSelector:
                     option_id=ans.option_id,
                     rating=choice.rating,
                 )
+            elif ans.rating is not None and ans.rating != choice.rating:
+                # v1 choices are unrated; never pass a client-supplied rating downstream.
+                raise InvalidPrefixError(
+                    f"Provided rating {ans.rating} does not match choice rating {choice.rating} for option '{ans.option_id}'",
+                    code=EngineErrorCode.RATING_MISMATCH,
+                )
 
             seen_question_ids.add(ans.question_id)
             normalized.append(ans)
@@ -249,29 +419,15 @@ class AdaptiveQuestionSelector:
         """Execute Definition 2.0 adaptive question selection."""
         decision_log: List[str] = []
 
-        # Validate rule schemas
-        sel_rule = definition.selection_rules.rule_schema_ref
-        if sel_rule not in SUPPORTED_V2_SELECTION_RULES:
-            raise UnsupportedDefinitionError(
-                f"Unsupported selection rule schema '{sel_rule}'. Supported: {SUPPORTED_V2_SELECTION_RULES}",
-                code=EngineErrorCode.UNSUPPORTED_RULE_SCHEMA,
-            )
+        # Definition structure already checked by _validate_definition.
+        baseline_order: List[str] = definition.selection_rules.payload["baseline_order"]
 
-        baseline_order: List[str] = definition.selection_rules.payload.get("baseline_order", [])
-        if len(baseline_order) != 12:
-            raise UnsupportedDefinitionError(
-                f"Definition 2.0 requires exactly 12 baseline items, found {len(baseline_order)}",
-                code=EngineErrorCode.INVALID_BASELINE_COUNT,
-            )
-
-        tie_order: List[str] = definition.tie_policy.payload.get("order", [])
-        if not tie_order:
-            tie_order = [h.house_id for h in definition.houses]
+        tie_order: List[str] = definition.tie_policy.payload["order"]
 
         coverage_payload = definition.coverage_rules.payload
-        max_total: int = coverage_payload.get("max_total", 30)
-        items_per_house: int = coverage_payload.get("items_per_house", 5)
-        min_answers_per_house: int = coverage_payload.get("min_answers_per_house", 2)
+        max_total: int = coverage_payload["max_total"]
+        items_per_house: int = coverage_payload["items_per_house"]
+        min_answers_per_house: int = coverage_payload["min_answers_per_house"]
 
         question_map = {q.question_id: q for q in definition.questions}
 
@@ -308,7 +464,7 @@ class AdaptiveQuestionSelector:
                 phase=SelectionPhase.COMPLETED,
                 progress=AssessmentProgressAdaptive(
                     completed=total_answers,
-                    min_total=12,
+                    min_total=BASELINE_TOTAL,
                     max_total=max_total,
                     total=total_answers,
                     phase=SelectionPhase.COMPLETED,
@@ -344,7 +500,7 @@ class AdaptiveQuestionSelector:
                     phase=SelectionPhase.COMPLETED,
                     progress=AssessmentProgressAdaptive(
                         completed=total_answers,
-                        min_total=12,
+                        min_total=BASELINE_TOTAL,
                         max_total=max_total,
                         total=total_answers,
                         phase=SelectionPhase.COMPLETED,
@@ -356,11 +512,11 @@ class AdaptiveQuestionSelector:
 
         # Step 5: Selection of Next Question (not stopped)
         # Phase 1: Baseline order (first 12 questions)
-        if total_answers < 12:
+        if total_answers < BASELINE_TOTAL:
             unasked_baseline = [qid for qid in baseline_order if qid not in seen_question_ids]
             if not unasked_baseline:
                 raise BankExhaustedError(
-                    "All baseline questions have been answered, but baseline count is under 12.",
+                    f"All baseline questions have been answered, but baseline count is under {BASELINE_TOTAL}.",
                     code=EngineErrorCode.BANK_EXHAUSTED,
                 )
             next_q_id = unasked_baseline[0]
@@ -377,7 +533,7 @@ class AdaptiveQuestionSelector:
                 phase=SelectionPhase.BASELINE,
                 progress=AssessmentProgressAdaptive(
                     completed=total_answers,
-                    min_total=12,
+                    min_total=BASELINE_TOTAL,
                     max_total=max_total,
                     total=None,
                     phase=SelectionPhase.BASELINE,
@@ -412,7 +568,7 @@ class AdaptiveQuestionSelector:
             phase=SelectionPhase.ADAPTIVE,
             progress=AssessmentProgressAdaptive(
                 completed=total_answers,
-                min_total=12,
+                min_total=BASELINE_TOTAL,
                 max_total=max_total,
                 total=None,
                 phase=SelectionPhase.ADAPTIVE,
@@ -460,8 +616,7 @@ class AdaptiveQuestionSelector:
         house_answers: Dict[str, List[int]] = {h.house_id: [] for h in definition.houses}
         for ans in answers:
             q = question_map[ans.question_id]
-            if q.house_id in house_answers and ans.rating is not None:
-                house_answers[q.house_id].append(ans.rating)
+            house_answers[q.house_id].append(ans.rating)
 
         stats_map: Dict[str, HouseStatistics] = {}
         for h in definition.houses:
@@ -502,12 +657,12 @@ class AdaptiveQuestionSelector:
             h_id for h_id, s in statistics.items() if s.count > 0 and s.mean is not None
         ]
         if not active_houses:
-            return tie_order[0] if tie_order else None
+            return tie_order[0]
 
         # Sort descending by exact mean fraction, ascending by tie_order index
         def sort_key(h_id: str):
             mean_val = statistics[h_id].mean.to_fraction()
-            tie_rank = tie_order.index(h_id) if h_id in tie_order else 999
+            tie_rank = tie_order.index(h_id)
             return (-mean_val, tie_rank)
 
         active_houses.sort(key=sort_key)
@@ -536,7 +691,7 @@ class AdaptiveQuestionSelector:
         ]
 
         # Break tie using tie_order
-        tied_houses.sort(key=lambda h: tie_order.index(h) if h in tie_order else 999)
+        tied_houses.sort(key=tie_order.index)
         winner = tied_houses[0]
         tie_applied = len(tied_houses) > 1
         return winner, tie_applied
@@ -577,7 +732,7 @@ class AdaptiveQuestionSelector:
                 h for h in candidate_houses if statistics[h].gap.to_fraction() == max_gap
             ]
             # Tie breaker: fixed tie_order
-            tied_gap.sort(key=lambda h: tie_order.index(h) if h in tie_order else 999)
+            tied_gap.sort(key=tie_order.index)
             chosen_house = tied_gap[0]
             decision_log.append(
                 f"Selected house with widest gap ({max_gap}): {chosen_house} (tied: {tied_gap})"
@@ -594,7 +749,7 @@ class AdaptiveQuestionSelector:
                     "All houses have exhausted their question items, but stopping condition was not reached.",
                     code=EngineErrorCode.BANK_EXHAUSTED,
                 )
-            remaining_houses.sort(key=lambda h: tie_order.index(h) if h in tie_order else 999)
+            remaining_houses.sort(key=tie_order.index)
             chosen_house = remaining_houses[0]
             decision_log.append(
                 f"Candidate set empty; fallback to house with remaining items: {chosen_house}"
@@ -607,25 +762,13 @@ class AdaptiveQuestionSelector:
             if q.house_id == chosen_house and q.question_id not in seen_question_ids
         ]
         if not house_unasked:
-            # Fallback across entire bank if specific house unasked is empty
-            bank_unasked = [
-                q for q in definition.questions if q.question_id not in seen_question_ids
-            ]
-            if not bank_unasked:
-                raise BankExhaustedError(
-                    "Question bank has no more unasked questions available.",
-                    code=EngineErrorCode.BANK_EXHAUSTED,
-                )
-            bank_unasked.sort(
-                key=lambda q: (
-                    tie_order.index(q.house_id) if q.house_id in tie_order else 999,
-                    q.item_order or 0,
-                )
+            # Unreachable for a validated bank: count < items_per_house guarantees an unasked item.
+            raise EngineError(
+                f"House '{chosen_house}' has no unasked items despite count < {items_per_house}",
+                code=EngineErrorCode.HOUSE_ITEMS_INVARIANT_VIOLATION,
             )
-            next_q = bank_unasked[0]
-        else:
-            house_unasked.sort(key=lambda q: q.item_order or 0)
-            next_q = house_unasked[0]
+        house_unasked.sort(key=lambda q: q.item_order)
+        next_q = house_unasked[0]
 
         # Final anti-repeat invariant assertion
         if next_q.question_id in seen_question_ids:
