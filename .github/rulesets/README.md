@@ -25,19 +25,25 @@ Nếu đã có ruleset bảo vệ nhánh mặc định, kiểm tra và cập nh�
 
 ## CI và quyền truy cập
 
-Workflow [CI](../workflows/ci.yml) chạy khi mở/cập nhật PR vào `main`, push lên `main` và chạy thủ công qua **Actions → CI → Run workflow**. Ba job độc lập kiểm tra:
+Workflow [CI](../workflows/ci.yml) chạy khi mở/cập nhật PR vào `main`, push lên `main` và chạy thủ công qua **Actions → CI → Run workflow**. Các job chạy song song trên mọi PR, không lọc theo đường dẫn:
 
 | Check | Nội dung |
 | --- | --- |
+| `Branch name` | Chỉ trên PR. Tên nhánh phải theo `<type>/<feature-slug>` (xem [commit guide](../commit_guide.instructions.md)); `dependabot/*` được miễn |
 | `Web UI` | Generate API types, typecheck, lint, unit tests và build |
 | `Studio API` | Generate API types, kiểm tra contract, typecheck, lint, unit tests và build |
-| `Agent Runtime` | Toàn bộ pytest trong app |
+| `Studio API Integration` | Integration tests với Postgres và MinIO tạm thời qua Testcontainers |
+| `Agent Runtime` | `ruff check` rồi toàn bộ pytest trong app |
+| `Docker Build (web-ui)`, `Docker Build (studio-api)`, `Docker Build (agent-runtime)` | Build thử Dockerfile của từng app, không push image |
+| `Dependency Review` | Chỉ trên PR. Chặn dependency mới có lỗ hổng mức high trở lên |
 
-CI dùng Node 22, pnpm 9.15.9 và Python theo `apps/agent-runtime/.python-version`, có cache dependencies và hủy lượt chạy cũ khi cùng PR/nhánh có cập nhật mới. Workflow không cần secrets, không deploy và chưa chạy integration tests cần DB/MinIO.
+Workflow [CodeQL](../workflows/codeql.yml) quét JavaScript/TypeScript và Python (check `CodeQL (javascript-typescript)`, `CodeQL (python)`) trên PR, khi push lên `main` và mỗi thứ Hai. Kết quả xem ở **Security → Code scanning**.
+
+CI dùng Node 22, pnpm 9.15.9, Python theo `apps/agent-runtime/.python-version` và ruff ghim trong `apps/agent-runtime/pyproject.toml`. Có cache dependencies và Docker layers, hủy lượt chạy cũ khi cùng PR/nhánh có cập nhật mới. Image dùng trong integration test được ghim version giống `docker-compose.yaml`. Workflow không cần secrets và không deploy.
 
 Việc tải dependencies dùng retry có sẵn của pnpm/pip; lỗi test, lint, typecheck hoặc build làm job thất bại ngay. Để thử lại khi lỗi hạ tầng/mạng, mở lượt chạy trong **Actions** và chọn **Re-run failed jobs**. CI không tự retry toàn bộ job.
 
-File `main-protection.json` hiện chưa yêu cầu status checks. Sau khi workflow chạy thành công trên GitHub, vào ruleset bảo vệ `main`, bật **Require status checks to pass**, thêm ba check `Web UI`, `Studio API`, `Agent Runtime` từ lượt chạy thực tế rồi lưu. Thêm workflow vào repo không tự bật quy tắc chặn merge này.
+File `main-protection.json` hiện chưa yêu cầu status checks. Sau khi các workflow chạy thành công trên GitHub, vào ruleset bảo vệ `main`, bật **Require status checks to pass**, thêm các check trong hai bảng trên từ lượt chạy thực tế rồi lưu. Thêm workflow vào repo không tự bật quy tắc chặn merge này.
 
 Chưa bắt buộc CODEOWNERS hoặc commit signature vì chưa thiết lập các quy trình đó.
 
