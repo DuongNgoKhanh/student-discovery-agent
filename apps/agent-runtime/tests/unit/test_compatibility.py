@@ -3,15 +3,12 @@
 Verifies engine capability registry, schema support, and DEC-04 rule schema registration.
 """
 
-import pytest
 
 from agent_runtime.evaluations.schemas.validation import ValidationStatus
 from agent_runtime.evaluations.services.compatibility import (
-    ALLOWED_RULE_SCHEMAS_BY_SLOT,
-    CompatibilityChecker,
-    DEFAULT_ENGINE_REGISTRY,
-    EngineProfile,
     PILOT_ENGINE_REGISTRY,
+    CompatibilityChecker,
+    EngineProfile,
 )
 
 

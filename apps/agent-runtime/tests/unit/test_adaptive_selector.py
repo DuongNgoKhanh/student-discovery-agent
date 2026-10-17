@@ -17,12 +17,11 @@ Verifies:
 import copy
 import random
 from fractions import Fraction
+
 import pytest
 from pydantic import ValidationError
 
 from agent_runtime.engine.exceptions import (
-    BankExhaustedError,
-    EngineError,
     InvalidPrefixError,
     MissingMappingError,
     UnsupportedDefinitionError,
@@ -40,7 +39,6 @@ from agent_runtime.engine.services.selector import (
     AdaptiveQuestionSelector,
     select_next_question,
 )
-from agent_runtime.evaluations.schemas.experience import ExperienceDefinitionDocument
 
 
 @pytest.fixture
@@ -922,7 +920,7 @@ class TestEarlyStopSoundness:
         early_stops = 0
         for _ in range(300):
             ratings = {q["question_id"]: rng.randint(1, 5) for q in valid_v2_doc["questions"]}
-            trace = _run_path(valid_v2_doc, lambda q: ratings[q.question_id])
+            trace = _run_path(valid_v2_doc, lambda q, ratings=ratings: ratings[q.question_id])
             final = trace[-1]
             assert final.progress.total <= 30
             if final.stopping_reason != StoppingReason.BOUNDED_WINNER:

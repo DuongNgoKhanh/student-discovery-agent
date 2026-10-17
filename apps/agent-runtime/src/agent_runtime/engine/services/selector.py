@@ -11,6 +11,7 @@ Authoritative implementation of:
 
 from fractions import Fraction
 from typing import Any, Dict, List, Optional, Set, Union
+
 from pydantic import ValidationError
 
 from agent_runtime.engine.error_codes import EngineErrorCode

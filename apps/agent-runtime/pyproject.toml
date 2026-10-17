@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dynamic = ["dependencies"]
 
 [project.optional-dependencies]
-dev = ["pytest==8.4.2", "httpx==0.28.1"]
+dev = ["pytest==8.4.2", "httpx==0.28.1", "ruff==0.17.1"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
@@ -20,3 +20,11 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+# Explicit list: ruff's default rule set changes between releases.
+select = ["E4", "E7", "E9", "F", "I", "B"]

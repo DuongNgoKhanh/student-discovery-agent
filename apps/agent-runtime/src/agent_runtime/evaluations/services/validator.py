@@ -12,18 +12,17 @@ Implements deterministic validation for ExperienceDefinitionDocument:
 - Outputs field-level and rule-level structured ValidationIssue items and ValidationReport.
 """
 
-from copy import deepcopy
-from datetime import datetime, timezone
 import hashlib
 import json
 import math
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
 import uuid
+from copy import deepcopy
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Set
 
 from pydantic import BaseModel
 
-from agent_runtime.evaluations.schemas.experience import ExperienceDefinitionDocument
 from agent_runtime.evaluations.schemas.validation import (
     ValidationIssue,
     ValidationReport,
@@ -31,7 +30,6 @@ from agent_runtime.evaluations.schemas.validation import (
 )
 from agent_runtime.evaluations.services.compatibility import (
     CompatibilityChecker,
-    DEFAULT_ENGINE_REGISTRY,
 )
 
 EXPECTED_HOUSES = {"house_r", "house_i", "house_a", "house_s", "house_e", "house_c"}
@@ -1215,7 +1213,7 @@ class ExperienceValidator:
                                 for q in questions if isinstance(q, dict) and "question_id" in q
                             }
                             actual_seq = [qid_to_house_order.get(qid) for qid in baseline]
-                            for b_idx, (actual_item, exp_item) in enumerate(zip(actual_seq, EXPECTED_BASELINE_SEQUENCE)):
+                            for b_idx, (actual_item, exp_item) in enumerate(zip(actual_seq, EXPECTED_BASELINE_SEQUENCE, strict=True)):
                                 if actual_item != exp_item:
                                     issues.append(
                                         ValidationIssue(

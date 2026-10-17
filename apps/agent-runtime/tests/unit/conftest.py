@@ -3,11 +3,10 @@
 import pytest
 
 from agent_runtime.evaluations.services.compatibility import (
-    CompatibilityChecker,
     PILOT_ENGINE_REGISTRY,
+    CompatibilityChecker,
 )
 from agent_runtime.evaluations.services.validator import ExperienceValidator
-
 
 HOUSE_CODES = ("r", "i", "a", "s", "e", "c")
 HOUSE_IDS = [f"house_{code}" for code in HOUSE_CODES]

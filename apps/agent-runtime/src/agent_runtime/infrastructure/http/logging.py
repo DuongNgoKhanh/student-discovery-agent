@@ -34,7 +34,6 @@ Usage:
 import logging
 import sys
 import threading
-import time
 import traceback
 
 from loguru import logger as loguru_logger

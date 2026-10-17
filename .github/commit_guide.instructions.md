@@ -55,12 +55,14 @@ Body rules:
 - Never paste secrets or private keys
 
 Branch naming:
-- Feature / task branches: task/[TASK_IDENTIFIER]_[YYYY-MM-DD]_[N]
-    - TASK_IDENTIFIER: short slug (e.g. admin-backend-docker-management)
-    - Example: task/container-config-manager_2025-10-16_1
-- Hotfix: hotfix/[short-desc]_[YYYYMMDD]
+- Format: <type>/<feature-slug>
+    - type: same set as commit types: feat, fix, refactor, docs, test, chore, build, perf
+    - hotfix: urgent fix to main
+    - feature-slug: describes the feature or change, not the task; lowercase kebab-case
+    - Examples: feat/adaptive-selector, fix/sequence-replay, build/ci-hardening, hotfix/login-500
 - Release: release/vX.Y.Z
-- Use lowercase, hyphens or underscores as project convention requires
+- Do not put task IDs or dates in branch names; reference the task in the PR description instead.
+- CI check "Branch name" rejects PRs from branches that do not match (dependabot/* is exempt).
 
 Pull request checklist:
 - Link to relevant issue or task file
@@ -77,7 +79,8 @@ Committing rules:
 - Do not commit local .tasks/* files; use: git add --all :!.tasks/*
 
 Automation & CI:
-- CI will run lint, tests, and container checks on PRs
+- CI runs branch-name, lint, unit and integration tests, Docker builds, dependency review and CodeQL
+  on PRs (see .github/rulesets/README.md)
 - Ensure commits that affect container/network configs include validation steps
 
 Enforcement:

@@ -7,6 +7,7 @@ All models strictly enforce extra='forbid' per OpenAPI additionalProperties: fal
 """
 
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 

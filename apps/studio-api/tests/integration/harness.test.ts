@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Client } from 'pg';
 import { CreateBucketCommand, ListBucketsCommand, S3Client } from '@aws-sdk/client-s3';
 import { startPostgres } from '../helpers/postgres';
-import { startMinio } from '../helpers/minio';
+import { minioEnabled, startMinio } from '../helpers/minio';
 
 describe('test harness smoke', () => {
   it('starts Postgres on a random port, connects, stops', async () => {
@@ -18,7 +18,7 @@ describe('test harness smoke', () => {
     }
   });
 
-  it('starts MinIO, creates a bucket, stops', async () => {
+  it.skipIf(!minioEnabled)('starts MinIO, creates a bucket, stops', async () => {
     const minio = await startMinio();
     try {
       const s3 = new S3Client({

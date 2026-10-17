@@ -1,6 +1,6 @@
 from agent_runtime.evaluations.services.compatibility import (
-    CompatibilityChecker,
     DEFAULT_ENGINE_REGISTRY,
+    CompatibilityChecker,
     EngineProfile,
 )
 from agent_runtime.evaluations.services.validator import (

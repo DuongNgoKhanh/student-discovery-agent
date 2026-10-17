@@ -152,13 +152,13 @@ class CompatibilityChecker:
             rule_ref = rule_doc.get("rule_schema_ref")
             rule_eng = rule_doc.get("engine_version")
 
-            for field, value in [("rule_schema_ref", rule_ref), ("engine_version", rule_eng)]:
+            for field_name, value in [("rule_schema_ref", rule_ref), ("engine_version", rule_eng)]:
                 if not isinstance(value, str) or not value.strip():
                     issues.append(
                         ValidationIssue(
-                            path=f"{slot}.{field}",
+                            path=f"{slot}.{field_name}",
                             code="VAL_INVALID_TYPE",
-                            message=f"Rule document {field} must be a non-empty string.",
+                            message=f"Rule document {field_name} must be a non-empty string.",
                             rule_id="RULE_SCHEMA_COMPATIBILITY",
                         )
                     )
