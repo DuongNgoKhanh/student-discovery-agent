@@ -5,6 +5,7 @@ Provides:
 - Deterministic Scoring & 6 House Contributions (Task C-03)
 """
 
+from agent_runtime.engine.error_codes import EngineErrorCode
 from agent_runtime.engine.exceptions import (
     BankExhaustedError,
     EngineError,
@@ -39,6 +40,7 @@ __all__ = [
     "SelectionStatus",
     "StoppingReason",
     "EngineError",
+    "EngineErrorCode",
     "InvalidPrefixError",
     "BankExhaustedError",
     "UnsupportedDefinitionError",

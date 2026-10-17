@@ -13,6 +13,7 @@ from fractions import Fraction
 from typing import Any, Dict, List, Optional, Set, Union
 from pydantic import ValidationError
 
+from agent_runtime.engine.error_codes import EngineErrorCode
 from agent_runtime.engine.exceptions import (
     BankExhaustedError,
     EngineError,
@@ -65,11 +66,11 @@ class AdaptiveQuestionSelector:
             except ValidationError as e:
                 raise UnsupportedDefinitionError(
                     f"Malformed ExperienceDefinitionDocument: {str(e)}",
-                    code="MALFORMED_DEFINITION",
+                    code=EngineErrorCode.INVALID_FIELD,
                 ) from e
         raise UnsupportedDefinitionError(
             f"Expected ExperienceDefinitionDocument or dict, got {type(definition).__name__}",
-            code="INVALID_DEFINITION_TYPE",
+            code=EngineErrorCode.INVALID_TYPE,
         )
 
     def select_next_question(
@@ -102,14 +103,14 @@ class AdaptiveQuestionSelector:
         if active_def is None:
             raise UnsupportedDefinitionError(
                 "Experience definition must be provided either at initialization or execution.",
-                code="NO_DEFINITION_BOUND",
+                code=EngineErrorCode.MISSING_REQUIRED_FIELD,
             )
 
         # Validate schema version
         if active_def.schema_version not in SUPPORTED_SCHEMA_VERSIONS:
             raise UnsupportedDefinitionError(
                 f"Unsupported schema_version '{active_def.schema_version}'. Supported: {SUPPORTED_SCHEMA_VERSIONS}",
-                code="UNSUPPORTED_SCHEMA_VERSION",
+                code=EngineErrorCode.INVALID_SCHEMA_VERSION,
             )
 
         # Coerce and validate answers prefix
@@ -148,7 +149,7 @@ class AdaptiveQuestionSelector:
         elif not isinstance(raw_answers, (list, tuple)):
             raise InvalidPrefixError(
                 f"Answers must be a list, got {type(raw_answers).__name__}",
-                code="INVALID_ANSWERS_TYPE",
+                code=EngineErrorCode.INVALID_TYPE,
             )
 
         question_map: Dict[str, AssessmentDefinitionQuestion] = {
@@ -161,13 +162,13 @@ class AdaptiveQuestionSelector:
             if isinstance(item, dict) and isinstance(item.get("rating"), bool):
                 raise InvalidPrefixError(
                     f"Answer rating at index {idx} must be an integer (booleans forbidden)",
-                    code="INVALID_RATING_TYPE",
+                    code=EngineErrorCode.INVALID_TYPE,
                 )
             if isinstance(item, AnswerInput):
                 if isinstance(item.rating, bool):
                     raise InvalidPrefixError(
                         f"Answer rating at index {idx} must be an integer (booleans forbidden)",
-                        code="INVALID_RATING_TYPE",
+                        code=EngineErrorCode.INVALID_TYPE,
                     )
                 ans = item
             elif isinstance(item, dict):
@@ -176,26 +177,26 @@ class AdaptiveQuestionSelector:
                 except ValidationError as e:
                     raise InvalidPrefixError(
                         f"Answer at index {idx} failed schema validation: {str(e)}",
-                        code="INVALID_ANSWER_SCHEMA",
+                        code=EngineErrorCode.INVALID_FIELD,
                     ) from e
             else:
                 raise InvalidPrefixError(
                     f"Answer at index {idx} has invalid type {type(item).__name__}",
-                    code="INVALID_ANSWER_TYPE",
+                    code=EngineErrorCode.INVALID_TYPE,
                 )
 
             # Anti-repeat check (Invariant: each question asked at most once)
             if ans.question_id in seen_question_ids:
                 raise InvalidPrefixError(
                     f"Anti-repeat violation: duplicate question_id '{ans.question_id}' at index {idx}",
-                    code="DUPLICATE_QUESTION",
+                    code=EngineErrorCode.QUESTION_ALREADY_ANSWERED,
                 )
 
             # Question bank membership check
             if ans.question_id not in question_map:
                 raise InvalidPrefixError(
                     f"Question ID '{ans.question_id}' does not exist in the question bank",
-                    code="UNKNOWN_QUESTION_ID",
+                    code=EngineErrorCode.UNKNOWN_QUESTION_ID,
                 )
 
             question = question_map[ans.question_id]
@@ -205,7 +206,7 @@ class AdaptiveQuestionSelector:
             if ans.option_id not in choice_map:
                 raise InvalidPrefixError(
                     f"Option ID '{ans.option_id}' does not belong to question '{ans.question_id}'",
-                    code="INVALID_OPTION_ID",
+                    code=EngineErrorCode.INVALID_OPTION_ID,
                 )
 
             choice = choice_map[ans.option_id]
@@ -220,18 +221,18 @@ class AdaptiveQuestionSelector:
                 ):
                     raise MissingMappingError(
                         f"Choice '{ans.option_id}' in question '{ans.question_id}' is missing a valid 1..5 rating",
-                        code="MISSING_CHOICE_RATING",
+                        code=EngineErrorCode.INVALID_RATING,
                     )
                 if ans.rating is not None:
                     if isinstance(ans.rating, bool) or not isinstance(ans.rating, int):
                         raise InvalidPrefixError(
                             f"Answer rating for option '{ans.option_id}' must be an integer (booleans forbidden)",
-                            code="INVALID_RATING_TYPE",
+                            code=EngineErrorCode.INVALID_TYPE,
                         )
                     if ans.rating != choice.rating:
                         raise InvalidPrefixError(
                             f"Provided rating {ans.rating} does not match choice rating {choice.rating} for option '{ans.option_id}'",
-                            code="RATING_MISMATCH",
+                            code=EngineErrorCode.RATING_MISMATCH,
                         )
                 # Assign authoritative rating
                 ans = AnswerInput(
@@ -264,14 +265,14 @@ class AdaptiveQuestionSelector:
         if sel_rule not in SUPPORTED_V2_SELECTION_RULES:
             raise UnsupportedDefinitionError(
                 f"Unsupported selection rule schema '{sel_rule}'. Supported: {SUPPORTED_V2_SELECTION_RULES}",
-                code="UNSUPPORTED_SELECTION_RULE",
+                code=EngineErrorCode.UNSUPPORTED_RULE_SCHEMA,
             )
 
         baseline_order: List[str] = definition.selection_rules.payload.get("baseline_order", [])
         if len(baseline_order) != 12:
             raise UnsupportedDefinitionError(
                 f"Definition 2.0 requires exactly 12 baseline items, found {len(baseline_order)}",
-                code="INVALID_BASELINE_LENGTH",
+                code=EngineErrorCode.INVALID_BASELINE_COUNT,
             )
 
         tie_order: List[str] = definition.tie_policy.payload.get("order", [])
@@ -371,7 +372,7 @@ class AdaptiveQuestionSelector:
             if not unasked_baseline:
                 raise BankExhaustedError(
                     "All baseline questions have been answered, but baseline count is under 12.",
-                    code="BANK_EXHAUSTED",
+                    code=EngineErrorCode.BANK_EXHAUSTED,
                 )
             next_q_id = unasked_baseline[0]
             decision_log.append(
@@ -450,13 +451,13 @@ class AdaptiveQuestionSelector:
                 raise InvalidPrefixError(
                     f"Assessment was already completed at step {step} with reason '{step_res.stopping_reason}'. "
                     f"Cannot accept further answer '{actual_q_id}'.",
-                    code="ASSESSMENT_ALREADY_COMPLETED",
+                    code=EngineErrorCode.ASSESSMENT_ALREADY_COMPLETED,
                 )
             expected_q_id = step_res.next_question_id
             if expected_q_id != actual_q_id:
                 raise InvalidPrefixError(
                     f"Sequence replay mismatch at answer step {step}: expected question '{expected_q_id}', got '{actual_q_id}'",
-                    code="SEQUENCE_MISMATCH",
+                    code=EngineErrorCode.SEQUENCE_MISMATCH,
                 )
 
     def _compute_house_statistics(
@@ -602,7 +603,7 @@ class AdaptiveQuestionSelector:
             if not remaining_houses:
                 raise BankExhaustedError(
                     "All houses have exhausted their question items, but stopping condition was not reached.",
-                    code="BANK_EXHAUSTED",
+                    code=EngineErrorCode.BANK_EXHAUSTED,
                 )
             remaining_houses.sort(key=lambda h: tie_order.index(h) if h in tie_order else 999)
             chosen_house = remaining_houses[0]
@@ -624,7 +625,7 @@ class AdaptiveQuestionSelector:
             if not bank_unasked:
                 raise BankExhaustedError(
                     "Question bank has no more unasked questions available.",
-                    code="BANK_EXHAUSTED",
+                    code=EngineErrorCode.BANK_EXHAUSTED,
                 )
             bank_unasked.sort(
                 key=lambda q: (
@@ -641,7 +642,7 @@ class AdaptiveQuestionSelector:
         if next_q.question_id in seen_question_ids:
             raise EngineError(
                 f"Anti-repeat invariant failure: selected already-answered question '{next_q.question_id}'",
-                code="ANTI_REPEAT_VIOLATION",
+                code=EngineErrorCode.ANTI_REPEAT_VIOLATION,
             )
 
         return next_q, candidate_houses
@@ -676,13 +677,13 @@ class AdaptiveQuestionSelector:
                     raise InvalidPrefixError(
                         f"Assessment was already completed at step {step} with reason '{step_res.stopping_reason}'. "
                         f"Cannot accept further answer '{actual_q_id}'.",
-                        code="ASSESSMENT_ALREADY_COMPLETED",
+                        code=EngineErrorCode.ASSESSMENT_ALREADY_COMPLETED,
                     )
                 expected_q_id = step_res.next_question_id
                 if expected_q_id != actual_q_id:
                     raise InvalidPrefixError(
                         f"Sequence replay mismatch at answer step {step}: expected question '{expected_q_id}', got '{actual_q_id}'",
-                        code="SEQUENCE_MISMATCH",
+                        code=EngineErrorCode.SEQUENCE_MISMATCH,
                     )
             decision_log.append("Definition 1.0 sequence replay validated.")
 
@@ -724,7 +725,7 @@ class AdaptiveQuestionSelector:
             if not unasked:
                 raise BankExhaustedError(
                     "Definition 1.0 question bank exhausted before reaching required count.",
-                    code="BANK_EXHAUSTED",
+                    code=EngineErrorCode.BANK_EXHAUSTED,
                 )
             next_q_id = unasked[0].question_id
 

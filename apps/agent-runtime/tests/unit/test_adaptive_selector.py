@@ -322,7 +322,7 @@ class TestAdaptiveQuestionSelectorValidationAndFailures:
         ]
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers)
-        assert exc_info.value.code == "DUPLICATE_QUESTION"
+        assert exc_info.value.code == "REQ_QUESTION_ALREADY_ANSWERED"
 
     def test_unknown_question_id_raises_invalid_prefix(self, valid_v2_doc):
         selector = AdaptiveQuestionSelector(valid_v2_doc)
@@ -331,7 +331,7 @@ class TestAdaptiveQuestionSelectorValidationAndFailures:
         ]
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers)
-        assert exc_info.value.code == "UNKNOWN_QUESTION_ID"
+        assert exc_info.value.code == "VAL_UNKNOWN_QUESTION_ID"
 
     def test_option_not_belonging_to_question_raises_invalid_prefix(self, valid_v2_doc):
         selector = AdaptiveQuestionSelector(valid_v2_doc)
@@ -340,7 +340,7 @@ class TestAdaptiveQuestionSelectorValidationAndFailures:
         ]
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers)
-        assert exc_info.value.code == "INVALID_OPTION_ID"
+        assert exc_info.value.code == "VAL_INVALID_OPTION_ID"
 
     def test_rating_mismatch_raises_invalid_prefix(self, valid_v2_doc):
         selector = AdaptiveQuestionSelector(valid_v2_doc)
@@ -349,7 +349,7 @@ class TestAdaptiveQuestionSelectorValidationAndFailures:
         ]
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers)
-        assert exc_info.value.code == "RATING_MISMATCH"
+        assert exc_info.value.code == "VAL_RATING_MISMATCH"
 
     def test_sequence_mismatch_raises_invalid_prefix(self, valid_v2_doc):
         selector = AdaptiveQuestionSelector(valid_v2_doc)
@@ -359,7 +359,7 @@ class TestAdaptiveQuestionSelectorValidationAndFailures:
         ]
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers, validate_sequence=True)
-        assert exc_info.value.code == "SEQUENCE_MISMATCH"
+        assert exc_info.value.code == "REQ_SEQUENCE_MISMATCH"
 
     def test_sequence_mismatch_ignored_when_flag_false(self, valid_v2_doc):
         selector = AdaptiveQuestionSelector(valid_v2_doc)
@@ -375,14 +375,14 @@ class TestAdaptiveQuestionSelectorValidationAndFailures:
         selector = AdaptiveQuestionSelector()
         with pytest.raises(UnsupportedDefinitionError) as exc_info:
             selector.select_next_question(answers=[], definition=valid_v2_dict)
-        assert exc_info.value.code == "UNSUPPORTED_SCHEMA_VERSION"
+        assert exc_info.value.code == "VAL_INVALID_SCHEMA_VERSION"
 
     def test_unsupported_selection_rule_raises_error(self, valid_v2_dict):
         valid_v2_dict["selection_rules"]["rule_schema_ref"] = "rule.schema.unsupported:v1"
         selector = AdaptiveQuestionSelector()
         with pytest.raises(UnsupportedDefinitionError) as exc_info:
             selector.select_next_question(answers=[], definition=valid_v2_dict)
-        assert exc_info.value.code == "UNSUPPORTED_SELECTION_RULE"
+        assert exc_info.value.code == "VAL_UNSUPPORTED_RULE_SCHEMA"
 
     def test_invalid_definition_payload_raises_error(self):
         selector = AdaptiveQuestionSelector()
@@ -529,7 +529,7 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
 
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers, validate_sequence=True)
-        assert exc_info.value.code == "ASSESSMENT_ALREADY_COMPLETED"
+        assert exc_info.value.code == "REQ_ASSESSMENT_ALREADY_COMPLETED"
 
     def test_answers_with_rich_session_metadata_accepted(self, valid_v2_doc):
         """Verify that AnswerInput accepts full ActivityAnswer dictionaries from database sessions."""
@@ -556,7 +556,7 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
         ]
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers)
-        assert exc_info.value.code == "INVALID_RATING_TYPE"
+        assert exc_info.value.code == "VAL_INVALID_TYPE"
 
     def test_none_answers_treated_as_empty_list(self, valid_v2_doc):
         """Verify that passing answers=None gracefully defaults to empty list."""
@@ -570,7 +570,7 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
         selector = AdaptiveQuestionSelector(valid_v2_doc)
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers="not-a-list")
-        assert exc_info.value.code == "INVALID_ANSWERS_TYPE"
+        assert exc_info.value.code == "VAL_INVALID_TYPE"
 
     def test_rational_score_operators(self):
         """Verify comparison and arithmetic operators on RationalScore."""
@@ -599,4 +599,4 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
         answers = [{"question_id": "q_demo_03", "option_id": "q_demo_03_opt_1"}]
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers, validate_sequence=True)
-        assert exc_info.value.code == "SEQUENCE_MISMATCH"
+        assert exc_info.value.code == "REQ_SEQUENCE_MISMATCH"
