@@ -7,6 +7,9 @@ export interface MinioHandle {
   stop(): Promise<void>;
 }
 
+/** MinIO-backed tests are opt-in (SDA_TEST_MINIO=1); see vitest.workspace.ts. */
+export const minioEnabled = process.env.SDA_TEST_MINIO === '1';
+
 const ACCESS_KEY = 'sda_test_access';
 const SECRET_KEY = 'sda_test_secret_key';
 
