@@ -14,8 +14,8 @@ from google.genai.errors import ClientError, ServerError
 from pydantic import BaseModel
 
 from agent_runtime.config.settings import settings
-from agent_runtime.infrastructure.llm.copilot import CopilotChat
 from agent_runtime.infrastructure.http.logging import logger
+from agent_runtime.infrastructure.llm.copilot import CopilotChat
 
 
 class GeminiCustom(Gemini):

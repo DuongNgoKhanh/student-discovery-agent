@@ -8,19 +8,21 @@ Verifies:
 """
 
 import copy
+
 import pytest
 
 from agent_runtime.evaluations.schemas.experience import ExperienceDefinitionDocument
 from agent_runtime.evaluations.schemas.validation import ValidationStatus
 from agent_runtime.evaluations.services.compatibility import (
-    CompatibilityChecker,
     PILOT_ENGINE_REGISTRY,
+    CompatibilityChecker,
 )
 from agent_runtime.evaluations.services.validator import (
     ExperienceValidator,
     calculate_content_hash,
     validate_experience_definition,
 )
+
 
 class TestExperienceValidator:
     """Test suite for ExperienceValidator (M-EVL)."""

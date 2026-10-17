@@ -4,6 +4,7 @@ import copy
 
 import pytest
 
+
 @pytest.mark.parametrize("field", ["rule_schema_ref", "engine_version"])
 @pytest.mark.parametrize("value", [[], {}, 1, False, ""])
 def test_rule_metadata_must_be_strings(validator, definition, field, value):
