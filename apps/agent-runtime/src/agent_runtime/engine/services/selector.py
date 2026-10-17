@@ -165,11 +165,6 @@ class AdaptiveQuestionSelector:
                     code=EngineErrorCode.INVALID_TYPE,
                 )
             if isinstance(item, AnswerInput):
-                if isinstance(item.rating, bool):
-                    raise InvalidPrefixError(
-                        f"Answer rating at index {idx} must be an integer (booleans forbidden)",
-                        code=EngineErrorCode.INVALID_TYPE,
-                    )
                 ans = item
             elif isinstance(item, dict):
                 try:
@@ -223,17 +218,11 @@ class AdaptiveQuestionSelector:
                         f"Choice '{ans.option_id}' in question '{ans.question_id}' is missing a valid 1..5 rating",
                         code=EngineErrorCode.INVALID_RATING,
                     )
-                if ans.rating is not None:
-                    if isinstance(ans.rating, bool) or not isinstance(ans.rating, int):
-                        raise InvalidPrefixError(
-                            f"Answer rating for option '{ans.option_id}' must be an integer (booleans forbidden)",
-                            code=EngineErrorCode.INVALID_TYPE,
-                        )
-                    if ans.rating != choice.rating:
-                        raise InvalidPrefixError(
-                            f"Provided rating {ans.rating} does not match choice rating {choice.rating} for option '{ans.option_id}'",
-                            code=EngineErrorCode.RATING_MISMATCH,
-                        )
+                if ans.rating is not None and ans.rating != choice.rating:
+                    raise InvalidPrefixError(
+                        f"Provided rating {ans.rating} does not match choice rating {choice.rating} for option '{ans.option_id}'",
+                        code=EngineErrorCode.RATING_MISMATCH,
+                    )
                 # Assign authoritative rating
                 ans = AnswerInput(
                     question_id=ans.question_id,
@@ -322,7 +311,7 @@ class AdaptiveQuestionSelector:
                     min_total=12,
                     max_total=max_total,
                     total=total_answers,
-                    phase=SelectionPhase.COMPLETED.value,
+                    phase=SelectionPhase.COMPLETED,
                 ),
                 statistics=statistics,
                 candidate_houses=[],
@@ -358,7 +347,7 @@ class AdaptiveQuestionSelector:
                         min_total=12,
                         max_total=max_total,
                         total=total_answers,
-                        phase=SelectionPhase.COMPLETED.value,
+                        phase=SelectionPhase.COMPLETED,
                     ),
                     statistics=statistics,
                     candidate_houses=[],
@@ -391,7 +380,7 @@ class AdaptiveQuestionSelector:
                     min_total=12,
                     max_total=max_total,
                     total=None,
-                    phase=SelectionPhase.BASELINE.value,
+                    phase=SelectionPhase.BASELINE,
                 ),
                 statistics=statistics,
                 candidate_houses=[question_map[next_q_id].house_id],
@@ -426,7 +415,7 @@ class AdaptiveQuestionSelector:
                 min_total=12,
                 max_total=max_total,
                 total=None,
-                phase=SelectionPhase.ADAPTIVE.value,
+                phase=SelectionPhase.ADAPTIVE,
             ),
             statistics=statistics,
             candidate_houses=candidate_houses,
@@ -494,7 +483,7 @@ class AdaptiveQuestionSelector:
                 house_id=h.house_id,
                 sum=s_h,
                 count=n_h,
-                mean=RationalScore.from_fraction(mean_frac) if mean_frac else None,
+                mean=RationalScore.from_fraction(mean_frac) if mean_frac is not None else None,
                 lower=RationalScore.from_fraction(lower_frac),
                 upper=RationalScore.from_fraction(upper_frac),
                 gap=RationalScore.from_fraction(gap_frac),
@@ -705,7 +694,7 @@ class AdaptiveQuestionSelector:
                     min_total=required_count,
                     max_total=required_count,
                     total=total_answers,
-                    phase=SelectionPhase.COMPLETED.value,
+                    phase=SelectionPhase.COMPLETED,
                 ),
                 statistics={},
                 candidate_houses=[],
@@ -744,7 +733,7 @@ class AdaptiveQuestionSelector:
                 min_total=required_count,
                 max_total=required_count,
                 total=None,
-                phase=SelectionPhase.FIXED.value,
+                phase=SelectionPhase.FIXED,
             ),
             statistics={},
             candidate_houses=[],

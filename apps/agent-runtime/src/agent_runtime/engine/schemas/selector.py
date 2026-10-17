@@ -3,13 +3,13 @@
 Conforms to:
 - ADR-002 (§7.5 Scoring, §7.6 Stopping Condition, §7.7 Adaptive Selector, §7.9 Contract)
 - OpenAPI: AssessmentProgress, ActivityAnswer, ActivityView
-- Pydantic v2: ConfigDict(extra="forbid")
+- Pydantic v2: ConfigDict(extra="forbid"), except AnswerInput which ignores extra ActivityAnswer fields
 """
 
 from enum import Enum
 from fractions import Fraction
-from typing import Dict, List, Optional, Union
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from agent_runtime.evaluations.schemas.experience import AssessmentDefinitionQuestion
 
@@ -41,14 +41,30 @@ class StoppingReason(str, Enum):
 class RationalScore(BaseModel):
     """Exact rational representation of scores/bounds (ADR-002 §7.5 & §8.3.3).
 
-    Maintains numerator and denominator to ensure 100% exact comparisons
-    without floating-point imprecision.
+    Maintains numerator and denominator to ensure exact comparisons without
+    floating-point imprecision. Always stored in canonical form (lowest terms,
+    positive denominator) so equal values serialize identically.
     """
 
-    numerator: int = Field(..., description="Numerator of the rational fraction")
-    denominator: int = Field(..., description="Denominator of the rational fraction (must be non-zero)")
+    numerator: StrictInt = Field(..., description="Numerator of the rational fraction")
+    denominator: StrictInt = Field(
+        ..., gt=0, description="Positive denominator, in lowest terms with the numerator"
+    )
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _canonicalize(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            num, den = data.get("numerator"), data.get("denominator")
+            # Non-int parts are left for StrictInt to reject.
+            if type(num) is int and type(den) is int:
+                if den == 0:
+                    raise ValueError("denominator must be non-zero")
+                frac = Fraction(num, den)
+                return {**data, "numerator": frac.numerator, "denominator": frac.denominator}
+        return data
 
     @classmethod
     def from_fraction(cls, frac: Fraction) -> "RationalScore":
@@ -59,7 +75,10 @@ class RationalScore(BaseModel):
 
     @property
     def value(self) -> float:
-        return self.numerator / self.denominator if self.denominator != 0 else 0.0
+        return self.numerator / self.denominator
+
+    def __hash__(self) -> int:
+        return hash(self.to_fraction())
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, RationalScore):
@@ -129,9 +148,10 @@ class AssessmentProgressAdaptive(BaseModel):
     max_total: int = Field(..., ge=0, description="Maximum questions budget (e.g. 30)")
     total: Optional[int] = Field(
         default=None,
+        ge=0,
         description="Total questions (null during in_progress, int when completed)",
     )
-    phase: str = Field(..., description="Current phase: baseline, adaptive, completed, fixed")
+    phase: SelectionPhase = Field(..., description="Current phase: baseline, adaptive, completed, fixed")
 
     model_config = ConfigDict(extra="forbid")
 
@@ -141,11 +161,12 @@ class AnswerInput(BaseModel):
 
     question_id: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
     option_id: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
-    rating: Optional[int] = Field(
+    rating: Optional[StrictInt] = Field(
         default=None, ge=1, le=5, description="Explicit rating if provided"
     )
 
-    # Allow extra fields (e.g. answer_id, ordinal, source from session ActivityAnswer)
+    # Ignore extra fields: ActivityAnswer allows additionalProperties (answer_id, ordinal,
+    # source, question, ...). The rating is cross-checked against the definition anyway.
     model_config = ConfigDict(extra="ignore")
 
 
@@ -181,3 +202,26 @@ class SelectionResult(BaseModel):
     )
 
     model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="after")
+    def _check_status_consistency(self) -> "SelectionResult":
+        if self.progress.phase != self.phase:
+            raise ValueError(f"progress.phase '{self.progress.phase}' differs from phase '{self.phase}'")
+
+        if self.status == SelectionStatus.NEXT_QUESTION:
+            if self.next_question is None or self.next_question_id != self.next_question.question_id:
+                raise ValueError("next_question_id must match a present next_question")
+            if self.stopping_reason is not None or self.primary_house_id is not None or self.tie_applied:
+                raise ValueError("stopping_reason, primary_house_id and tie_applied are only set when completed")
+            if self.phase == SelectionPhase.COMPLETED or self.progress.total is not None:
+                raise ValueError("an in-progress result cannot be in the completed phase or have a total")
+        else:
+            if self.next_question_id is not None or self.next_question is not None:
+                raise ValueError("a completed result cannot carry a next question")
+            if self.stopping_reason is None or self.phase != SelectionPhase.COMPLETED:
+                raise ValueError("a completed result needs a stopping_reason and the completed phase")
+            if self.progress.total is None:
+                raise ValueError("a completed result needs progress.total")
+            if self.tie_applied and self.stopping_reason != StoppingReason.QUESTION_LIMIT:
+                raise ValueError("tie policy is only applied at question_limit")
+        return self

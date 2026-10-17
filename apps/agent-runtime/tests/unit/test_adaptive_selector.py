@@ -17,6 +17,7 @@ Verifies:
 import copy
 from fractions import Fraction
 import pytest
+from pydantic import ValidationError
 
 from agent_runtime.engine.exceptions import (
     BankExhaustedError,
@@ -27,8 +28,10 @@ from agent_runtime.engine.exceptions import (
 )
 from agent_runtime.engine.schemas.selector import (
     AnswerInput,
+    AssessmentProgressAdaptive,
     RationalScore,
     SelectionPhase,
+    SelectionResult,
     SelectionStatus,
     StoppingReason,
 )
@@ -600,3 +603,78 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers, validate_sequence=True)
         assert exc_info.value.code == "REQ_SEQUENCE_MISMATCH"
+
+
+class TestSelectorSchemaInvariants:
+    """Schema types must not represent illegal states (zero denominators, contradictory results)."""
+
+    def test_rational_score_rejects_zero_denominator(self):
+        with pytest.raises(ValidationError):
+            RationalScore(numerator=1, denominator=0)
+
+    def test_rational_score_normalizes_to_canonical_form(self):
+        """Equal values must serialize identically, so audit logs and replays agree."""
+        assert RationalScore(numerator=2, denominator=4).model_dump() == {"numerator": 1, "denominator": 2}
+        assert RationalScore(numerator=1, denominator=-2).model_dump() == {"numerator": -1, "denominator": 2}
+
+    def test_rational_score_is_immutable_and_hashable(self):
+        score = RationalScore(numerator=17, denominator=5)
+        with pytest.raises(ValidationError):
+            score.numerator = 99
+        assert hash(score) == hash(RationalScore(numerator=34, denominator=10))
+
+    def test_rational_score_rejects_non_integer_parts(self):
+        with pytest.raises(ValidationError):
+            RationalScore(numerator="3", denominator=2)
+
+    def test_answer_input_rejects_non_integer_rating(self):
+        with pytest.raises(ValidationError):
+            AnswerInput(question_id="q_r_01", option_id="q_r_01_opt_5", rating=True)
+        with pytest.raises(ValidationError):
+            AnswerInput(question_id="q_r_01", option_id="q_r_01_opt_5", rating="5")
+
+    def test_progress_phase_must_be_known_phase(self):
+        with pytest.raises(ValidationError):
+            AssessmentProgressAdaptive(completed=0, min_total=12, max_total=30, phase="banana")
+
+    @staticmethod
+    def _dump(definition, answers=None):
+        return AdaptiveQuestionSelector(definition).select_next_question(answers or []).model_dump()
+
+    @pytest.mark.parametrize(
+        "mutate",
+        [
+            lambda d: d.update(status="completed"),  # completed but still carries a next question
+            lambda d: d.update(next_question=None),
+            lambda d: d.update(next_question_id="q_i_01"),  # id disagrees with question object
+            lambda d: d.update(stopping_reason="question_limit"),
+            lambda d: d.update(tie_applied=True),
+            lambda d: d["progress"].update(phase="adaptive"),  # disagrees with outer phase
+        ],
+        ids=["completed_with_next", "next_without_question", "id_mismatch",
+             "reason_while_running", "tie_while_running", "phase_mismatch"],
+    )
+    def test_selection_result_rejects_contradictory_next_question_state(self, valid_v2_doc, mutate):
+        data = self._dump(valid_v2_doc)
+        mutate(data)
+        with pytest.raises(ValidationError):
+            SelectionResult.model_validate(data)
+
+    @pytest.mark.parametrize(
+        "mutate",
+        [
+            lambda d: d.update(stopping_reason=None),
+            lambda d: d.update(phase="adaptive"),
+            lambda d: d["progress"].update(total=None),
+        ],
+        ids=["no_reason", "wrong_phase", "no_total"],
+    )
+    def test_selection_result_rejects_contradictory_completed_state(self, valid_v1_doc, mutate):
+        answers = [
+            {"question_id": f"q_demo_{i:02}", "option_id": f"q_demo_{i:02}_opt_1"} for i in range(1, 7)
+        ]
+        data = self._dump(valid_v1_doc, answers)
+        assert data["status"] == "completed"
+        mutate(data)
+        with pytest.raises(ValidationError):
+            SelectionResult.model_validate(data)
