@@ -1,0 +1,20 @@
+[
+  {
+    "name": "utf16-key-order",
+    "input_json": "{\"\\ue000\":2,\"\\ud801\\udc37\":1,\"b\":3,\"a\":4}",
+    "canonical": "{\"a\":4,\"b\":3,\"\ud801\udc37\":1,\"\ue000\":2}",
+    "hash": "sha256:f3dcc7bf048beb1b0f9c15ffff7f377bca68972f267f9403794b7c07d073e3e9"
+  },
+  {
+    "name": "numeric-boundaries",
+    "input_json": "{\"numbers\":[1,1.0,-0.0,1e-7,1e-6,1e-5,1e20,1e21,5e-324,333333333.33333329]}",
+    "canonical": "{\"numbers\":[1,1,0,1e-7,0.000001,0.00001,100000000000000000000,1e+21,5e-324,333333333.3333333]}",
+    "hash": "sha256:15c2a8bf0134d499739fcd1e9e74b499e836a48e40a69b172b9022e9d5f0cece"
+  },
+  {
+    "name": "nested-key-order",
+    "input_json": "{\"z\":[{\"2\":2,\"10\":10}],\"a\":{\"weight\":1e-7,\"zero\":-0.0}}",
+    "canonical": "{\"a\":{\"weight\":1e-7,\"zero\":0},\"z\":[{\"10\":10,\"2\":2}]}",
+    "hash": "sha256:13cee7eba6cefbdb5ef0f08af3559c51189a0f318ae75b0234da8e0327447d35"
+  }
+]
