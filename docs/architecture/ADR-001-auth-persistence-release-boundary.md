@@ -158,6 +158,9 @@ sequenceDiagram
 1. **Chuẩn hóa Hashing (Deterministic Content Hashing):**
    - Nội dung cấu hình draft được chuẩn hóa theo RFC 8785 (JSON Canonicalization Scheme), như quy ước đã ghi trong docs `user-api.yaml`, trước khi hash bằng `SHA-256`.
    - Mã băm được đặt tên: `sha256:<hash_hex>`.
+   - Hai plane dùng cùng quy tắc JCS: số theo ECMAScript (`1.0` thành `1`, `-0` thành `0`), key theo UTF-16 code units và output UTF-8. Python dùng `jcs==0.2.1`; không dùng `json.dumps(sort_keys=True)` để tính hash.
+   - Fixtures dùng chung tại `contracts/fixtures/experience-content-hash.json` được kiểm tra bởi cả Studio API và Python validator.
+   - Hash từ serializer cũ có thể khác với số thực hoặc key ngoài BMP. Draft/report thử nghiệm đã tạo bằng serializer cũ cần tính hash và chạy validation/evaluation lại; không sửa hash/content của immutable release đã tồn tại.
 2. **Tính bất biến của Release:**
    - Một khi bản ghi Release đã được tạo trong bảng `experience_releases`, **không được phép UPDATE hoặc DELETE**.
    - Nếu muốn sửa lỗi nội dung: Admin phải sửa trên Draft $\rightarrow$ sinh Hash mới $\rightarrow$ re-validate $\rightarrow$ publish một Release ID mới.

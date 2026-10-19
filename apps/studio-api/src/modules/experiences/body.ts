@@ -118,11 +118,33 @@ export async function readExperienceJsonBody(
   if (contentLength !== null) {
     const parsedLength = Number.parseInt(contentLength, 10);
     if (Number.isFinite(parsedLength) && parsedLength > maxBytes) {
+      void req.body?.cancel().catch(() => {});
       throw new ProductError(413, 'PAYLOAD_TOO_LARGE', `Payload exceeds size limit of ${maxBytes} bytes`);
     }
   }
 
-  const text = await req.text();
+  let text = '';
+  if (req.body) {
+    const reader = req.body.getReader();
+    const decoder = new TextDecoder();
+    let bytesRead = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytesRead += value.byteLength;
+        if (bytesRead > maxBytes) {
+          // Stop consuming immediately; a failing cancellation must not hide the 413.
+          void reader.cancel().catch(() => {});
+          throw new ProductError(413, 'PAYLOAD_TOO_LARGE', `Payload exceeds size limit of ${maxBytes} bytes`);
+        }
+        text += decoder.decode(value, { stream: true });
+      }
+      text += decoder.decode();
+    } finally {
+      reader.releaseLock();
+    }
+  }
   const empty = !text.trim();
 
   if (empty && opts.optional) {
@@ -135,10 +157,6 @@ export async function readExperienceJsonBody(
 
   if (empty) {
     throw new ProductError(400, 'INVALID_REQUEST', 'Request body is required');
-  }
-
-  if (Buffer.byteLength(text, 'utf8') > maxBytes) {
-    throw new ProductError(413, 'PAYLOAD_TOO_LARGE', `Payload exceeds size limit of ${maxBytes} bytes`);
   }
 
   return parseExperienceJson(text);

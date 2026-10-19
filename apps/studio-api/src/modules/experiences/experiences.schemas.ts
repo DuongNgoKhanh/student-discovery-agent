@@ -25,7 +25,7 @@ export const createExperienceSchema = z.object({
   description: z.string().default(''),
   activity_type: activityTypeSchema,
   idempotency_key: idempotencyKeySchema,
-});
+}).strict();
 export type CreateExperienceInput = z.infer<typeof createExperienceSchema>;
 
 export const patchExperienceSchema = z
@@ -35,6 +35,7 @@ export const patchExperienceSchema = z
     name: z.string().min(1).optional(),
     description: z.string().optional(),
   })
+  .strict()
   .refine((data) => data.name !== undefined || data.description !== undefined, {
     message: 'At least one of name or description must be provided',
     path: ['name'],
@@ -45,7 +46,7 @@ export const saveDraftSchema = z.object({
   expected_revision: revisionSchema,
   idempotency_key: idempotencyKeySchema,
   content: z.record(z.unknown()),
-});
+}).strict();
 export type SaveDraftInput = z.infer<typeof saveDraftSchema>;
 
 export const publishReleaseSchema = z.object({
@@ -55,7 +56,7 @@ export const publishReleaseSchema = z.object({
   evaluation_id: resourceIdSchema,
   approval_refs: z.array(resourceIdSchema),
   idempotency_key: idempotencyKeySchema,
-});
+}).strict();
 export type PublishReleaseInput = z.infer<typeof publishReleaseSchema>;
 
 export const paginationQuerySchema = z.object({

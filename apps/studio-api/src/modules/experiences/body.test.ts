@@ -143,6 +143,61 @@ describe('parseExperienceJson', () => {
 });
 
 describe('readExperienceJsonBody', () => {
+  it.each([undefined, '1'])(
+    'cancels an oversized stream before consuming the remaining chunks (Content-Length: %s)',
+    async (contentLength) => {
+      let chunksRead = 0;
+      let cancelled = false;
+      const stream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (chunksRead === 100) { controller.close(); return; }
+          chunksRead++;
+          controller.enqueue(new TextEncoder().encode('x'.repeat(8)));
+        },
+        cancel() { cancelled = true; },
+      }, { highWaterMark: 0 });
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      if (contentLength !== undefined) headers['content-length'] = contentLength;
+      const init: RequestInit & { duplex: string } = { method: 'PUT', headers, body: stream, duplex: 'half' };
+      const request = new Request('http://localhost/draft', init);
+
+      await expect(readExperienceJsonBody(request, { maxBytes: 10 })).rejects.toMatchObject({
+        status: 413, code: 'PAYLOAD_TOO_LARGE',
+      });
+      expect(chunksRead).toBe(2);
+      expect(cancelled).toBe(true);
+      expect(stream.locked).toBe(false);
+    },
+  );
+
+  it.each([false, true])('rejects oversized whitespace before empty-body handling (optional: %s)', async (optional) => {
+    await expect(readExperienceJsonBody(req(' '.repeat(11), 'application/json'), {
+      maxBytes: 10, optional,
+    })).rejects.toMatchObject({ status: 413, code: 'PAYLOAD_TOO_LARGE' });
+  });
+
+  it('counts raw UTF-8 bytes and decodes characters split across chunks', async () => {
+    const payload = { word: 'ế' };
+    const bytes = new TextEncoder().encode(JSON.stringify(payload));
+    function request() {
+      let index = 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (index === bytes.length) { controller.close(); return; }
+          controller.enqueue(bytes.slice(index, ++index));
+        },
+      });
+      const init: RequestInit & { duplex: string } = {
+        method: 'PUT', headers: { 'content-type': 'application/json' }, body, duplex: 'half',
+      };
+      return new Request('http://localhost/draft', init);
+    }
+    await expect(readExperienceJsonBody(request(), { maxBytes: bytes.length })).resolves.toEqual(payload);
+    await expect(readExperienceJsonBody(request(), { maxBytes: bytes.length - 1 })).rejects.toMatchObject({
+      status: 413, code: 'PAYLOAD_TOO_LARGE',
+    });
+  });
+
   it.each([
     'application/json',
     'application/json; charset=utf-8',

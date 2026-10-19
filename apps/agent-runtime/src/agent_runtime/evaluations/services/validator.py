@@ -13,7 +13,6 @@ Implements deterministic validation for ExperienceDefinitionDocument:
 """
 
 import hashlib
-import json
 import math
 import re
 import uuid
@@ -21,6 +20,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
+import jcs
 from pydantic import BaseModel
 
 from agent_runtime.evaluations.schemas.validation import (
@@ -94,7 +94,8 @@ def is_strict_int(val: Any) -> bool:
 def calculate_content_hash(doc_input: Any) -> str:
     """Calculate deterministic canonical SHA256 content hash.
 
-    Follows RFC 8785 principles: sorted keys, no whitespace separators, allow_nan=False.
+    Uses RFC 8785 JCS: ECMAScript numbers and UTF-16 code-unit key order,
+    matching Studio API even for integral floats, exponents and astral keys.
     Guarantees identical hash whether input is a dict or a Pydantic model.
     """
     if isinstance(doc_input, BaseModel):
@@ -104,14 +105,7 @@ def calculate_content_hash(doc_input: Any) -> str:
     else:
         doc = {"raw": str(doc_input)}
 
-    canonical_json = json.dumps(
-        doc,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    )
-    digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(jcs.canonicalize(doc)).hexdigest()
     return f"sha256:{digest}"
 
 

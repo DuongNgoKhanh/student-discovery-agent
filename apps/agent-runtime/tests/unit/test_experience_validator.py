@@ -8,6 +8,8 @@ Verifies:
 """
 
 import copy
+import json
+from pathlib import Path
 
 import pytest
 
@@ -71,6 +73,22 @@ class TestExperienceValidator:
         bad_doc = {"rating": float("nan")}
         with pytest.raises(ValueError):
             calculate_content_hash(bad_doc)
+
+    @pytest.mark.parametrize(
+        "fixture",
+        json.loads(
+            (Path(__file__).resolve().parents[4] / "contracts/fixtures/experience-content-hash.json")
+            .read_text(encoding="utf-8")
+        ),
+        ids=lambda fixture: fixture["name"],
+    )
+    def test_content_hash_shared_jcs_fixtures(self, fixture):
+        assert calculate_content_hash(json.loads(fixture["input_json"])) == fixture["hash"]
+        # Studio may send canonical numeric tokens as integers instead of exponent floats.
+        assert calculate_content_hash(json.loads(fixture["canonical"])) == fixture["hash"]
+
+    def test_content_hash_ignores_python_integer_float_distinction(self):
+        assert calculate_content_hash({"score": 1}) == calculate_content_hash({"score": 1.0})
 
     def test_invalid_schema_version(self, validator, valid_v2_doc):
         doc = copy.deepcopy(valid_v2_doc)

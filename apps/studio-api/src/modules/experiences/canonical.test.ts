@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, computeContentHash } from './canonical';
+import hashFixtures from '../../../../../contracts/fixtures/experience-content-hash.json';
 
 describe('canonicalJson & computeContentHash', () => {
+  it.each(hashFixtures)('matches shared JCS fixture $name', (fixture) => {
+    const data: unknown = JSON.parse(fixture.input_json);
+    expect(canonicalJson(data)).toBe(fixture.canonical);
+    expect(computeContentHash(data)).toBe(fixture.hash);
+  });
+
+  it.each(['\ud800', '\udc00'])('rejects lone surrogates in values and keys', (invalid) => {
+    expect(() => canonicalJson({ value: invalid })).toThrow(RangeError);
+    expect(() => canonicalJson({ [invalid]: 'value' })).toThrow(RangeError);
+  });
   describe('canonicalJson format & determinism', () => {
     it('serializes primitives consistently', () => {
       expect(canonicalJson('hello')).toBe('"hello"');
@@ -11,7 +22,7 @@ describe('canonicalJson & computeContentHash', () => {
       expect(canonicalJson(null)).toBe('null');
     });
 
-    it('sorts object keys lexicographically by Unicode code point sequence', () => {
+    it('sorts object keys lexicographically', () => {
       const input = { z: 1, a: 2, m: 3 };
       expect(canonicalJson(input)).toBe('{"a":2,"m":3,"z":1}');
     });
@@ -23,9 +34,9 @@ describe('canonicalJson & computeContentHash', () => {
 
     it('sorts astral-plane characters correctly matching RFC 8785 and Python', () => {
       // In UTF-16, 𐐷 is surrogate pair (0xD801 0xDC37), \ue000 is 0xE000.
-      // Under code point / UTF-8 sorting, \ue000 (0xEE 0x80 0x80) comes BEFORE 𐐷 (0xF0 0x90 0x90 0xB7).
+      // RFC 8785 orders UTF-16 code units, so the surrogate pair sorts before U+E000.
       const input = { '𐐷': 1, '\ue000': 2, b: 3, a: 4 };
-      expect(canonicalJson(input)).toBe('{"a":4,"b":3,"\ue000":2,"𐐷":1}');
+      expect(canonicalJson(input)).toBe('{"a":4,"b":3,"𐐷":1,"\ue000":2}');
     });
   });
 
@@ -78,7 +89,7 @@ describe('canonicalJson & computeContentHash', () => {
         '\ue000': 'special',
         tiếng_việt: 'Chào bạn',
       });
-      expect(hash).toBe('sha256:dc378fb4b4c7215aed7faa754e8e3edd5532d654aa180845efc03b2357973011');
+      expect(hash).toBe('sha256:e36cea3c709c870ec55fae7ff37b76a7c7488f2da147d8ed1b3182cdb919b4b6');
     });
 
     it('matches Python hash for fractional float values', () => {

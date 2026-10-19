@@ -1,19 +1,13 @@
 import { createHash } from 'node:crypto';
 
 /**
- * Compare two string keys by Unicode code point sequence (equivalent to UTF-8 byte order),
- * complying with RFC 8785 (JSON Canonicalization Scheme - JCS) Section 3.2.3 and matching
- * Python's `json.dumps(sort_keys=True)`.
- */
-function compareKeys(a: string, b: string): number {
-  return Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
-}
-
-/**
- * Serializes input data to deterministic canonical JSON according to RFC 8785 principles.
- * Rejects non-finite numbers (NaN, Infinity, -Infinity) by throwing a RangeError.
+ * RFC 8785: ECMAScript number serialization and UTF-16 code-unit key order.
+ * Matches Python's JCS serializer. Rejects non-finite numbers and lone surrogates.
  */
 export function canonicalJson(data: unknown): string {
+  if (typeof data === 'string' && /[\uD800-\uDFFF]/u.test(data)) {
+    throw new RangeError('lone surrogate');
+  }
   if (typeof data === 'number') {
     if (!Number.isFinite(data)) {
       throw new RangeError('non-finite number');
@@ -32,8 +26,8 @@ export function canonicalJson(data: unknown): string {
   const obj = data as Record<string, unknown>;
   const pairs = Object.keys(obj)
     .filter((k) => obj[k] !== undefined)
-    .sort(compareKeys)
-    .map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`);
+    .sort()
+    .map((k) => `${canonicalJson(k)}:${canonicalJson(obj[k])}`);
 
   return '{' + pairs.join(',') + '}';
 }

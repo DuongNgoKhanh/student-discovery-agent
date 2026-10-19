@@ -12,6 +12,42 @@ import {
 } from '@/modules/experiences/experiences.schemas';
 
 describe('experiences.schemas', () => {
+  it.each([
+    {
+      name: 'create',
+      schema: createExperienceSchema,
+      input: { name: 'Experience', activity_type: 'personality_assessment', idempotency_key: 'k1' },
+    },
+    {
+      name: 'patch',
+      schema: patchExperienceSchema,
+      input: { expected_revision: 0, name: 'Updated', idempotency_key: 'k1' },
+    },
+    {
+      name: 'save draft',
+      schema: saveDraftSchema,
+      input: { expected_revision: 0, content: { custom_field: true }, idempotency_key: 'k1' },
+    },
+    {
+      name: 'publish',
+      schema: publishReleaseSchema,
+      input: {
+        expected_revision: 0,
+        content_hash: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        validation_id: 'val-1', evaluation_id: 'eval-1', approval_refs: [], idempotency_key: 'k1',
+      },
+    },
+  ])('rejects unknown fields in $name request envelopes', ({ schema, input }) => {
+    expect(schema.safeParse(input).success).toBe(true);
+    const result = schema.safeParse({ ...input, unexpected: true });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(expect.objectContaining({
+        code: 'unrecognized_keys', keys: ['unexpected'],
+      }));
+    }
+  });
+
   describe('createExperienceSchema', () => {
     it('accepts valid input', () => {
       const parsed = createExperienceSchema.parse({
@@ -82,9 +118,9 @@ describe('experiences.schemas', () => {
       const parsed = saveDraftSchema.parse({
         expected_revision: 0,
         idempotency_key: 'save-key-1',
-        content: { questions: [] },
+        content: { questions: [], custom_field: { enabled: true } },
       });
-      expect(parsed.content).toEqual({ questions: [] });
+      expect(parsed.content).toEqual({ questions: [], custom_field: { enabled: true } });
     });
   });
 
