@@ -6,7 +6,7 @@ on:
   push:
     branches: [main]
   schedule:
-    # Mondays 08:00 Asia/Ho_Chi_Minh, before the weekly Dependabot run.
+    # Mondays 08:00 Asia/Ho_Chi_Minh.
     - cron: '0 1 * * 1'
   workflow_dispatch:
 
