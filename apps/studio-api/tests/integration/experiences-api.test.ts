@@ -444,14 +444,26 @@ describe('Experiences and Releases API (A-01 integration)', () => {
 
     // Direct SQL UPDATE on product.experience_releases must fail via trigger
     const db = getProductDatabase();
-    await expect(
-      db.execute(`UPDATE product.experience_releases SET definition_version = '9.9.9' WHERE id = '${releaseId}'`),
-    ).rejects.toThrow(/experience_releases is immutable/i);
+    let updateError: unknown;
+    try {
+      await db.execute(`UPDATE product.experience_releases SET definition_version = '9.9.9' WHERE id = '${releaseId}'`);
+    } catch (err) {
+      updateError = err;
+    }
+    expect(updateError).toBeDefined();
+    const updateErrorMsg = `${(updateError as Error).message} ${String((updateError as { cause?: Error }).cause?.message ?? '')}`;
+    expect(updateErrorMsg).toMatch(/experience_releases is immutable/i);
 
     // Direct SQL DELETE on product.experience_releases must fail via trigger
-    await expect(
-      db.execute(`DELETE FROM product.experience_releases WHERE id = '${releaseId}'`),
-    ).rejects.toThrow(/experience_releases is immutable/i);
+    let deleteError: unknown;
+    try {
+      await db.execute(`DELETE FROM product.experience_releases WHERE id = '${releaseId}'`);
+    } catch (err) {
+      deleteError = err;
+    }
+    expect(deleteError).toBeDefined();
+    const deleteErrorMsg = `${(deleteError as Error).message} ${String((deleteError as { cause?: Error }).cause?.message ?? '')}`;
+    expect(deleteErrorMsg).toMatch(/experience_releases is immutable/i);
   });
 
   it('8. PATCH metadata: updates name/description with expected_revision; stale revision -> 409', async () => {
