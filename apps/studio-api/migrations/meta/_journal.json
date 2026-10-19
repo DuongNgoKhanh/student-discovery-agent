@@ -8,6 +8,13 @@
       "when": 1792121145681,
       "tag": "0001_product_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792121145682,
+      "tag": "0002_experience_drafts_and_releases",
+      "breakpoints": true
     }
   ]
 }
