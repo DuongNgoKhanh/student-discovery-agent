@@ -83,7 +83,7 @@ export const experienceDefinitionStructuralSchema = z.object({
   templates: z.record(z.string().min(1)),
   evaluation_cases: z.array(z.unknown()),
   approval_refs: z.array(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/)),
-});
+}).strict();
 export type ExperienceDefinitionStructural = z.infer<typeof experienceDefinitionStructuralSchema>;
 
 export interface DraftRefDTO {

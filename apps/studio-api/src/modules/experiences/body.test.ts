@@ -38,11 +38,11 @@ describe('assertNoDuplicateKeys', () => {
     ).not.toThrow();
   });
 
-  it('rejects duplicate keys at root level with 400 INVALID_REQUEST', () => {
+  it('rejects duplicate keys at root level with 400 VAL_INVALID_REQUEST', () => {
     expect(() => assertNoDuplicateKeys('{"a": 1, "a": 2}')).toThrowError(
       expect.objectContaining({
         status: 400,
-        code: 'INVALID_REQUEST',
+        code: 'VAL_INVALID_REQUEST',
         message: 'Duplicate key "a"',
       }),
     );
@@ -54,7 +54,7 @@ describe('assertNoDuplicateKeys', () => {
     ).toThrowError(
       expect.objectContaining({
         status: 400,
-        code: 'INVALID_REQUEST',
+        code: 'VAL_INVALID_REQUEST',
         message: 'Duplicate key "dup"',
       }),
     );
@@ -66,7 +66,7 @@ describe('assertNoDuplicateKeys', () => {
     ).toThrowError(
       expect.objectContaining({
         status: 400,
-        code: 'INVALID_REQUEST',
+        code: 'VAL_INVALID_REQUEST',
         message: 'Duplicate key "id"',
       }),
     );
@@ -76,7 +76,7 @@ describe('assertNoDuplicateKeys', () => {
     expect(() => assertNoDuplicateKeys('{"\\u0061": 1, "a": 2}')).toThrowError(
       expect.objectContaining({
         status: 400,
-        code: 'INVALID_REQUEST',
+        code: 'VAL_INVALID_REQUEST',
         message: 'Duplicate key "a"',
       }),
     );
@@ -91,52 +91,52 @@ describe('parseExperienceJson', () => {
     });
   });
 
-  it('rejects malformed JSON syntax with 400 INVALID_REQUEST', () => {
+  it('rejects malformed JSON syntax with 400 VAL_INVALID_REQUEST', () => {
     expect(() => parseExperienceJson('{')).toThrowError(
       expect.objectContaining({
         status: 400,
-        code: 'INVALID_REQUEST',
+        code: 'VAL_INVALID_REQUEST',
         message: 'Malformed JSON body',
       }),
     );
     expect(() => parseExperienceJson('{"a": 1,}')).toThrowError(
       expect.objectContaining({
         status: 400,
-        code: 'INVALID_REQUEST',
+        code: 'VAL_INVALID_REQUEST',
         message: 'Malformed JSON body',
       }),
     );
   });
 
-  it('rejects non-finite numbers (Infinity / -Infinity / 1e1000) with 400 INVALID_REQUEST', () => {
+  it('rejects non-finite numbers (Infinity / -Infinity / 1e1000) with 400 VAL_INVALID_REQUEST', () => {
     expect(() => parseExperienceJson('{"val": 1e1000}')).toThrowError(
       expect.objectContaining({
         status: 400,
-        code: 'INVALID_REQUEST',
+        code: 'VAL_INVALID_REQUEST',
         message: 'Non-finite numbers are not allowed',
       }),
     );
     expect(() => parseExperienceJson('{"val": -1e1000}')).toThrowError(
       expect.objectContaining({
         status: 400,
-        code: 'INVALID_REQUEST',
+        code: 'VAL_INVALID_REQUEST',
         message: 'Non-finite numbers are not allowed',
       }),
     );
     expect(() => parseExperienceJson('[1, 1e1000]')).toThrowError(
       expect.objectContaining({
         status: 400,
-        code: 'INVALID_REQUEST',
+        code: 'VAL_INVALID_REQUEST',
         message: 'Non-finite numbers are not allowed',
       }),
     );
   });
 
-  it('rejects duplicate keys via assertNoDuplicateKeys with 400 INVALID_REQUEST', () => {
+  it('rejects duplicate keys via assertNoDuplicateKeys with 400 VAL_INVALID_REQUEST', () => {
     expect(() => parseExperienceJson('{"foo": "a", "foo": "b"}')).toThrowError(
       expect.objectContaining({
         status: 400,
-        code: 'INVALID_REQUEST',
+        code: 'VAL_INVALID_REQUEST',
       }),
     );
   });
@@ -162,7 +162,7 @@ describe('readExperienceJsonBody', () => {
       const request = new Request('http://localhost/draft', init);
 
       await expect(readExperienceJsonBody(request, { maxBytes: 10 })).rejects.toMatchObject({
-        status: 413, code: 'PAYLOAD_TOO_LARGE',
+        status: 413, code: 'VAL_PAYLOAD_TOO_LARGE',
       });
       expect(chunksRead).toBe(2);
       expect(cancelled).toBe(true);
@@ -173,7 +173,7 @@ describe('readExperienceJsonBody', () => {
   it.each([false, true])('rejects oversized whitespace before empty-body handling (optional: %s)', async (optional) => {
     await expect(readExperienceJsonBody(req(' '.repeat(11), 'application/json'), {
       maxBytes: 10, optional,
-    })).rejects.toMatchObject({ status: 413, code: 'PAYLOAD_TOO_LARGE' });
+    })).rejects.toMatchObject({ status: 413, code: 'VAL_PAYLOAD_TOO_LARGE' });
   });
 
   it('counts raw UTF-8 bytes and decodes characters split across chunks', async () => {
@@ -194,7 +194,7 @@ describe('readExperienceJsonBody', () => {
     }
     await expect(readExperienceJsonBody(request(), { maxBytes: bytes.length })).resolves.toEqual(payload);
     await expect(readExperienceJsonBody(request(), { maxBytes: bytes.length - 1 })).rejects.toMatchObject({
-      status: 413, code: 'PAYLOAD_TOO_LARGE',
+      status: 413, code: 'VAL_PAYLOAD_TOO_LARGE',
     });
   });
 
@@ -230,26 +230,26 @@ describe('readExperienceJsonBody', () => {
     ).rejects.toMatchObject({ status: 415 });
   });
 
-  it('rejects empty body when required with 400 INVALID_REQUEST', async () => {
+  it('rejects empty body when required with 400 VAL_INVALID_REQUEST', async () => {
     await expect(readExperienceJsonBody(req('', 'application/json'))).rejects.toMatchObject({
       status: 400,
-      code: 'INVALID_REQUEST',
+      code: 'VAL_INVALID_REQUEST',
       message: 'Request body is required',
     });
     await expect(readExperienceJsonBody(req('   ', 'application/json'))).rejects.toMatchObject({
       status: 400,
-      code: 'INVALID_REQUEST',
+      code: 'VAL_INVALID_REQUEST',
       message: 'Request body is required',
     });
   });
 
-  it('rejects payloads exceeding custom maxBytes with 413 PAYLOAD_TOO_LARGE', async () => {
+  it('rejects payloads exceeding custom maxBytes with 413 VAL_PAYLOAD_TOO_LARGE', async () => {
     const payload = JSON.stringify({ data: 'hello' }); // ~17 bytes
     await expect(
       readExperienceJsonBody(req(payload, 'application/json'), { maxBytes: 10 }),
     ).rejects.toMatchObject({
       status: 413,
-      code: 'PAYLOAD_TOO_LARGE',
+      code: 'VAL_PAYLOAD_TOO_LARGE',
     });
   });
 
@@ -261,7 +261,7 @@ describe('readExperienceJsonBody', () => {
       }),
     ).rejects.toMatchObject({
       status: 413,
-      code: 'PAYLOAD_TOO_LARGE',
+      code: 'VAL_PAYLOAD_TOO_LARGE',
     });
   });
 
@@ -270,5 +270,44 @@ describe('readExperienceJsonBody', () => {
     await expect(
       readExperienceJsonBody(req(JSON.stringify(data), 'application/json')),
     ).resolves.toEqual(data);
+  });
+});
+
+describe('review fixes: input that must be rejected with 400', () => {
+  async function expectInvalid(request: Request) {
+    await expect(readExperienceJsonBody(request)).rejects.toMatchObject({
+      status: 400,
+      code: 'VAL_INVALID_REQUEST',
+    });
+  }
+
+  it('rejects bytes that are not valid UTF-8 instead of replacing them', async () => {
+    const bytes = new Uint8Array([0x7b, 0x22, 0x61, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d]); // {"a":"<0xff>"}
+    await expectInvalid(
+      new Request('http://localhost/x', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: bytes,
+      }),
+    );
+  });
+
+  it('rejects a lone surrogate in a string value', async () => {
+    // JSON escape text, not a raw surrogate (Request would re-encode that as U+FFFD).
+    await expectInvalid(req('{"a":"\\ud800"}', 'application/json'));
+  });
+
+  it('rejects a lone surrogate in a key', async () => {
+    await expectInvalid(req('{"\\udc00":1}', 'application/json'));
+  });
+
+  it('rejects integers outside the safe range, which would hash differently in Python', async () => {
+    await expectInvalid(req('{"a":9007199254740993}', 'application/json'));
+  });
+
+  it('still accepts valid surrogate pairs and safe integers', async () => {
+    await expect(
+      readExperienceJsonBody(req('{"a":"\\ud83d\\ude00","n":9007199254740991}', 'application/json')),
+    ).resolves.toEqual({ a: '😀', n: 9007199254740991 });
   });
 });

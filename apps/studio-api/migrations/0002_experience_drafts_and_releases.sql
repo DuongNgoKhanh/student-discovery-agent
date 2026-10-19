@@ -8,7 +8,7 @@ BEGIN
     name TEXT NOT NULL,
     description TEXT DEFAULT '' NOT NULL,
     activity_type TEXT DEFAULT 'personality_assessment' NOT NULL,
-    revision INTEGER DEFAULT 0 NOT NULL,
+    revision BIGINT DEFAULT 0 NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
     PRIMARY KEY (id)
@@ -17,7 +17,7 @@ BEGIN
   CREATE TABLE IF NOT EXISTS product.experience_drafts (
     draft_id TEXT NOT NULL,
     experience_id TEXT NOT NULL,
-    revision INTEGER DEFAULT 0 NOT NULL,
+    revision BIGINT DEFAULT 0 NOT NULL,
     content_hash TEXT NOT NULL,
     content JSONB DEFAULT '{}'::jsonb NOT NULL,
     updated_by TEXT DEFAULT 'admin' NOT NULL,
@@ -62,7 +62,7 @@ BEGIN
   CREATE OR REPLACE FUNCTION product.prevent_experience_release_mutation()
   RETURNS trigger AS $fn$
   BEGIN
-    RAISE EXCEPTION 'experience_releases is immutable: UPDATE and DELETE are prohibited'
+    RAISE EXCEPTION 'experience_releases is immutable: UPDATE, DELETE and TRUNCATE are prohibited'
       USING ERRCODE = 'restrict_violation';
   END;
   $fn$ LANGUAGE plpgsql;
@@ -71,5 +71,11 @@ BEGIN
   CREATE TRIGGER experience_releases_immutable_trigger
   BEFORE UPDATE OR DELETE ON product.experience_releases
   FOR EACH ROW EXECUTE FUNCTION product.prevent_experience_release_mutation();
+
+  -- Row triggers do not fire on TRUNCATE, so it needs its own statement-level trigger.
+  DROP TRIGGER IF EXISTS experience_releases_no_truncate_trigger ON product.experience_releases;
+  CREATE TRIGGER experience_releases_no_truncate_trigger
+  BEFORE TRUNCATE ON product.experience_releases
+  FOR EACH STATEMENT EXECUTE FUNCTION product.prevent_experience_release_mutation();
 END
 $$;

@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, primaryKey, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { bigint, boolean, integer, jsonb, primaryKey, text, timestamp, unique } from 'drizzle-orm/pg-core';
 import { productSchema } from '@/infrastructure/db/product-schema';
 
 /**
@@ -9,7 +9,7 @@ export const experiences = productSchema.table('experiences', {
   name: text('name').notNull(),
   description: text('description').notNull().default(''),
   activity_type: text('activity_type').notNull().default('personality_assessment'),
-  revision: integer('revision').notNull().default(0),
+  revision: bigint('revision', { mode: 'number' }).notNull().default(0),
   created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 });
@@ -24,7 +24,7 @@ export const experienceDrafts = productSchema.table('experience_drafts', {
     .notNull()
     .unique()
     .references(() => experiences.id, { onDelete: 'cascade' }),
-  revision: integer('revision').notNull().default(0),
+  revision: bigint('revision', { mode: 'number' }).notNull().default(0),
   content_hash: text('content_hash').notNull(),
   content: jsonb('content').$type<Record<string, unknown>>().notNull().default({}),
   updated_by: text('updated_by').notNull().default('admin'),

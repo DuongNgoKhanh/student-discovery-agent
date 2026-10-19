@@ -173,6 +173,10 @@ describe('experiences.schemas', () => {
       expect(() => experienceDefinitionStructuralSchema.parse(validDef)).not.toThrow();
     });
 
+    it('rejects unknown top-level fields (contract: additionalProperties false)', () => {
+      expect(() => experienceDefinitionStructuralSchema.parse({ ...validDef, extra_field: 1 })).toThrow();
+    });
+
     it('rejects definition with fewer than 6 questions', () => {
       expect(() =>
         experienceDefinitionStructuralSchema.parse({ ...validDef, questions: [1, 2, 3] }),

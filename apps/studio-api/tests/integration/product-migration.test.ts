@@ -279,6 +279,21 @@ describe('Product migration', () => {
       await expect(
         c.query(`DELETE FROM product.experience_releases WHERE id = 'rel-1'`),
       ).rejects.toThrow(/experience_releases is immutable/i);
+
+      await expect(c.query(`TRUNCATE product.experience_releases`)).rejects.toThrow(
+        /experience_releases is immutable/i,
+      );
+      expect((await c.query(`SELECT count(*)::int AS n FROM product.experience_releases`)).rows[0].n).toBe(1);
+
+      // Revisions span the full contract range (0..2^53-1), so the columns must be bigint.
+      const types = await c.query(
+        `SELECT table_name, data_type FROM information_schema.columns
+         WHERE table_schema = 'product' AND column_name = 'revision' ORDER BY table_name`,
+      );
+      expect(types.rows).toEqual([
+        { table_name: 'experience_drafts', data_type: 'bigint' },
+        { table_name: 'experiences', data_type: 'bigint' },
+      ]);
     });
   });
 });
