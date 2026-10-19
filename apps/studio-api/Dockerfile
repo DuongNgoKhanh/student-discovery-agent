@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:22-alpine AS base
+FROM node:26-alpine AS base
 ARG http_proxy
 ARG https_proxy
 RUN npm i -g pnpm@9.15.9
@@ -26,7 +26,7 @@ CMD ["pnpm", "db:migrate"]
 FROM build AS production-deps
 RUN pnpm prune --prod
 
-FROM node:22-alpine AS runner
+FROM node:26-alpine AS runner
 ENV NODE_ENV=production PORT=3001
 WORKDIR /app
 COPY --from=production-deps --chown=node:node /repo/apps/studio-api/node_modules ./node_modules
