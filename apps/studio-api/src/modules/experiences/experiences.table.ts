@@ -76,3 +76,4 @@ export const idempotencyRecords = productSchema.table(
     primaryKey({ columns: [table.scope, table.key] }),
   ],
 );
+

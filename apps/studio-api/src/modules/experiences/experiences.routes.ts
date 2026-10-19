@@ -107,3 +107,4 @@ export function registerExperiencesRoutes(app: Hono): void {
   app.get('/api/v1/admin/experiences/:id/releases', honoHandler(handleListExperienceReleases));
   app.get('/api/v1/admin/experience-releases/:release_id', honoHandler(handleReadExperienceRelease));
 }
+

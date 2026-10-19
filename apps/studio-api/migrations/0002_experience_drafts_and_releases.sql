@@ -73,3 +73,4 @@ BEGIN
   FOR EACH ROW EXECUTE FUNCTION product.prevent_experience_release_mutation();
 END
 $$;
+
