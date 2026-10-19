@@ -68,7 +68,11 @@ describe('Product migration', () => {
     await withClient(url, async (c) => {
       expect(await regclass(c, 'public.users')).toBeNull();
       expect(await regclass(c, 'public.versions')).toBeNull();
-      expect(await journalCount(c)).toBe(1);
+      expect(await journalCount(c)).toBe(2);
+      expect(await regclass(c, 'product.experiences')).toBe('product.experiences');
+      expect(await regclass(c, 'product.experience_drafts')).toBe('product.experience_drafts');
+      expect(await regclass(c, 'product.experience_releases')).toBe('product.experience_releases');
+      expect(await regclass(c, 'product.idempotency_records')).toBe('product.idempotency_records');
       const execution = await c.query(`SELECT 1 FROM pg_namespace WHERE nspname = 'execution'`);
       expect(execution.rowCount).toBe(0);
 
@@ -203,7 +207,7 @@ describe('Product migration', () => {
 
     let snapshot: { users: string[]; versions: string[]; seq: unknown } | undefined;
     await withClient(url, async (c) => {
-      expect(await journalCount(c)).toBe(1);
+      expect(await journalCount(c)).toBe(2);
       snapshot = {
         users: await dumpRows(c, 'product.users'),
         versions: await dumpRows(c, 'product.versions'),
@@ -215,7 +219,7 @@ describe('Product migration', () => {
     await migrateProduct(url);
 
     await withClient(url, async (c) => {
-      expect(await journalCount(c)).toBe(1);
+      expect(await journalCount(c)).toBe(2);
       expect({
         users: await dumpRows(c, 'product.users'),
         versions: await dumpRows(c, 'product.versions'),
@@ -257,4 +261,24 @@ describe('Product migration', () => {
       });
     },
   );
+
+  it('enforces immutability trigger on product.experience_releases', async () => {
+    const url = await freshDb();
+    await migrateProduct(url);
+    await withClient(url, async (c) => {
+      await c.query(`INSERT INTO product.experiences (id, name) VALUES ('exp-1', 'Test Experience')`);
+      await c.query(
+        `INSERT INTO product.experience_releases (id, experience_id, definition_version, definition_hash, definition_schema_version, engine_version, validation_id, evaluation_id, content, published_by)
+         VALUES ('rel-1', 'exp-1', '1.0.0', 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', '1.0', '1.0', 'val-1', 'eval-1', '{}'::jsonb, 'admin')`,
+      );
+
+      await expect(
+        c.query(`UPDATE product.experience_releases SET definition_version = '1.0.1' WHERE id = 'rel-1'`),
+      ).rejects.toThrow(/experience_releases is immutable/i);
+
+      await expect(
+        c.query(`DELETE FROM product.experience_releases WHERE id = 'rel-1'`),
+      ).rejects.toThrow(/experience_releases is immutable/i);
+    });
+  });
 });
