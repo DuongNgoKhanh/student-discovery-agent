@@ -1,6 +1,6 @@
 # Studio API
 
-Backend TypeScript độc lập dùng Hono/Node, cổng mặc định 3001. Chứa Product auth/users/admin/versions, storage và migration; Studio/Agent domain mới chưa triển khai. Không phụ thuộc Next/React hoặc source của app khác.
+Backend TypeScript độc lập dùng Hono/Node, cổng mặc định 3001. Chứa Product auth/users/admin/versions/experiences, storage và migration. Không phụ thuộc Next/React hoặc source của app khác.
 
 ```bash
 pnpm install
@@ -18,6 +18,11 @@ pnpm exec tsx --env-file=.env src/infrastructure/db/migrate.ts
 
 `createApp()` trong `src/app.ts` dựng router không listen hoặc kết nối DB. `src/main.ts` là Node entrypoint, đóng DB pool khi shutdown. `/api/health` là liveness không cần Product env. `/api/v1/auth/session` trả metadata đã xác minh `{userId,isAdmin}`, invalid/expired access trả 401, không set token/cookie mới.
 
-Source: `src/modules/{auth,users,versions}` giữ service/repository/controller; `src/infrastructure/{db,storage}` giữ adapter; `src/http` giữ envelope/errors/handler. Admin users thuộc domain users. `migrations/` giữ nguyên SQL/journal; build/start không tự migrate.
+### Experience Configuration & Immutable Releases (Task A-01, Module M-CFG)
+- **Experiences & Drafts**: `GET|POST /api/v1/admin/experiences`, `GET|PATCH /api/v1/admin/experiences/:id`, `GET|PUT /api/v1/admin/experiences/:id/draft`. Hỗ trợ lưu draft chưa hoàn chỉnh (incomplete JSON), từ chối malformed JSON / duplicate keys / non-finite numbers (400 `INVALID_REQUEST`), kiểm soát xung đột ghi đồng thời bằng optimistic locking (`expected_revision`), tính mã băm canonical sha256 chuẩn hóa (RFC 8785).
+- **Immutable Releases**: `POST|GET /api/v1/admin/experiences/:id/releases`, `GET /api/v1/admin/experience-releases/:release_id`. Kiểm tra publish gate cấu trúc definition document (`schema_version: '1.0'`), đóng băng snapshot không thể sửa đổi hay xóa (trigger DB `prevent_experience_release_mutation` cấm `UPDATE`/`DELETE`).
+- **Idempotency Replay**: Mọi thao tác ghi (`POST`, `PUT`, `PATCH`) yêu cầu `idempotency_key` và tự động replay kết quả ban đầu ngay cả khi revision đã tăng, hoặc trả 409 `IDEMPOTENCY_KEY_COLLISION` nếu key bị dùng lại với payload khác.
+
+Source: `src/modules/{auth,users,versions,experiences}` giữ service/repository/controller; `src/infrastructure/{db,storage}` giữ adapter; `src/http` giữ envelope/errors/handler. Admin users thuộc domain users. `migrations/` giữ nguyên SQL/journal; build/start không tự migrate.
 
 Browser truy cập cùng origin qua gateway; public origin nằm trong `PRODUCT_BASE_URL`. SSR UI gọi API nội bộ, không chia sẻ JWT secret. Compose đọc env ở root repo, không tự nạp file `.env` tại app này. Xem [root README](../../README.md), [API conventions](docs/README.md) và [runbook](../../docs/operations/studio-runtime-cutover.md).
