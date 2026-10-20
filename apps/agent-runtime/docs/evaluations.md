@@ -28,3 +28,27 @@ python -m pytest
 
 Public contracts are in `contracts/openapi/public` and shared schemas are in
 `contracts/openapi/schemas` at the repository root.
+
+## Structured conversation turns (B-02)
+
+`POST /api/v1/internal/conversations/{conversation_id}/turns` executes only
+`set_name` and `submit_answer` with an option. Message, text, confirm and edit
+turns are well-formed but return `422 INVALID_ACTIVITY_TRANSITION`.
+
+- The selector runs against the release pinned on the activity, outside any
+  write transaction. The default engine registry is empty until DEC-04, so a
+  production container fails closed with `422 INCOMPATIBLE_SCHEMA`. Tests
+  inject `PILOT_ENGINE_REGISTRY` explicitly.
+- No completion projector is configured before B-03/C-04. When the engine
+  reports completion, the turn returns `503 SERVICE_UNAVAILABLE` and the final
+  answer is not stored. Tests use a fixture projector only to prove the
+  interface and atomic commit; that is not scoring or golden-path (AT-07)
+  evidence.
+- There is no public TypeScript route for turns yet.
+
+Integration checks need a disposable PostgreSQL 16 admin URL:
+
+```bash
+RUNTIME_TEST_ADMIN_DATABASE_URL=postgresql://user:pass@127.0.0.1:5432/sda_b01_admin \
+  python -m pytest -m integration --require-runtime-db
+```
