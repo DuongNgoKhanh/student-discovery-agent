@@ -60,13 +60,13 @@ class TurnStore:
             activity = self.activities.get(session, parent.id, request.activity_id)
             if activity is None:
                 raise RuntimeSessionError(404, "RESOURCE_NOT_FOUND")
-            if parent.active_activity_id != activity.id or activity.state.status not in OPEN_STATES:
+            if parent.active_activity_id != activity.id:
                 raise RuntimeSessionError(422, "INVALID_ACTIVITY_TRANSITION")
             # Absent optional guard stays absent: the server still captures and rechecks the revision at commit.
             if request.expected_activity_revision is not None and request.expected_activity_revision != activity.revision:
                 raise self._conflict(session, parent, "activity", request.expected_activity_revision,
                                      activity.revision)
-            if not is_supported(request):
+            if activity.state.status not in OPEN_STATES or not is_supported(request):
                 raise RuntimeSessionError(422, "INVALID_ACTIVITY_TRANSITION")
             release = self.snapshots.get(session, activity.experience_snapshot)
             return TurnSnapshot(parent=parent, activity=activity, release=release,

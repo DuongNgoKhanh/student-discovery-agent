@@ -51,7 +51,7 @@ def test_identity_changes_with_semantic_fields(change):
 
 
 @pytest.mark.parametrize("raw", [
-    "A" * 51, "", "   ", "̂Lan", "Lan 2", "Lan 😀", "<b>Lan</b>", "Lan!", "Lan\x00", "La​n", "Lan ́",
+    "A" * 51, "", "   ", "̂Lan", "Lan 2", "Lan 😀", "<b>Lan</b>", "Lan\x1fAnh", "Lan!","Lan\x00", "La​n", "Lan ́",
 ])
 def test_rejects_invalid_name(raw):
     with pytest.raises(RuntimeSessionError) as error:

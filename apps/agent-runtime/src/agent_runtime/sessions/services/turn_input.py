@@ -1,4 +1,5 @@
 """Turn input parsing, display-name policy and canonical replay identity. No DB, no IDs."""
+import re
 import unicodedata
 
 from pydantic import TypeAdapter, ValidationError
@@ -15,6 +16,8 @@ from agent_runtime.sessions.services.activity import request_fingerprint
 
 MAX_DISPLAY_NAME = 50
 _TURN_INPUT = TypeAdapter(ConversationTurnInput)
+# Unicode whitespace runs, excluding the C0 separators U+001C..U+001F that str.isspace() also accepts.
+_WHITESPACE = re.compile(r"[^\S\x1c-\x1f]+")
 
 
 def parse_turn_input(value: JsonObject) -> ConversationTurnInput:
@@ -31,8 +34,7 @@ def is_supported(request: ConversationTurnInput) -> bool:
 
 
 def normalize_display_name(value: str) -> str:
-    # str.split() without arguments splits on every Unicode whitespace run.
-    return " ".join(unicodedata.normalize("NFC", value).split())
+    return _WHITESPACE.sub(" ", unicodedata.normalize("NFC", value)).strip(" ")
 
 
 def validate_display_name(value: str) -> str:
