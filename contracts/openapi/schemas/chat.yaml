@@ -38,6 +38,12 @@ components:
               nullable: true
               enum:
                 - null
+        current_result:
+          anyOf:
+            - $ref: activity.yaml#/components/schemas/ActivityResultRef
+            - type: object
+              nullable: true
+              enum: [null]
         created_at:
           type: string
           format: date-time
@@ -61,7 +67,7 @@ components:
         Conversation là cửa vào chat; pin Agent Release lúc tạo. Runtime sở hữu conversation/messages/activities/results; Product/Studio sở hữu config/releases.
         GET phục hồi ngữ cảnh và active activity, không tự tạo chat/activity mới. History phân trang qua messages.
         Activity completion không đóng conversation: học sinh tiếp tục chat về kết quả trong cùng khung chat.
-        End conversation đóng các activity đang chạy; expiry kiểm theo đồng hồ server. Read-after-close/retention còn chờ DEC-03.
+        End conversation đóng các activity đang chạy; expiry kiểm theo đồng hồ server. Demo TTL 3600 seconds from creation never slides. End/expiry blocks all content reads/writes (410, data null). Content retention is 86400 seconds from effective closure; repeated end returns only the minimal acknowledgement.
     MessageTurnInput:
       type: object
       properties:
@@ -427,7 +433,7 @@ components:
       description: |-
         revision thuộc conversation; activity.revision thuộc activity. General chat có activity null hoặc state không đổi.
         Commit parent revision, activity changes, answers/proposal/result validity, messages/blocks và replay outcome nguyên tử.
-        Lượt trả lời thứ 6 đủ coverage trả personality_card ngay. Lỗi engine không để progress/result commit một phần.
+        Legacy: sixth answer with coverage emits personality_card. Adaptive: completion follows the pinned engine/profile and view v2; B-01 does not decide scoring/stop. Lỗi engine không để progress/result commit một phần.
         Replay data giữ nguyên turn/message/block IDs, committed_at và snapshot; meta thuộc HTTP request mới. Client không ghi đè conversation state mới bằng outcome cũ.
     ConversationTurnEnvelope:
       oneOf:

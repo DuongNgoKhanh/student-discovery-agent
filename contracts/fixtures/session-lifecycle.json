@@ -1,0 +1,1123 @@
+﻿{
+    "adaptive_view":  {
+                          "created_at":  "2026-10-20T00:00:00Z",
+                          "id":  "act_demo",
+                          "definition_hash":  "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                          "type":  "personality_assessment_adaptive",
+                          "expires_at":  "2026-10-20T01:00:00Z",
+                          "experience_id":  "exp_demo",
+                          "experience_release_id":  "rel_demo",
+                          "is_demo":  true,
+                          "display_name":  "Ngân",
+                          "clarification":  null,
+                          "current_question":  {
+                                                   "title":  "Câu hỏi minh họa",
+                                                   "question_id":  "q15",
+                                                   "options":  [
+                                                                   {
+                                                                       "id":  "rating1",
+                                                                       "label":  "Mức 1"
+                                                                   },
+                                                                   {
+                                                                       "id":  "rating2",
+                                                                       "label":  "Mức 2"
+                                                                   },
+                                                                   {
+                                                                       "id":  "rating3",
+                                                                       "label":  "Mức 3"
+                                                                   },
+                                                                   {
+                                                                       "id":  "rating4",
+                                                                       "label":  "Mức 4"
+                                                                   },
+                                                                   {
+                                                                       "id":  "rating5",
+                                                                       "label":  "Mức 5"
+                                                                   }
+                                                               ]
+                                               },
+                          "algorithm_profile":  "riasec.mean.bounds.v2",
+                          "result":  null,
+                          "answers":  [
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  1,
+                                              "question_id":  "q1",
+                                              "answer_id":  "ans1",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q1",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  1
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  2,
+                                              "question_id":  "q2",
+                                              "answer_id":  "ans2",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q2",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  2
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  3,
+                                              "question_id":  "q3",
+                                              "answer_id":  "ans3",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q3",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  3
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  4,
+                                              "question_id":  "q4",
+                                              "answer_id":  "ans4",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q4",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  4
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  5,
+                                              "question_id":  "q5",
+                                              "answer_id":  "ans5",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q5",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  5
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  6,
+                                              "question_id":  "q6",
+                                              "answer_id":  "ans6",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q6",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  6
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  7,
+                                              "question_id":  "q7",
+                                              "answer_id":  "ans7",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q7",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  7
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  8,
+                                              "question_id":  "q8",
+                                              "answer_id":  "ans8",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q8",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  8
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  9,
+                                              "question_id":  "q9",
+                                              "answer_id":  "ans9",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q9",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  9
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  10,
+                                              "question_id":  "q10",
+                                              "answer_id":  "ans10",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q10",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  10
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  11,
+                                              "question_id":  "q11",
+                                              "answer_id":  "ans11",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q11",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  11
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  12,
+                                              "question_id":  "q12",
+                                              "answer_id":  "ans12",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q12",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  12
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  13,
+                                              "question_id":  "q13",
+                                              "answer_id":  "ans13",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q13",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  13
+                                          },
+                                          {
+                                              "option_id":  "rating3",
+                                              "source":  "option",
+                                              "ordinal":  14,
+                                              "question_id":  "q14",
+                                              "answer_id":  "ans14",
+                                              "question":  {
+                                                               "title":  "Câu hỏi minh họa",
+                                                               "question_id":  "q14",
+                                                               "options":  [
+                                                                               {
+                                                                                   "id":  "rating1",
+                                                                                   "label":  "Mức 1"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating2",
+                                                                                   "label":  "Mức 2"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating3",
+                                                                                   "label":  "Mức 3"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating4",
+                                                                                   "label":  "Mức 4"
+                                                                               },
+                                                                               {
+                                                                                   "id":  "rating5",
+                                                                                   "label":  "Mức 5"
+                                                                               }
+                                                                           ]
+                                                           },
+                                              "accepted_activity_revision":  14
+                                          }
+                                      ],
+                          "schema_version":  2,
+                          "conversation_id":  "conv_demo",
+                          "status":  "in_progress",
+                          "revision":  16,
+                          "progress":  {
+                                           "phase":  "adaptive",
+                                           "min_total":  12,
+                                           "completed":  14,
+                                           "total":  null,
+                                           "max_total":  30
+                                       }
+                      },
+    "adaptive_state":  {
+                           "schema_version":  2,
+                           "current_result_id":  null,
+                           "type":  "personality_assessment_adaptive",
+                           "answers":  [
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  1,
+                                               "question_id":  "q1",
+                                               "answer_id":  "ans1",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q1",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  1
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  2,
+                                               "question_id":  "q2",
+                                               "answer_id":  "ans2",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q2",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  2
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  3,
+                                               "question_id":  "q3",
+                                               "answer_id":  "ans3",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q3",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  3
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  4,
+                                               "question_id":  "q4",
+                                               "answer_id":  "ans4",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q4",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  4
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  5,
+                                               "question_id":  "q5",
+                                               "answer_id":  "ans5",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q5",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  5
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  6,
+                                               "question_id":  "q6",
+                                               "answer_id":  "ans6",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q6",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  6
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  7,
+                                               "question_id":  "q7",
+                                               "answer_id":  "ans7",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q7",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  7
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  8,
+                                               "question_id":  "q8",
+                                               "answer_id":  "ans8",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q8",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  8
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  9,
+                                               "question_id":  "q9",
+                                               "answer_id":  "ans9",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q9",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  9
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  10,
+                                               "question_id":  "q10",
+                                               "answer_id":  "ans10",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q10",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  10
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  11,
+                                               "question_id":  "q11",
+                                               "answer_id":  "ans11",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q11",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  11
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  12,
+                                               "question_id":  "q12",
+                                               "answer_id":  "ans12",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q12",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  12
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  13,
+                                               "question_id":  "q13",
+                                               "answer_id":  "ans13",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q13",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  13
+                                           },
+                                           {
+                                               "option_id":  "rating3",
+                                               "source":  "option",
+                                               "ordinal":  14,
+                                               "question_id":  "q14",
+                                               "answer_id":  "ans14",
+                                               "question":  {
+                                                                "title":  "Câu hỏi minh họa",
+                                                                "question_id":  "q14",
+                                                                "options":  [
+                                                                                {
+                                                                                    "id":  "rating1",
+                                                                                    "label":  "Mức 1"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating2",
+                                                                                    "label":  "Mức 2"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating3",
+                                                                                    "label":  "Mức 3"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating4",
+                                                                                    "label":  "Mức 4"
+                                                                                },
+                                                                                {
+                                                                                    "id":  "rating5",
+                                                                                    "label":  "Mức 5"
+                                                                                }
+                                                                            ]
+                                                            },
+                                               "accepted_activity_revision":  14
+                                           }
+                                       ],
+                           "display_name":  "Ngân",
+                           "algorithm_profile":  "riasec.mean.bounds.v2",
+                           "progress":  {
+                                            "phase":  "adaptive",
+                                            "min_total":  12,
+                                            "completed":  14,
+                                            "total":  null,
+                                            "max_total":  30
+                                        },
+                           "clarification":  null,
+                           "current_question":  {
+                                                    "title":  "Câu hỏi minh họa",
+                                                    "question_id":  "q15",
+                                                    "options":  [
+                                                                    {
+                                                                        "id":  "rating1",
+                                                                        "label":  "Mức 1"
+                                                                    },
+                                                                    {
+                                                                        "id":  "rating2",
+                                                                        "label":  "Mức 2"
+                                                                    },
+                                                                    {
+                                                                        "id":  "rating3",
+                                                                        "label":  "Mức 3"
+                                                                    },
+                                                                    {
+                                                                        "id":  "rating4",
+                                                                        "label":  "Mức 4"
+                                                                    },
+                                                                    {
+                                                                        "id":  "rating5",
+                                                                        "label":  "Mức 5"
+                                                                    }
+                                                                ]
+                                                },
+                           "status":  "in_progress",
+                           "state_schema_version":  2
+                       },
+    "adaptive_create":  {
+                            "schema_version":  1,
+                            "idempotency_key":  "create_adaptive",
+                            "accepted_activity_profiles":  [
+                                                               "riasec.mean.bounds.v2"
+                                                           ],
+                            "supported_blocks":  [
+                                                     {
+                                                         "type":  "text",
+                                                         "schema_versions":  [
+                                                                                 1
+                                                                             ]
+                                                     },
+                                                     {
+                                                         "type":  "assessment_question",
+                                                         "schema_versions":  [
+                                                                                 2
+                                                                             ]
+                                                     },
+                                                     {
+                                                         "type":  "assessment_clarification",
+                                                         "schema_versions":  [
+                                                                                 2
+                                                                             ]
+                                                     },
+                                                     {
+                                                         "type":  "personality_card",
+                                                         "schema_versions":  [
+                                                                                 1
+                                                                             ]
+                                                     }
+                                                 ]
+                        },
+    "closed_ack":  {
+                       "status":  "ended",
+                       "conversation_id":  "conv_demo",
+                       "expires_at":  "2026-10-20T01:00:00Z",
+                       "revision":  1,
+                       "closed_at":  "2026-10-20T00:30:00Z"
+                   },
+    "legacy_state":  {
+                         "schema_version":  1,
+                         "current_result_id":  null,
+                         "type":  "personality_assessment",
+                         "answers":  [
+
+                                     ],
+                         "display_name":  null,
+                         "progress":  {
+                                          "total":  6,
+                                          "completed":  0
+                                      },
+                         "clarification":  null,
+                         "current_question":  null,
+                         "status":  "collecting_name",
+                         "state_schema_version":  1
+                     },
+    "agent_snapshot":  {
+                           "allowed_activity_profiles":  [
+                                                             "personality_assessment",
+                                                             "riasec.mean.bounds.v2"
+                                                         ],
+                           "greeting_text":  "Xin chào"
+                       },
+    "expired_ack":  {
+                        "status":  "expired",
+                        "conversation_id":  "conv_demo",
+                        "expires_at":  "2026-10-20T01:00:00Z",
+                        "revision":  1,
+                        "closed_at":  "2026-10-20T01:00:00Z"
+                    }
+}

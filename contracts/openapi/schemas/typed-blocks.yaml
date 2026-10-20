@@ -228,16 +228,134 @@ components:
       additionalProperties: true
     TypedBlock:
       oneOf:
-        - $ref: '#/components/schemas/TextBlock'
-        - $ref: '#/components/schemas/AssessmentQuestionBlock'
-        - $ref: '#/components/schemas/AssessmentClarificationBlock'
-        - $ref: '#/components/schemas/PersonalityCardBlock'
+      - $ref: '#/components/schemas/TextBlock'
+      - $ref: '#/components/schemas/AssessmentQuestionBlock'
+      - $ref: '#/components/schemas/AssessmentClarificationBlock'
+      - $ref: '#/components/schemas/PersonalityCardBlock'
+      - $ref: '#/components/schemas/AssessmentQuestionBlockV2'
+      - $ref: '#/components/schemas/AssessmentClarificationBlockV2'
       discriminator:
         propertyName: type
         mapping:
           text: '#/components/schemas/TextBlock'
-          assessment_question: '#/components/schemas/AssessmentQuestionBlock'
-          assessment_clarification: '#/components/schemas/AssessmentClarificationBlock'
+          assessment_question: '#/components/schemas/AssessmentQuestionBlockVersions'
+          assessment_clarification: '#/components/schemas/AssessmentClarificationBlockVersions'
           personality_card: '#/components/schemas/PersonalityCardBlock'
       description: Backend validates every block. IDs/version ổn định qua replay/history; text không thực thi HTML.
         Unknown block/version → incompatibility có kiểm soát trước submit tiếp.
+    AssessmentQuestionBlockV2:
+      type: object
+      properties:
+        block_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        type:
+          type: string
+          enum:
+          - assessment_question
+        schema_version:
+          type: integer
+          enum:
+          - 2
+        activity_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        question_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        title:
+          type: string
+          minLength: 1
+        options:
+          type: array
+          items:
+            $ref: activity.yaml#/components/schemas/AssessmentOption
+          minItems: 2
+        progress:
+          $ref: activity.yaml#/components/schemas/AssessmentProgressV2
+      required:
+      - block_id
+      - type
+      - schema_version
+      - activity_id
+      - question_id
+      - title
+      - options
+      - progress
+      additionalProperties: true
+    AssessmentQuestionBlockVersions:
+      type: object
+      oneOf:
+      - $ref: '#/components/schemas/AssessmentQuestionBlock'
+      - $ref: '#/components/schemas/AssessmentQuestionBlockV2'
+      discriminator:
+        propertyName: schema_version
+        mapping:
+          '1': '#/components/schemas/AssessmentQuestionBlock'
+          '2': '#/components/schemas/AssessmentQuestionBlockV2'
+    AssessmentClarificationBlockV2:
+      type: object
+      properties:
+        block_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        type:
+          type: string
+          enum:
+          - assessment_clarification
+        schema_version:
+          type: integer
+          enum:
+          - 2
+        activity_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        proposal_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        question_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        activity_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        title:
+          type: string
+          minLength: 1
+        candidates:
+          type: array
+          items:
+            $ref: activity.yaml#/components/schemas/ClarificationCandidate
+          minItems: 1
+        progress:
+          $ref: activity.yaml#/components/schemas/AssessmentProgressV2
+      required:
+      - block_id
+      - type
+      - schema_version
+      - activity_id
+      - proposal_id
+      - question_id
+      - activity_revision
+      - title
+      - candidates
+      - progress
+      additionalProperties: true
+    AssessmentClarificationBlockVersions:
+      type: object
+      oneOf:
+      - $ref: '#/components/schemas/AssessmentClarificationBlock'
+      - $ref: '#/components/schemas/AssessmentClarificationBlockV2'
+      discriminator:
+        propertyName: schema_version
+        mapping:
+          '1': '#/components/schemas/AssessmentClarificationBlock'
+          '2': '#/components/schemas/AssessmentClarificationBlockV2'

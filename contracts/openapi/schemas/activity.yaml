@@ -159,7 +159,7 @@ components:
         - result_revision
         - validity
       additionalProperties: true
-    ActivityView:
+    ActivityViewV1:
       description: |-
         MVP activity type: personality_assessment. Các loại khác cần capability/schema được hỗ trợ trước activation.
         Activity là lần thực hiện Experience, pin experience_id/experience_release_id. State/questions/progress
@@ -411,3 +411,370 @@ components:
               required:
                 - status
               additionalProperties: true
+    AssessmentProgressV2:
+      type: object
+      properties:
+        completed:
+          type: integer
+          minimum: 0
+          maximum: 30
+        min_total:
+          type: integer
+          enum:
+          - 12
+        max_total:
+          type: integer
+          enum:
+          - 30
+        total:
+          type: integer
+          nullable: true
+          minimum: 12
+          maximum: 30
+        phase:
+          type: string
+          enum:
+          - baseline
+          - adaptive
+          - completed
+      required:
+      - completed
+      - min_total
+      - max_total
+      - total
+      - phase
+      additionalProperties: false
+      oneOf:
+      - properties:
+          phase:
+            enum:
+            - baseline
+            - adaptive
+          total:
+            type: integer
+            nullable: true
+            enum:
+            - null
+      - properties:
+          phase:
+            enum:
+            - completed
+          total:
+            type: integer
+            minimum: 12
+            maximum: 30
+      description: 'ADR-002: total remains null before completion; completed total equals active answer count. Closing
+        preserves the last progress/phase. Runtime validates equality and ordered answers without deciding scoring/stop.'
+    ActivityAnswerV2:
+      type: object
+      properties:
+        answer_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        question_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        option_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        ordinal:
+          type: integer
+          minimum: 1
+          maximum: 30
+        accepted_activity_revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        source:
+          type: string
+          enum:
+          - option
+          - text_mapping
+          - text_confirmation
+          - edit_option
+        question:
+          $ref: '#/components/schemas/AssessmentQuestion'
+      required:
+      - answer_id
+      - question_id
+      - option_id
+      - ordinal
+      - accepted_activity_revision
+      - source
+      - question
+      additionalProperties: true
+    ActivityViewV2:
+      description: Adaptive transport registered explicitly for riasec.mean.bounds.v2. State/view version 2; never project
+        under legacy v1. Unknown/unregistered profile or engine is rejected before resource creation. Runtime checks
+        structural integrity without deciding scoring/stop.
+      allOf:
+      - type: object
+        properties:
+          id:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          conversation_id:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          type:
+            type: string
+            enum:
+            - personality_assessment_adaptive
+          schema_version:
+            type: integer
+            enum:
+            - 2
+          experience_id:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          experience_release_id:
+            type: string
+            minLength: 1
+            pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          definition_hash:
+            type: string
+            pattern: ^sha256:[a-f0-9]{64}$
+          status:
+            type: string
+            enum:
+            - collecting_name
+            - in_progress
+            - completed
+            - ended
+            - expired
+          revision:
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
+          display_name:
+            type: string
+            minLength: 1
+            format: normalized-display-name
+            description: Tên đã chuẩn hóa NFC/khoảng trắng, không digit/emoji; giới hạn còn chờ policy.
+            nullable: true
+          progress:
+            $ref: '#/components/schemas/AssessmentProgressV2'
+          current_question:
+            anyOf:
+            - $ref: '#/components/schemas/AssessmentQuestion'
+            - type: object
+              nullable: true
+              enum:
+              - null
+          clarification:
+            anyOf:
+            - $ref: '#/components/schemas/ActivityClarification'
+            - type: object
+              nullable: true
+              enum:
+              - null
+          answers:
+            type: array
+            items:
+              $ref: '#/components/schemas/ActivityAnswerV2'
+            maxItems: 30
+          result:
+            anyOf:
+            - $ref: '#/components/schemas/ActivityResultRef'
+            - type: object
+              nullable: true
+              enum:
+              - null
+          is_demo:
+            type: boolean
+          created_at:
+            type: string
+            format: date-time
+            pattern: Z$
+          expires_at:
+            type: string
+            format: date-time
+            pattern: Z$
+            nullable: true
+          algorithm_profile:
+            type: string
+            enum:
+            - riasec.mean.bounds.v2
+        required:
+        - id
+        - conversation_id
+        - type
+        - schema_version
+        - experience_id
+        - experience_release_id
+        - definition_hash
+        - status
+        - revision
+        - display_name
+        - progress
+        - current_question
+        - clarification
+        - answers
+        - result
+        - is_demo
+        - created_at
+        - expires_at
+        - algorithm_profile
+        additionalProperties: true
+      - oneOf:
+        - type: object
+          properties:
+            status:
+              type: string
+              enum:
+              - collecting_name
+            display_name:
+              type: object
+              nullable: true
+              enum:
+              - null
+            current_question:
+              type: object
+              nullable: true
+              enum:
+              - null
+            clarification:
+              type: object
+              nullable: true
+              enum:
+              - null
+            result:
+              type: object
+              nullable: true
+              enum:
+              - null
+            answers:
+              type: array
+              maxItems: 0
+            progress:
+              type: object
+              properties:
+                completed:
+                  type: integer
+                  enum:
+                  - 0
+                phase:
+                  type: string
+                  enum: [baseline, adaptive]
+              required:
+              - completed
+              - phase
+              additionalProperties: true
+          required:
+          - status
+          additionalProperties: true
+        - type: object
+          properties:
+            status:
+              type: string
+              enum:
+              - in_progress
+            display_name:
+              type: string
+              minLength: 1
+              format: normalized-display-name
+              description: Tên đã chuẩn hóa NFC/khoảng trắng, không digit/emoji; giới hạn còn chờ policy.
+            current_question:
+              $ref: '#/components/schemas/AssessmentQuestion'
+            result:
+              type: object
+              nullable: true
+              enum:
+              - null
+            progress:
+              type: object
+              properties:
+                completed:
+                  type: integer
+                  minimum: 0
+                  maximum: 29
+                phase:
+                  type: string
+                  enum: [baseline, adaptive]
+              required:
+              - completed
+              - phase
+              additionalProperties: true
+          required:
+          - status
+          additionalProperties: true
+        - type: object
+          properties:
+            status:
+              type: string
+              enum:
+              - completed
+            display_name:
+              type: string
+              minLength: 1
+              format: normalized-display-name
+              description: Tên đã chuẩn hóa NFC/khoảng trắng, không digit/emoji; giới hạn còn chờ policy.
+            current_question:
+              type: object
+              nullable: true
+              enum:
+              - null
+            clarification:
+              type: object
+              nullable: true
+              enum:
+              - null
+            result:
+              $ref: '#/components/schemas/ActivityResultRef'
+            answers:
+              type: array
+              minItems: 12
+              maxItems: 30
+            progress:
+              type: object
+              properties:
+                completed:
+                  type: integer
+                  minimum: 12
+                  maximum: 30
+                phase:
+                  type: string
+                  enum:
+                  - completed
+              required:
+              - completed
+              - phase
+              additionalProperties: true
+          required:
+          - status
+          additionalProperties: true
+        - type: object
+          properties:
+            status:
+              type: string
+              enum:
+              - ended
+              - expired
+            current_question:
+              type: object
+              nullable: true
+              enum:
+              - null
+            clarification:
+              type: object
+              nullable: true
+              enum:
+              - null
+          required:
+          - status
+          additionalProperties: true
+    ActivityView:
+      oneOf:
+      - $ref: '#/components/schemas/ActivityViewV1'
+      - $ref: '#/components/schemas/ActivityViewV2'
+      discriminator:
+        propertyName: type
+        mapping:
+          personality_assessment: '#/components/schemas/ActivityViewV1'
+          personality_assessment_adaptive: '#/components/schemas/ActivityViewV2'
