@@ -19,4 +19,14 @@ def test_health_without_product_dependencies(monkeypatch):
     assert response.json() == {"status": "healthy"}
 
     paths = set(main.create_app().openapi()["paths"])
-    assert not any(p.startswith(("/api/v1", "/auth", "/users")) for p in paths)
+    allowed = {
+        "/api/v1/internal/conversations": {"post"},
+        "/api/v1/internal/conversations/{conversation_id}": {"get"},
+        "/api/v1/internal/conversations/{conversation_id}/messages": {"get"},
+        "/api/v1/internal/conversations/{conversation_id}:end": {"post"},
+        "/api/v1/internal/activities/{activity_id}/result": {"get"},
+        "/api/v1/internal/results/{result_id}/share-card": {"get"},
+    }
+    schema = main.create_app().openapi()["paths"]
+    assert {path: set(operations) for path, operations in schema.items() if path != "/health"} == allowed
+    assert not any(p.startswith(("/auth", "/users", "/api/v1/auth", "/api/v1/users")) for p in paths)
