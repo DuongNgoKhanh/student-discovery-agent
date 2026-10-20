@@ -100,4 +100,3 @@ class ConversationTurnResult(ContractModel):
     committed_at: UtcDatetime
     activity: ActivityView | None
     blocks: Annotated[tuple[TypedBlock, ...], Field(min_length=1)]
-
