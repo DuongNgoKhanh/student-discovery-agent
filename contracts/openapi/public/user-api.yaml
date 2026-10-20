@@ -12,7 +12,7 @@ info:
 
     Chat-first contract theo docs/prd/chat_first_assessment_api_proposal.md (Proposed, 12/10/2026).
     Conversation → Activities → Results; resource model rộng hơn MVP 6 câu/card trong SRS v0.3.
-    MVP chỉ personality_assessment; các loại career_interest/skill/career_exploration là extension sau.
+    Legacy v1 personality_assessment; adaptive v2 personality_assessment_adaptive uses riasec.mean.bounds.v2; các loại career_interest/skill/career_exploration là extension sau.
     Conversation pin Agent Release; activity pin Experience Release. Structured option interaction không bắt buộc gọi LLM.
     Natural text đi qua Agent; start_activity và answer mapping chỉ là validated commands, Engine giữ state/scoring correctness.
     Runtime sở hữu conversation/messages/activity/result; Studio/Product sở hữu definition/draft/release/audit; không ghi chéo bảng.
@@ -29,7 +29,7 @@ info:
 
     DEC-01: edit option ở in_progress/completed, bỏ suffix sau k và invalidate proposal/result cũ; tên no digits/emoji và không đổi sau bước tên.
     DEC-02: summary.v1 share PNG/demo, full share qua projection version riêng; layout/limits/assets còn mở.
-    DEC-03: read-after-close/TTL/retention còn mở; end/expiry không đồng nghĩa xóa ngay và không resume.
+    DEC-03 demo B-01: fixed TTL 3600 seconds from creation, no sliding; end/expiry blocks content reads/writes. Minimal end acknowledgement only; content retention 86400 seconds from effective closure, traces 86400 seconds from event. Production policy remains separate.
     DEC-04 hoãn rules/scoring/coverage/tie/golden outcomes; JSON structure hợp lệ không đủ để publish.
     DEC-05 text auto-accept khi policy đã duyệt/membership/revision hợp lệ, mơ hồ hỏi lại.
     DEC-06 LLM từ phase đầu; provider/model/budget còn mở. DEC-07 học sinh chat anonymous; POST /conversations
@@ -265,6 +265,22 @@ components:
       $ref: activity-api.yaml#/components/schemas/ActivityResultEnvelope
     ShareCardEnvelope:
       $ref: result-api.yaml#/components/schemas/ShareCardEnvelope
+    ClosedConversationAcknowledgement:
+      $ref: ../schemas/session-lifecycle.yaml#/components/schemas/ClosedConversationAcknowledgement
+    ClosedConversationEnvelope:
+      $ref: ../schemas/session-lifecycle.yaml#/components/schemas/ClosedConversationEnvelope
+    ActivityViewV1:
+      $ref: ../schemas/activity.yaml#/components/schemas/ActivityViewV1
+    ActivityViewV2:
+      $ref: ../schemas/activity.yaml#/components/schemas/ActivityViewV2
+    AssessmentProgressV2:
+      $ref: ../schemas/activity.yaml#/components/schemas/AssessmentProgressV2
+    ActivityAnswerV2:
+      $ref: ../schemas/activity.yaml#/components/schemas/ActivityAnswerV2
+    AssessmentQuestionBlockV2:
+      $ref: ../schemas/typed-blocks.yaml#/components/schemas/AssessmentQuestionBlockV2
+    AssessmentClarificationBlockV2:
+      $ref: ../schemas/typed-blocks.yaml#/components/schemas/AssessmentClarificationBlockV2
   responses:
     BadRequestError:
       $ref: ../schemas/common.yaml#/components/responses/BadRequestError

@@ -23,6 +23,7 @@ paths:
         Old ID after edit returns 409 even if its own immutable generation matches query. General chat revision
         changes do not invalidate a valid result. Browser obtains snapshot, waits/renders assets, rechecks expected_result_revision
         before download. No server image-render API in MVP.
+      x-runtime-lifecycle: Parent ownership/lifecycle checked before projection; ended/expired returns 410 with data null. Noncurrent or superseded results are not exported as valid. Student data uses Cache-Control no-store.
       security:
         - AnonymousOwner: []
       responses:

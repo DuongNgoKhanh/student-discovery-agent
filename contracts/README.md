@@ -124,3 +124,36 @@ Mọi endpoint Product `/api/v1` nhận JSON body (Studio API/Hono) yêu cầu `
 (cho phép `; charset=...` hoặc `application/*+json`); body không rỗng với content type khác trả `415`
 `VAL_UNSUPPORTED_MEDIA_TYPE` và không set cookie (chống CSRF qua request "simple" cross-site). Body tùy chọn
 để trống (ví dụ `/auth/refresh` dùng cookie) không cần content type. Mã lỗi xem [error_codes.md](error_codes.md).
+
+## B-01 runtime lifecycle và capability
+
+[Internal runtime API](openapi/internal/runtime-api.yaml) dùng prefix `/api/v1/internal` và hai header
+`X-Caller-Context`/`X-Internal-Caller` đã ký/binding request; không dùng cookie AnonymousOwner trực tiếp,
+không mở route Python qua public gateway. `/health` độc lập. Shared schema nằm trong
+[session-lifecycle.yaml](openapi/schemas/session-lifecycle.yaml), fixture tại
+[session-lifecycle.json](fixtures/session-lifecycle.json). Đăng ký contract chưa xác nhận route TS/client đã triển khai.
+
+Demo có TTL cố định 3600 giây từ lúc tạo; reload/turn không gia hạn. End hoặc đúng hạn expiry chặn
+mọi đọc/ghi nội dung, history/result/ShareCard trả 410 và data null. End lặp lại chỉ trả năm trường
+`conversation_id/status/revision/closed_at/expires_at`; sau purge trả 404. Nội dung đủ điều kiện purge
+86400 giây sau thời điểm đóng hiệu lực; trace có retention riêng 86400 giây từ event.
+
+Create `accepted_activity_profiles` thiếu/rỗng mặc định legacy-only (`algorithm_profile=null`).
+Khai báo `riasec.mean.bounds.v2` đồng nghĩa hiểu ActivityView v2 và yêu cầu đủ manifest text v1,
+assessment_question v2, assessment_clarification v2, personality_card v1. Không ngầm bổ sung blocks
+hoặc legacy fallback. Capability được pin, runtime từ chối profile/engine chưa đăng ký. Schema v1
+vẫn giữ sáu answers; v2 dùng progress min/max/phase và total null trước completed. Bộ selector/scoring không đổi.
+
+DTO Python dùng synchronous ports trong `agent_runtime.sessions`; policy demo không ngầm dùng production.
+Product release descriptor phân biệt delivery schema và definition schema, snapshot agent `agent.snapshot.v1`
+chỉ chứa greeting_text và allowed_activity_profiles. Registry, canonical hash và metadata immutable được
+release importer kiểm trước pinning. Result/ShareCard tiếp tục dùng projection và allowlist hiện có.
+
+Contract review: A/D cần đối chiếu manifest/view/block v2, Agent snapshot và minimal end acknowledgement;
+internal signing/request binding cần tích hợp Product trước khi xem là hỗ trợ thực tế. Generated TS DTO được tạo bằng `gen:api`; các lệnh xác minh và kết quả thực tế nằm trong [bằng chứng B-01](../docs/implementation/b01-acceptance-evidence.md).
+
+Agent `allowed_activity_profiles` là allowlist quyền: `personality_assessment` cho activity legacy
+(`algorithm_profile=null`), `riasec.mean.bounds.v2` cho adaptive. Danh sách rỗng chặn mọi activity;
+capability legacy mặc định của browser không tự cấp quyền Agent.
+
+Legacy definition 1.0 hiện luôn `UNSUPPORTED` bởi semantic validator thật; v1 storage/rehydration vẫn được giữ. Positive start B-01 dùng adaptive capability và pilot registry được inject rõ trong tests. Registry runtime mặc định rỗng; không có legacy import/start bypass. Sáu internal operations Python không xác nhận Product signer/cookie/proxy hay UI đã triển khai. Xem [runtime lifecycle](../apps/agent-runtime/docs/session-runtime.md) và [runbook demo](../docs/operations/session-runtime-demo.md).
