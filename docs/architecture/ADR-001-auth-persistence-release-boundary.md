@@ -192,7 +192,7 @@ sequenceDiagram
    - Triệt tiêu lỗ hổng bảo mật truy cập chéo giữa các học sinh.
    - Bảo đảm tính toàn vẹn của kết quả trắc nghiệm và báo cáo hướng nghiệp.
 2. **Kế hoạch tiếp nối (Next Steps):**
-   - **Ticket A-01:** Triển khai TS DB migration và Service lưu trữ Draft/Release.
+   - **Ticket A-01 (Hoàn thành / Done):** Đã triển khai TS DB migration `0002_experience_drafts_and_releases.sql`, Canonical Content Hashing (RFC 8785-aligned), Drizzle tables, Service và Routes cho Experience Metadata, Draft (optimistic locking), và Immutable Releases (kèm DB trigger cấm UPDATE/DELETE). Các hạng mục hoãn lại (deferred items): kết nối Python validation/evaluation endpoints (A-02/C-05), active release pointer / activation / rollback (FR-CFG-06).
    - **Ticket A-04:** Triển khai middleware quản lý Cookie `sda_owner` và ký Header nội bộ tại tầng BFF.
    - **Ticket B-01:** Triển khai middleware xác thực caller context và owner binding phía FastAPI.
    - Hoàn tất tài liệu chi tiết contract schemas tương ứng trong `contracts/openapi/`.
