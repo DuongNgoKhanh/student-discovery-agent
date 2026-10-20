@@ -11,6 +11,13 @@ from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from sqlalchemy.engine import URL
 
+from tests.helpers.turns import TurnRig, build_turn_rig
+from tests.unit.conftest import valid_v2_doc as adaptive_definition_fixture
+from tests.unit.conftest import validator as pilot_validator_fixture
+
+valid_v2_doc = adaptive_definition_fixture
+validator = pilot_validator_fixture
+
 
 @dataclass(repr=False)
 class TestDatabase:
@@ -78,3 +85,13 @@ def test_database(request):
                     admin.execute(sql.SQL("DROP ROLE {}").format(sql.Identifier(role)))
             finally:
                 admin.close()
+
+
+@pytest.fixture
+def turn_rig(test_database, valid_v2_doc, validator) -> TurnRig:
+    """Real conversation + adaptive activity created through services and the pilot validator."""
+    rig = build_turn_rig(test_database.url, valid_v2_doc, validator)
+    try:
+        yield rig
+    finally:
+        rig.db_engine.dispose()

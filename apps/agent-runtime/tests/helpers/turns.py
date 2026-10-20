@@ -1,18 +1,43 @@
 """Shared turn fixtures. Synthetic examples come from contracts; never imported by runtime code."""
 import copy
 import json
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from functools import cache
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
+from sqlalchemy import func, select
+
+from agent_runtime.evaluations.services.compatibility import PILOT_ENGINE_REGISTRY
+from agent_runtime.infrastructure.auth.caller import VerifiedCaller
+from agent_runtime.infrastructure.db.migrate import upgrade_database
+from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
+from agent_runtime.infrastructure.db.tables import (
+    activities,
+    conversations,
+    messages,
+    operation_outcomes,
+    result_snapshots,
+)
 from agent_runtime.sessions.schemas.activity import ActivityRecord, ActivityStateV1, ActivityStateV2
-from agent_runtime.sessions.schemas.conversation import ConversationRecord
+from agent_runtime.sessions.schemas.common import RuntimePolicy
+from agent_runtime.sessions.schemas.conversation import ConversationRecord, CreateConversationInput
 from agent_runtime.sessions.schemas.release import ReleaseKey
 from agent_runtime.sessions.schemas.turn_execution import CompletionBundle, TurnSnapshot
+from agent_runtime.sessions.services.activity import ActivityPersistence
+from agent_runtime.sessions.services.conversations import ConversationService
 from agent_runtime.sessions.services.releases import validate_snapshot_integrity
-from tests.helpers.builders import adaptive_capabilities, experience_release
+from agent_runtime.sessions.services.turn_handlers import PinnedAssessmentEngine, TurnHandler
+from agent_runtime.sessions.services.turn_input import parse_turn_input
+from agent_runtime.sessions.services.turn_store import TurnStore
+from tests.helpers.builders import adaptive_capabilities, agent_release, experience_release
+from tests.helpers.clock import FakeClock
+from tests.helpers.product import FakeProductReleaseSource
 
+PROFILE = "riasec.mean.bounds.v2"
+NOW = datetime(2026, 10, 20, tzinfo=timezone.utc)
 FIXTURE = Path(__file__).resolve().parents[4] / "contracts" / "fixtures" / "session-turns.json"
 
 
@@ -27,7 +52,7 @@ def turn_examples() -> dict:
 
 def make_turn_snapshot(definition: dict, *, capabilities=None) -> TurnSnapshot:
     """Fresh collecting_name activity pinned to an integrity-checked synthetic release."""
-    now = datetime(2026, 10, 20, tzinfo=timezone.utc)
+    now = NOW
     release = validate_snapshot_integrity(experience_release(definition))
     adaptive = definition["schema_version"] == "2.0"
     common = dict(status="collecting_name", display_name=None, current_question=None, clarification=None,
@@ -96,3 +121,83 @@ class FakeCompletionPort:
         if self.mutate:
             self.mutate(bundle)
         return CompletionBundle.model_validate(bundle)
+
+
+@dataclass(repr=False)
+class TurnRig:
+    uow: object
+    db_engine: object
+    clock: object
+    caller: VerifiedCaller
+    product: FakeProductReleaseSource
+    conversations: ConversationService
+    activity_persistence: ActivityPersistence
+    store: TurnStore
+    handler: TurnHandler
+    conversation_id: str
+    activity_id: str
+    completion: FakeCompletionPort
+    service: object = None
+
+
+def build_turn_rig(url: str, definition: dict, validator) -> TurnRig:
+    upgrade_database(url)
+    db_engine = build_engine(url)
+    uow = RuntimeUnitOfWork(db_engine)
+    clock = FakeClock(NOW)
+    caller = VerifiedCaller("owner", "sda-product-bff", NOW + timedelta(seconds=60))
+    product = FakeProductReleaseSource()
+    product.agent = agent_release(content={"greeting_text": "Hello", "allowed_activity_profiles": [PROFILE]})
+    product.experiences[("logical-experience", PROFILE)] = experience_release(definition)
+    conversations = ConversationService(uow, product, validator, policy=RuntimePolicy(environment="demo"),
+                                        clock=clock)
+    blocks = [block.model_dump() for block in adaptive_capabilities().supported_blocks]
+    created = conversations.create(caller, CreateConversationInput(
+        idempotency_key="create", accepted_activity_profiles=(PROFILE,), supported_blocks=blocks))
+    conversation_id = created.data["conversation"]["id"]
+    persistence = ActivityPersistence(uow, product, validator, clock=clock)
+    activity_id = persistence.start(caller, conversation_id, 0, "logical-experience", PROFILE, "start").data[
+        "activity_id"]
+    completion = FakeCompletionPort()
+    return TurnRig(uow=uow, db_engine=db_engine, clock=clock, caller=caller, product=product,
+                   conversations=conversations, activity_persistence=persistence,
+                   store=TurnStore(uow, persistence, conversations, clock=clock),
+                   handler=TurnHandler(PinnedAssessmentEngine(PILOT_ENGINE_REGISTRY), completion),
+                   conversation_id=conversation_id, activity_id=activity_id, completion=completion)
+
+
+def turn_counts(rig: TurnRig) -> dict[str, int]:
+    with rig.uow.begin() as session:
+        def count(table, *where):
+            return session.scalar(select(func.count()).select_from(table).where(*where))
+        activity = session.execute(select(activities.c.revision, activities.c.state).where(
+            activities.c.id == rig.activity_id)).one()
+        return {"answers": len(activity.state["answers"]), "messages": count(messages),
+                "outcomes": count(operation_outcomes), "results": count(result_snapshots),
+                "conversation_revision": session.scalar(select(conversations.c.revision).where(
+                    conversations.c.id == rig.conversation_id)),
+                "activity_revision": activity.revision}
+
+
+def current_state(rig: TurnRig) -> tuple[int, int, dict]:
+    with rig.uow.begin() as session:
+        revision = session.scalar(select(conversations.c.revision).where(conversations.c.id == rig.conversation_id))
+        row = session.execute(select(activities.c.revision, activities.c.state).where(
+            activities.c.id == rig.activity_id)).one()
+        return revision, row.revision, row.state
+
+
+def request_for(rig: TurnRig, action: Literal["set_name", "submit_answer"], *, key: str,
+                option_id: str | None = None, with_activity_revision: bool = True):
+    """Supported request against current DB revisions: name 'Ngân' or rating 3 on the current question."""
+    revision, activity_revision, state = current_state(rig)
+    if action == "set_name":
+        payload = {"display_name": "Ngân"}
+    else:
+        question_id = state["current_question"]["question_id"]
+        payload = {"question_id": question_id, "option_id": option_id or f"{question_id}_opt_3"}
+    data = {"type": "interaction", "activity_id": rig.activity_id, "action": action, "payload": payload,
+            "expected_revision": revision, "idempotency_key": key}
+    if with_activity_revision:
+        data["expected_activity_revision"] = activity_revision
+    return parse_turn_input(data)
