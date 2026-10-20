@@ -1,3 +1,4 @@
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,6 +8,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
 
     LOG_LEVEL: str = "INFO"
+
+    # Optional until session readiness is requested; health needs no database.
+    # Migration configuration is intentionally read by the migration CLI only.
+    RUNTIME_ENVIRONMENT: str | None = None
+    RUNTIME_DATABASE_URL: SecretStr | None = None
+    RUNTIME_SESSION_TTL_SECONDS: int = 3600
+    RUNTIME_CONTENT_RETENTION_SECONDS: int = 86400
+    RUNTIME_TRACE_RETENTION_SECONDS: int = 86400
+    RUNTIME_INTERNAL_KEYRING: SecretStr | None = None
+    RUNTIME_CURSOR_SIGNING_KEY: SecretStr | None = None
+    RUNTIME_INTERNAL_TOKEN_MAX_AGE_SECONDS: int = 60
 
     # Gemini / embeddings
     GOOGLE_API_KEY: str = ""
