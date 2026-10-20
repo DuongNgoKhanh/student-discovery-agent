@@ -297,6 +297,13 @@ export type InsertReleaseResult =
   | { status: 'ok'; release: ExperienceReleaseRow }
   | { status: 'duplicate_version' };
 
+function isUniqueViolation(error: unknown): boolean {
+  for (let e: unknown = error; e && typeof e === 'object'; e = (e as { cause?: unknown }).cause) {
+    if ((e as { code?: unknown }).code === '23505') return true;
+  }
+  return false;
+}
+
 export async function insertExperienceRelease(
   db: ProductDatabase,
   input: {
@@ -319,12 +326,7 @@ export async function insertExperienceRelease(
     if (!row) throw new Error('insert release returned no row');
     return { status: 'ok', release: row };
   } catch (err: unknown) {
-    if (
-      typeof err === 'object' &&
-      err !== null &&
-      'code' in err &&
-      (err as { code: string }).code === '23505'
-    ) {
+    if (isUniqueViolation(err)) {
       return { status: 'duplicate_version' };
     }
     throw err;
