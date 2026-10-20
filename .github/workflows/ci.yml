@@ -89,6 +89,10 @@ jobs:
         run: pnpm gen:api
       - name: Check contracts
         run: pnpm contracts:check
+      - name: Check internal session contract and fixtures
+        run: |
+          pnpm exec redocly lint --config redocly.yaml ../../contracts/openapi/internal/runtime-api.yaml
+          pnpm exec vitest run --project unit src/http/session-contract.test.ts
       - name: Typecheck
         run: pnpm typecheck
       - name: Lint
@@ -143,8 +147,48 @@ jobs:
         run: python -m pip install -e '.[dev]'
       - name: Lint
         run: python -m ruff check --output-format=github .
-      - name: Tests
-        run: python -m pytest
+      - name: Check dependencies
+        run: python -m pip check
+      - name: Unit tests
+        run: python -m pytest -m "not integration"
+
+  agent-runtime-integration:
+    name: Agent Runtime Integration (PostgreSQL 16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/agent-runtime
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sda_b01_test_admin
+          POSTGRES_PASSWORD: disposable-ci-only
+          POSTGRES_DB: sda_b01_admin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sda_b01_test_admin -d sda_b01_admin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Disposable runner service only; never use Product/demo/production credentials.
+      RUNTIME_TEST_ADMIN_DATABASE_URL: postgresql://sda_b01_test_admin:disposable-ci-only@127.0.0.1:5432/sda_b01_admin
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: apps/agent-runtime/.python-version
+          cache: pip
+          cache-dependency-path: |
+            apps/agent-runtime/requirements.txt
+            apps/agent-runtime/pyproject.toml
+      - name: Install dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: Integration tests (database required)
+        run: python -m pytest -m integration --require-runtime-db
 
   docker-build:
     name: Docker Build (${{ matrix.app }})
