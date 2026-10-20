@@ -96,6 +96,43 @@ paths:
                 $ref: ../public/conversation-api.yaml#/components/schemas/MessagePageEnvelope
         default:
           $ref: '#/components/responses/RuntimeError'
+  /conversations/{conversation_id}/turns:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    post:
+      operationId: internalSubmitConversationTurn
+      summary: Commit one structured interaction turn
+      description: |
+        B-02 subset of the public ConversationTurnInput union: only interaction set_name and submit_answer with an
+        option payload execute. Well-formed message/text/confirm/edit requests return 422 INVALID_ACTIVITY_TRANSITION
+        after owner/lifecycle, replay and revision guards; malformed input returns 422 INVALID_INPUT.
+        Replay identity is (owner, conversation.turn, conversation_id, idempotency_key); the fingerprint covers the
+        normalized request (NFC/whitespace-normalized name, key order ignored) including expected_revision and
+        expected_activity_revision only when sent. Replay returns the stored status/data with fresh meta.
+        The engine runs outside the write transaction; the commit rechecks lifecycle, replay and captured revisions,
+        then atomically writes activity/answers, conversation revision (+1 each), result when completed, user and
+        assistant messages and one outcome. Completed without a configured completion projector returns 503.
+        Revision conflicts return 409 REVISION_CONFLICT with resource_kind and readable snapshots.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/chat.yaml#/components/schemas/ConversationTurnInput
+      responses:
+        '200':
+          description: Committed turn; replay preserves status/data, IDs and committed_at with fresh request meta.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/chat.yaml#/components/schemas/ConversationTurnEnvelope
+        default:
+          $ref: '#/components/responses/RuntimeError'
   /conversations/{conversation_id}:end:
     parameters:
       - $ref: '#/components/parameters/ConversationId'

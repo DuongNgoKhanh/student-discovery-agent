@@ -79,6 +79,7 @@ components:
         idempotency_key:
           type: string
           minLength: 1
+          maxLength: 256
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
         schema_version:
           type: integer
@@ -118,6 +119,7 @@ components:
         idempotency_key:
           type: string
           minLength: 1
+          maxLength: 256
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
         schema_version:
           type: integer
@@ -143,8 +145,9 @@ components:
               type: string
               minLength: 1
               format: display-name
-              description: 'Input: NFC + trim/collapse Unicode whitespace; letters/marks/spaces, no digits/emoji.
-                Maximum from approved runtime policy; DEC-01 limit pending.'
+              description: 'Input: NFC + trim/collapse Unicode whitespace; letters, marks attached to a letter
+                cluster, and spaces; no digits/emoji/punctuation/markup. 1..50 Unicode code points measured after
+                normalization (no raw maxLength). Case and diacritics are preserved; invalid names return 422 INVALID_INPUT.'
           required:
             - display_name
           additionalProperties: false
@@ -173,6 +176,7 @@ components:
         idempotency_key:
           type: string
           minLength: 1
+          maxLength: 256
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
         schema_version:
           type: integer
@@ -246,6 +250,7 @@ components:
         idempotency_key:
           type: string
           minLength: 1
+          maxLength: 256
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
         schema_version:
           type: integer
@@ -309,6 +314,7 @@ components:
         idempotency_key:
           type: string
           minLength: 1
+          maxLength: 256
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
         schema_version:
           type: integer
