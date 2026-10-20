@@ -405,7 +405,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     expect(dupVerPub.status).toBe(409);
     const dupVerBody = await json(dupVerPub);
     expect(dupVerBody.error.code).toBe('REVISION_CONFLICT');
-    expect(dupVerBody.error.message).toMatch(/already exists/i);
+    expect(dupVerBody.error.message).toMatch(/already been published/i);
   });
 
   it('7. Immutability of releases: edits to draft do not change release; direct SQL update fails (AT-04, FR-CFG-05)', async () => {
