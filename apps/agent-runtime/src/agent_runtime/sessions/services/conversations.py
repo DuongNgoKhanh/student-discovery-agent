@@ -2,7 +2,7 @@
 from datetime import timedelta
 from uuid import uuid4
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -15,7 +15,7 @@ from agent_runtime.sessions.repositories.messages import MessageRepository
 from agent_runtime.sessions.repositories.outcomes import OutcomeRepository
 from agent_runtime.sessions.repositories.results import ResultRepository
 from agent_runtime.sessions.repositories.snapshots import SnapshotRepository
-from agent_runtime.sessions.schemas.activity import ActivityView, NewMessage, TextBlock
+from agent_runtime.sessions.schemas.activity import NewMessage, TextBlock
 from agent_runtime.sessions.schemas.common import RuntimePolicy, ServiceResponse
 from agent_runtime.sessions.schemas.conversation import (
     ConversationRecord,
@@ -28,6 +28,7 @@ from agent_runtime.sessions.services.access import AccessPolicy
 from agent_runtime.sessions.services.activity import request_fingerprint
 from agent_runtime.sessions.services.releases import validate_release
 from agent_runtime.sessions.services.results import is_current_result
+from agent_runtime.sessions.services.turn_response import project_activity
 from agent_runtime.sessions.trace import observed
 
 CREATE_OPERATION = "conversation.create"
@@ -136,6 +137,10 @@ class ConversationService:
                     raise
                 return replay
 
+    def view_in_session(self, session, parent: ConversationRecord) -> ConversationView:
+        """Current projection; the caller owns the parent lock and lifecycle check."""
+        return self._view(session, parent)
+
     def _view(self, session, parent):
         self.snapshots.get(session, parent.agent_snapshot)
         child_view = None
@@ -150,12 +155,7 @@ class ConversationService:
                 if not is_current_result(parent, child, result):
                     raise RuntimeSessionError(500, "INTERNAL_ERROR")
                 current_result = CurrentResultRef(result_id=result.result_id, result_revision=result.result_revision)
-            child_view = TypeAdapter(ActivityView).validate_python({
-                **child.state.model_dump(exclude={"state_schema_version", "current_result_id"}),
-                "id": child.id, "conversation_id": parent.id, "experience_id": child.experience_id,
-                "experience_release_id": snapshot.release_id, "definition_hash": snapshot.content_hash,
-                "revision": child.revision, "result": current_result, "is_demo": snapshot.is_demo,
-                "created_at": child.created_at, "expires_at": None})
+            child_view = project_activity(parent, child, snapshot, current_result)
         return ConversationView(id=parent.id, revision=parent.revision,
             agent_release_id=parent.agent_snapshot.release_id, display_name=parent.display_name,
             active_activity=child_view, created_at=parent.created_at, expires_at=parent.expires_at,
