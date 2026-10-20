@@ -15,8 +15,8 @@ from agent_runtime.sessions.schemas.common import ContractModel, JsonSafeInt, Ut
 Reference = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=128,
                                             pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")]
 ContextId = Annotated[str, StringConstraints(strict=True, pattern=r"^[a-f0-9]{32}$")]
-Action = Literal["conversation.create", "conversation.read", "conversation.end", "history.read",
-                 "activity.start", "activity.commit", "result.read", "share.read"]
+Action = Literal["conversation.create", "conversation.read", "conversation.end", "conversation.turn",
+                 "history.read", "activity.start", "activity.commit", "result.read", "share.read"]
 
 
 class TraceEvent(ContractModel):

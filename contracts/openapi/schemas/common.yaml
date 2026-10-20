@@ -119,6 +119,12 @@ components:
               nullable: true
               enum:
                 - null
+        resource_kind:
+          type: string
+          enum:
+            - conversation
+            - activity
+          description: Optional. Which guard failed; for activity both revision fields are activity revisions.
       required:
         - kind
         - expected_revision

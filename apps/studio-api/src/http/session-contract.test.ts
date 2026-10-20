@@ -6,6 +6,7 @@ import { parse } from 'yaml';
 
 const root = resolve(__dirname, '../../../../contracts');
 const fixture = JSON.parse(readFileSync(join(root, 'fixtures/session-lifecycle.json'), 'utf8').replace(/^\uFEFF/, ''));
+const turns = JSON.parse(readFileSync(join(root, 'fixtures/session-turns.json'), 'utf8').replace(/^\uFEFF/, ''));
 function validUtcTimestamp(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/.exec(value);
   if (!match) return false;
@@ -115,5 +116,34 @@ describe('session lifecycle public and internal contracts', () => {
     const card = doc.components.examples.ShareSummary.value.data;
     expect(validate(card), JSON.stringify(validate.errors)).toBe(true);
     expect(validate({ ...card, scores: { R: 99 } })).toBe(false);
+  });
+});
+
+describe('B-02 structured turn contract', () => {
+  it.each(['name_input', 'option_input', 'message_input', 'text_input', 'confirm_input', 'edit_input'])(
+    'accepts shared turn input %s', (name) => {
+      const validate = validator('schemas/chat.yaml', 'ConversationTurnInput');
+      expect(validate(turns[name]), JSON.stringify(validate.errors)).toBe(true);
+    });
+  it('rejects malformed turn inputs', () => {
+    const validate = validator('schemas/chat.yaml', 'ConversationTurnInput');
+    const option = turns.option_input;
+    expect(validate({ ...option, payload: { ...option.payload, text: 'both' } })).toBe(false);
+    expect(validate({ ...turns.name_input, owner_id: 'spoof' })).toBe(false);
+    expect(validate({ ...turns.name_input, expected_revision: '1' })).toBe(false);
+    expect(validate({ ...turns.name_input, idempotency_key: 'k'.repeat(256) })).toBe(true);
+    expect(validate({ ...turns.name_input, idempotency_key: 'k'.repeat(257) })).toBe(false);
+    // Name length is enforced after normalization by the runtime, never by a raw maxLength.
+    expect(validate({ ...turns.name_input, payload: { display_name: ' '.repeat(60) + 'Lan' } })).toBe(true);
+  });
+  it('validates the committed turn result and typed conflict', () => {
+    const result = validator('schemas/chat.yaml', 'ConversationTurnResult');
+    expect(result(turns.question_result), JSON.stringify(result.errors)).toBe(true);
+    expect(result({ ...turns.question_result, blocks: [] })).toBe(false);
+    const envelope = validator('schemas/common.yaml', 'ErrorEnvelope');
+    expect(envelope(turns.conflict_error), JSON.stringify(envelope.errors)).toBe(true);
+    const details = turns.conflict_error.error.details;
+    expect(envelope({ ...turns.conflict_error, error: { ...turns.conflict_error.error,
+      details: { ...details, resource_kind: 'result' } } })).toBe(false);
   });
 });

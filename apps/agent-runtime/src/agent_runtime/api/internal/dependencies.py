@@ -21,10 +21,14 @@ from agent_runtime.infrastructure.http.trace import request_trace_context
 from agent_runtime.infrastructure.product.releases import ProductUnavailable
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import RuntimePolicy
+from agent_runtime.sessions.services.activity import ActivityPersistence
 from agent_runtime.sessions.services.conversations import ConversationService
 from agent_runtime.sessions.services.history import HistoryCursorCodec, HistoryService
 from agent_runtime.sessions.services.lifecycle import LifecycleService
 from agent_runtime.sessions.services.results import ResultReadService
+from agent_runtime.sessions.services.turn_handlers import PinnedAssessmentEngine, TurnHandler
+from agent_runtime.sessions.services.turn_store import TurnStore
+from agent_runtime.sessions.services.turns import TurnService
 
 from .envelopes import failure
 
@@ -47,6 +51,7 @@ class RuntimeContainer:
     history: HistoryService | None = None
     lifecycle: LifecycleService | None = None
     results: ResultReadService | None = None
+    turns: TurnService | None = None
     product_ready: bool = False
     engine: object | None = None
 
@@ -87,12 +92,16 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         engine = build_engine(settings.RUNTIME_DATABASE_URL.get_secret_value())
         uow = RuntimeUnitOfWork(engine)
         trace_sink = DatabaseTraceSink(uow)
-        return RuntimeContainer(policy=policy, verifier=verifier,
-            conversations=ConversationService(uow, ProductUnavailable(), ExperienceValidator(),
-                policy=policy, trace_sink=trace_sink),
+        product, validator = ProductUnavailable(), ExperienceValidator()
+        conversations = ConversationService(uow, product, validator, policy=policy, trace_sink=trace_sink)
+        # Default engine registry is empty until DEC-04 and no completion projector exists before B-03/C-04;
+        # pinned activities therefore fail closed instead of running an unregistered profile.
+        store = TurnStore(uow, ActivityPersistence(uow, product, validator), conversations)
+        turns = TurnService(store, TurnHandler(PinnedAssessmentEngine(), completion=None), trace_sink=trace_sink)
+        return RuntimeContainer(policy=policy, verifier=verifier, conversations=conversations,
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
-            results=ResultReadService(uow, trace_sink=trace_sink), engine=engine)
+            results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, engine=engine)
     except Exception:
         if engine is not None:
             engine.dispose()

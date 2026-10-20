@@ -1,5 +1,6 @@
 """Python-only Harness persistence ports. Product and engine work stays outside write transactions."""
 import json
+from datetime import datetime
 from uuid import uuid4
 
 from pydantic import TypeAdapter, ValidationError
@@ -21,6 +22,7 @@ from agent_runtime.sessions.schemas.activity import (
     CommitPatch,
 )
 from agent_runtime.sessions.schemas.common import IdempotencyKey, ServiceResponse
+from agent_runtime.sessions.schemas.conversation import ConversationRecord
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.services.access import AccessPolicy
 from agent_runtime.sessions.services.releases import validate_release
@@ -175,6 +177,27 @@ class ActivityPersistence:
                         raise RuntimeSessionError(400, "INVALID_REQUEST")
         return patch, candidate
 
+    def apply_patch(self, session, caller: VerifiedCaller, parent: ConversationRecord, current: ActivityRecord,
+                    patch: CommitPatch, *, now: datetime | None = None) -> CommitPatch:
+        """Validate and write one patch inside the caller's UoW; never opens a transaction or saves an outcome.
+
+        The caller holds the parent FOR UPDATE and has already applied replay/revision guards. Lifecycle and
+        caller expiry are rechecked here, immediately before the writes; a supplied ``now`` is the timestamp
+        the caller already finalised into the patch.
+        """
+        checked, candidate = self._validate_patch(session, parent, current, patch)
+        checked_at = self.access.check_open(session, caller, parent)
+        now = now if now is not None else checked_at
+        self.results.invalidate(session, current.id, checked.invalidate_result_ids)
+        if checked.new_result:
+            self.results.insert(session, checked.new_result, now)
+        self.activities.save(session, candidate)
+        updated = parent.model_copy(update={"revision": parent.revision + 1,
+                                            "display_name": candidate.state.display_name})
+        self.conversations.save(session, updated)
+        self.messages.append(session, parent.id, updated.revision, checked.append_messages, now)
+        return checked
+
     @observed("activity.commit")
     def commit(self, caller: VerifiedCaller, conversation_id: str, expected_revision: int,
                idempotency_key: str, patch: CommitPatch) -> ServiceResponse:
@@ -191,16 +214,7 @@ class ActivityPersistence:
                 raise RuntimeSessionError(404, "RESOURCE_NOT_FOUND")
             if parent.active_activity_id != current.id or current.revision != patch.expected_activity_revision:
                 raise RuntimeSessionError(409, "REVISION_CONFLICT")
-            checked, candidate = self._validate_patch(session, parent, current, patch)
-            now = self.access.check_open(session, caller, parent)
-            self.results.invalidate(session, current.id, checked.invalidate_result_ids)
-            if checked.new_result:
-                self.results.insert(session, checked.new_result, now)
-            self.activities.save(session, candidate)
-            updated = parent.model_copy(update={"revision": parent.revision + 1,
-                                                "display_name": candidate.state.display_name})
-            self.conversations.save(session, updated)
-            self.messages.append(session, parent.id, updated.revision, checked.append_messages, now)
+            checked = self.apply_patch(session, caller, parent, current, patch)
             response = ServiceResponse(status=200, data=checked.response_data)
             self.outcomes.save(session, owner_id=caller.owner_id, operation=operation, resource_scope=scope,
                 key=idempotency_key, request_hash=fingerprint, conversation_id=parent.id, response=response)
