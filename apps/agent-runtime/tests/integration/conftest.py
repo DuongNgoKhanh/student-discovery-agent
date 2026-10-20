@@ -7,11 +7,13 @@ from uuid import uuid4
 
 import psycopg
 import pytest
+from fastapi.testclient import TestClient
 from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from sqlalchemy.engine import URL
 
-from tests.helpers.turns import TurnRig, build_turn_rig
+from agent_runtime.main import create_app
+from tests.helpers.turns import TurnRig, build_turn_rig, turn_container
 from tests.unit.conftest import valid_v2_doc as adaptive_definition_fixture
 from tests.unit.conftest import validator as pilot_validator_fixture
 
@@ -95,3 +97,9 @@ def turn_rig(test_database, valid_v2_doc, validator) -> TurnRig:
         yield rig
     finally:
         rig.db_engine.dispose()
+
+
+@pytest.fixture
+def turn_http(turn_rig):
+    with TestClient(create_app(turn_container(turn_rig))) as client:
+        yield client, turn_rig

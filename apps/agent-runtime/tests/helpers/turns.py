@@ -10,8 +10,10 @@ from uuid import uuid4
 
 from sqlalchemy import func, select
 
+from agent_runtime.api.internal.dependencies import RuntimeContainer
 from agent_runtime.evaluations.services.compatibility import PILOT_ENGINE_REGISTRY
-from agent_runtime.infrastructure.auth.caller import VerifiedCaller
+from agent_runtime.infrastructure.auth.caller import RawRequestContext, VerifiedCaller
+from agent_runtime.infrastructure.auth.verifier import CallerVerifier
 from agent_runtime.infrastructure.db.migrate import upgrade_database
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
 from agent_runtime.infrastructure.db.tables import (
@@ -28,13 +30,17 @@ from agent_runtime.sessions.schemas.release import ReleaseKey
 from agent_runtime.sessions.schemas.turn_execution import CompletionBundle, TurnSnapshot
 from agent_runtime.sessions.services.activity import ActivityPersistence
 from agent_runtime.sessions.services.conversations import ConversationService
+from agent_runtime.sessions.services.history import HistoryCursorCodec, HistoryService
 from agent_runtime.sessions.services.releases import validate_snapshot_integrity
+from agent_runtime.sessions.services.results import ResultReadService
 from agent_runtime.sessions.services.turn_handlers import PinnedAssessmentEngine, TurnHandler
 from agent_runtime.sessions.services.turn_input import parse_turn_input
 from agent_runtime.sessions.services.turn_store import TurnStore
+from agent_runtime.sessions.services.turns import TurnService
 from tests.helpers.builders import adaptive_capabilities, agent_release, experience_release
 from tests.helpers.clock import FakeClock
 from tests.helpers.product import FakeProductReleaseSource
+from tests.helpers.signing import sign_request
 
 PROFILE = "riasec.mean.bounds.v2"
 NOW = datetime(2026, 10, 20, tzinfo=timezone.utc)
@@ -88,10 +94,9 @@ def interaction(snapshot, action: str, payload: dict, *, key: str = "key") -> di
             "expected_revision": snapshot.parent.revision, "idempotency_key": key}
 
 
-def biased_option(question) -> str:
+def biased_option(question_id: str) -> str:
     """Rate house R items 5 and all others 1 so the adaptive selector stops early with a bounded winner."""
-    rating = 5 if question.question_id.startswith("q_r_") else 1
-    return f"{question.question_id}_opt_{rating}"
+    return f"{question_id}_opt_{5 if question_id.startswith('q_r_') else 1}"
 
 
 class FakeCompletionPort:
@@ -201,3 +206,30 @@ def request_for(rig: TurnRig, action: Literal["set_name", "submit_answer"], *, k
     if with_activity_revision:
         data["expected_activity_revision"] = activity_revision
     return parse_turn_input(data)
+
+
+HTTP_KEY = b"test-only-http-signing-key-32bytes!"
+INTERNAL_PREFIX = "/api/v1/internal"
+
+
+def turn_container(rig: TurnRig, *, handler: TurnHandler | None = None, trace_sink=None) -> RuntimeContainer:
+    """Explicitly injected container: pilot registry + fixture completion port, never the production builder."""
+    rig.service = TurnService(rig.store, handler or rig.handler, trace_sink=trace_sink)
+    return RuntimeContainer(verifier=CallerVerifier({"http": HTTP_KEY}, rig.clock),
+        policy=RuntimePolicy(environment="demo"), conversations=rig.conversations,
+        history=HistoryService(rig.uow, HistoryCursorCodec(b"cursor-test-key" * 3), clock=rig.clock),
+        results=ResultReadService(rig.uow, clock=rig.clock), turns=rig.service)
+
+
+def signed_call(client, rig: TurnRig, method: str, path: str, raw: bytes = b"", *, owner: str = "owner"):
+    target = INTERNAL_PREFIX + path
+    token = sign_request(RawRequestContext(method, target, raw), owner_id=owner, now=rig.clock.now(),
+                         key=HTTP_KEY, kid="http")
+    return client.request(method, target, content=raw,
+                          headers={"X-Caller-Context": token, "X-Internal-Caller": "sda-product-bff"})
+
+
+def post_turn(client, rig: TurnRig, request, *, owner: str = "owner", path: str | None = None):
+    body = request if isinstance(request, (bytes, dict)) else request.model_dump(mode="json", exclude_unset=True)
+    raw = body if isinstance(body, bytes) else json.dumps(body).encode()
+    return signed_call(client, rig, "POST", path or f"/conversations/{rig.conversation_id}/turns", raw, owner=owner)

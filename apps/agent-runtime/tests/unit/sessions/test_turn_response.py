@@ -29,7 +29,7 @@ def prepared_name_turn(handler, valid_v2_doc):
 def _answer(snapshot, option_id=None):
     question = snapshot.activity.state.current_question
     return parse_turn_input(interaction(snapshot, "submit_answer", {
-        "question_id": question.question_id, "option_id": option_id or biased_option(question)}))
+        "question_id": question.question_id, "option_id": option_id or biased_option(question.question_id)}))
 
 
 def test_name_turn_response_matches_messages(prepared_name_turn):

@@ -1,4 +1,4 @@
-"""Six synchronous operations; FastAPI dispatches all service/DB work to its pool."""
+"""Seven synchronous operations; FastAPI dispatches all service/DB work to its pool."""
 import re
 
 from fastapi import APIRouter, Request
@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.conversation import CreateConversationInput, EndConversationInput
+from agent_runtime.sessions.services.turn_input import parse_turn_input
 
 from .dependencies import PREFIX
 from .envelopes import success
@@ -69,6 +70,14 @@ def read_messages(request: Request, conversation_id: str):
     query = _query(request, ("cursor", "limit"))
     response = _service(request, "history").read(request.state.caller, _id(conversation_id),
         cursor=query.get("cursor"), limit=_integer(query.get("limit", 20)))
+    return success(response, *request.state.meta)
+
+
+@router.post("/conversations/{conversation_id}/turns", operation_id="internalSubmitConversationTurn")
+def submit_conversation_turn(request: Request, conversation_id: str):
+    _query(request, ())
+    data = parse_turn_input(read_strict_json(request.state.raw_body))
+    response = _service(request, "turns").submit(request.state.caller, _id(conversation_id), data)
     return success(response, *request.state.meta)
 
 

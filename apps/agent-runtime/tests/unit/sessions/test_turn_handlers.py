@@ -127,7 +127,8 @@ def test_counter_overflow_rejected_before_engine(valid_v2_doc):
 
 def _run_to_completion(handler, snapshot):
     while True:
-        draft = handler.prepare(snapshot, _option(snapshot, biased_option(snapshot.activity.state.current_question)))
+        option = biased_option(snapshot.activity.state.current_question.question_id)
+        draft = handler.prepare(snapshot, _option(snapshot, option))
         if draft.next_state.status == "completed":
             return snapshot, draft
         snapshot = advance(snapshot, draft)
@@ -139,7 +140,7 @@ def test_terminal_without_completion_port_is_unavailable(handler, valid_v2_doc):
     assert port.calls == 1 and done.completion is not None
     assert done.next_state.progress.total == done.next_state.progress.completed < 30  # adaptive, not hardcoded
     assert done.next_state.current_result_id == done.completion.result_id
-    request = _option(last, biased_option(last.activity.state.current_question))
+    request = _option(last, biased_option(last.activity.state.current_question.question_id))
     _error(lambda: handler.prepare(last, request), 503, "SERVICE_UNAVAILABLE")
 
 
@@ -154,5 +155,5 @@ def test_terminal_without_completion_port_is_unavailable(handler, valid_v2_doc):
 def test_invalid_completion_bundle_is_internal_error(handler, valid_v2_doc, mutate):
     last, _ = _run_to_completion(TurnHandler(handler.engine, FakeCompletionPort()), _named(handler, valid_v2_doc))
     forged = TurnHandler(handler.engine, FakeCompletionPort(mutate))
-    request = _option(last, biased_option(last.activity.state.current_question))
+    request = _option(last, biased_option(last.activity.state.current_question.question_id))
     _error(lambda: forged.prepare(last, request), 500, "INTERNAL_ERROR")
