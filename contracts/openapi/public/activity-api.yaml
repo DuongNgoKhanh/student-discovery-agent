@@ -22,6 +22,7 @@ paths:
       description: Resolve parent conversation and verify owner/read policy first. Return latest valid immutable
         snapshot with full card data. Insufficient answers/engine failure → RESULT_NOT_READY; invalidation/mismatch
         → stale error. Never expose internal scores/evidence or rebuild result using another active release.
+      x-runtime-lifecycle: Parent ownership/lifecycle checked before projection; ended/expired returns 410 with data null. Noncurrent or superseded results are not exported as valid. Student data uses Cache-Control no-store.
       security:
         - AnonymousOwner: []
       responses:
@@ -102,6 +103,7 @@ components:
           type: string
           enum:
             - personality_assessment
+            - personality_assessment_adaptive
         result_revision:
           type: integer
           minimum: 1

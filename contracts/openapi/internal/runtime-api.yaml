@@ -1,0 +1,236 @@
+﻿openapi: 3.0.3
+info:
+  title: Student Discovery Internal Runtime
+  version: 1.0.0
+  description: |
+    B-01 Python-only session boundary; no public gateway route. Health is independent of these credentials.
+    Calls use raw internal request targets under /api/v1/internal. JSON business body <=65536 bytes,
+    X-Caller-Context JWT <=8192 bytes, release content from Product ports <=2097152 bytes.
+    Verified owner comes only from signed caller context, environment only from runtime config (demo).
+    TTL 3600 seconds from creation never slides. Content read/write blocked after end/exact expiry.
+    Content retention 86400 seconds after effective closure; trace retention 86400 seconds from event.
+    Contract registration does not claim implementation in the public TypeScript routes or clients.
+servers:
+  - url: /api/v1/internal
+security:
+  - InternalCallerContext: []
+    InternalCallerIssuer: []
+paths:
+  /conversations:
+    post:
+      operationId: internalCreateConversation
+      summary: Create conversation with pinned Agent and capability
+      description: Resolve published Agent once; atomically persist snapshot, conversation revision 0, greeting and outcome. Same owner/key/input replays only while readable. Closed replay returns 410, changed input 409. Restart and activation do not alter existing pins.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../public/conversation-api.yaml#/components/schemas/CreateConversationInput
+      responses:
+        '201':
+          description: Conversation and greeting; replay preserves status/data and stable IDs with fresh request meta.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: ../public/conversation-api.yaml#/components/schemas/ConversationCreatedEnvelope
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /conversations/{conversation_id}:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    get:
+      operationId: internalReadConversation
+      summary: Read authorized current conversation state
+      description: Parent lifecycle checked before projection; closed/expired returns 410 with data null. GET does not materialize expiry, advance revision or resolve active releases.
+      responses:
+        '200':
+          description: Current readable state.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: ../public/conversation-api.yaml#/components/schemas/ConversationEnvelope
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /conversations/{conversation_id}/messages:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    get:
+      operationId: internalListConversationMessages
+      summary: Read ordered history at a stable watermark
+      description: Each page rechecks owner/lifecycle. Cursor HMAC uses a separate >=256-bit key; version, conversation ID, watermark revision and last ordinal only. Cursor grants no read permission. Closed history returns 410 with data null.
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            minLength: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Ordered committed messages with next cursor and snapshot revision.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: ../public/conversation-api.yaml#/components/schemas/MessagePageEnvelope
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /conversations/{conversation_id}:end:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+    post:
+      operationId: internalEndConversation
+      summary: Close atomically and return minimal acknowledgement
+      description: End/expiry closes children atomically without fabricating results. Exact deadline yields expired. End replay returns only the five acknowledgement fields; no additional revision/outcome/history/deadline update for new keys after closure. Changed input on a known key remains 409; purged resources return 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../public/conversation-api.yaml#/components/schemas/EndConversationInput
+      responses:
+        '200':
+          description: Minimal effective closure acknowledgement.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/session-lifecycle.yaml#/components/schemas/ClosedConversationEnvelope
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /activities/{activity_id}/result:
+    parameters:
+      - name: activity_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+    get:
+      operationId: internalReadActivityResult
+      summary: Read the stored current valid result projection
+      description: Parent owner/lifecycle first, then validity/current result/revision. Closed parent returns 410; no scoring or release resolution on GET. Internal scores/evidence are not projected.
+      parameters:
+        - $ref: '#/components/parameters/ExpectedResultRevision'
+      responses:
+        '200':
+          description: Stored safe result projection.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: ../public/activity-api.yaml#/components/schemas/ActivityResultEnvelope
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /results/{result_id}/share-card:
+    parameters:
+      - name: result_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+    get:
+      operationId: internalReadShareCard
+      summary: Read stored summary.v1 allowlist
+      description: Guard parent lifecycle, ownership and current valid result; closed parent returns 410 with data null. No internal scores/evidence, no generation or scoring on GET.
+      parameters:
+        - $ref: '#/components/parameters/ExpectedResultRevision'
+      responses:
+        '200':
+          description: Stored ShareCard summary projection.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: ../public/result-api.yaml#/components/schemas/ShareCardEnvelope
+        default:
+          $ref: '#/components/responses/RuntimeError'
+components:
+  securitySchemes:
+    InternalCallerContext:
+      type: apiKey
+      in: header
+      name: X-Caller-Context
+      description: |
+        HS256 JWT only; JOSE typ=sda-internal+jwt and configured kid, no jku/jwk/x5u key lookup.
+        Separate random >=256-bit runtime keyring, never cookie/login keys or snapshot content.
+        Required claims iss=sda-product-bff, aud=sda-agent-runtime, caller_type=student, nonempty owner_id (at most 256 Unicode scalar characters / 1024 UTF-8 bytes; no lone surrogates or NUL),
+        integer UTC iat/exp with iat <= now < exp and 0 < exp-iat <=60; no expiry leeway.
+        Required method (uppercase), request_target (raw percent-encoded internal path plus raw query,
+        unchanged ordering/bytes, no host/decoding), body_sha256 (lowercase SHA-256 hex of raw bytes).
+        No owner from body/other headers; recheck caller expiry at final guarded write after DB lock.
+    InternalCallerIssuer:
+      type: apiKey
+      in: header
+      name: X-Internal-Caller
+      description: Must equal signed issuer sda-product-bff; header alone grants no permission.
+  parameters:
+    ConversationId:
+      name: conversation_id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+    ExpectedResultRevision:
+      name: expected_result_revision
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 9007199254740991
+  schemas:
+    AgentSnapshotV1:
+      $ref: ../schemas/session-lifecycle.yaml#/components/schemas/AgentSnapshotV1
+    ReleaseDescriptor:
+      $ref: ../schemas/session-lifecycle.yaml#/components/schemas/ReleaseDescriptor
+  responses:
+    RuntimeError:
+      description: 'Typed error; data null for lifecycle failures, no forbidden state in details. 401 invalid caller, 404 unknown/mismatched owner, 409 revision/key/current-result conflict, 410 closed/expired, 413 byte limit, 422 invalid input/cursor, 503 required dependency unavailable. No auth or RAM-only fallback.'
+      headers:
+        Cache-Control:
+          schema:
+            type: string
+            enum: [no-store]
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+

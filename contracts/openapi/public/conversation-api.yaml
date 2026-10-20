@@ -215,8 +215,9 @@ paths:
           schema:
             type: integer
             minimum: 1
-            maximum: 9007199254740991
-          description: Upper limit from approved runtime policy; no production default chosen here.
+            maximum: 100
+            default: 20
+          description: Demo history limit; each page rechecks owner and parent lifecycle.
   /conversations/{conversation_id}/turns:
     post:
       operationId: submitConversationTurn
@@ -304,7 +305,7 @@ paths:
       summary: Kết thúc conversation idempotent
       description: Use :end consistently. New close checks expected conversation revision/key and closes running
         activities atomically. Repeated end returns closed state without another increment. Turns/replay cannot
-        reopen closed/expired conversation; reads/results depend on DEC-03 credential/read policy.
+        reopen closed/expired conversation. Closed/expired history/results/share reads return 410 with data null. End replies contain only the minimal acknowledgement; expiry at the exact deadline wins over end. Repeated end does not increment revision or extend retention.
       security:
         - AnonymousOwner: []
       responses:
@@ -319,7 +320,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConversationEnvelope'
+                $ref: ../schemas/session-lifecycle.yaml#/components/schemas/ClosedConversationEnvelope
         '400':
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
         '401':
@@ -366,6 +367,7 @@ components:
         idempotency_key:
           type: string
           minLength: 1
+          maxLength: 256
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
         schema_version:
           type: integer
@@ -393,6 +395,15 @@ components:
               - schema_versions
             additionalProperties: false
           minItems: 1
+        accepted_activity_profiles:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            pattern: \S
+          uniqueItems: true
+          default: []
+          description: Absent/empty means legacy-only (algorithm_profile null). Explicit adaptive implies ActivityView v2 and requires the full block manifest; no implicit legacy fallback or block expansion. Supported profile is riasec.mean.bounds.v2; unknown profiles negotiate to 422 INCOMPATIBLE_SCHEMA after owner/lifecycle/replay checks.
       required:
         - idempotency_key
       additionalProperties: false
@@ -403,6 +414,9 @@ components:
         Create key scoped theo anonymous owner/operation; retry cùng owner giữ key/payload.
         Mất cả cookie và response khởi tạo không cho phép replay xuyên owner bằng idempotency_key.
         Nếu không khai báo supported_blocks, dùng bộ block v1 của MVP; chỉ gửi block/schema client được hỗ trợ.
+        Idempotency keys are at most 256 ASCII identifier characters. Structurally malformed input returns 422 INVALID_INPUT.
+        Unsupported capability versions/profiles or incomplete adaptive manifests return 422 INCOMPATIBLE_SCHEMA after owner/lifecycle/replay lookup and before Product resolution or writes.
+        Demo TTL is exactly 3600 seconds from creation and never slides. Validate and pin capability before create.
     EndConversationInput:
       type: object
       properties:
@@ -414,6 +428,7 @@ components:
         idempotency_key:
           type: string
           minLength: 1
+          maxLength: 256
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
         schema_version:
           type: integer

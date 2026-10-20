@@ -1,0 +1,153 @@
+﻿components:
+  schemas:
+    ClosedConversationAcknowledgement:
+      type: object
+      additionalProperties: false
+      required: [conversation_id, status, revision, closed_at, expires_at]
+      properties:
+        conversation_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        status:
+          type: string
+          enum: [ended, expired]
+        revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        closed_at:
+          type: string
+          format: date-time
+          pattern: Z$
+        expires_at:
+          type: string
+          format: date-time
+          pattern: Z$
+      description: Effective closure only; no name, answer, question, result, release content or credential. Expired closed_at equals expires_at. Repeated end never increments revision or slides retention. After purge end returns 404.
+    ClosedConversationEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required: [data]
+              properties:
+                data:
+                  $ref: '#/components/schemas/ClosedConversationAcknowledgement'
+        - $ref: common.yaml#/components/schemas/ErrorEnvelope
+    AgentSnapshotV1:
+      type: object
+      additionalProperties: false
+      required: [greeting_text, allowed_activity_profiles]
+      properties:
+        greeting_text:
+          type: string
+          minLength: 1
+          pattern: \S
+        allowed_activity_profiles:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            pattern: \S
+      description: agent.snapshot.v1 content; canonical content hash uses JCS SHA-256. Greeting projects to a server-ID text v1 block without an LLM call. Adapter proposal; does not imply Product registry support.
+    ReleaseKey:
+      type: object
+      additionalProperties: false
+      required: [environment, kind, release_id]
+      properties:
+        environment:
+          type: string
+          minLength: 1
+          pattern: \S
+        kind:
+          type: string
+          enum: [agent, experience]
+        release_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+    ReleaseDescriptor:
+      type: object
+      additionalProperties: false
+      required: [environment, kind, release_id, content_hash, delivery_schema_version, content, is_demo]
+      properties:
+        environment:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+          enum: [agent, experience]
+        release_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        content_hash:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+        delivery_schema_version:
+          type: string
+          minLength: 1
+        content:
+          type: object
+        is_demo:
+          type: boolean
+        definition_schema_version:
+          type: string
+          minLength: 1
+          nullable: true
+        algorithm_profile:
+          type: string
+          minLength: 1
+          nullable: true
+        engine_version:
+          type: string
+          minLength: 1
+          nullable: true
+      oneOf:
+        - properties:
+            kind:
+              enum: [agent]
+            delivery_schema_version:
+              enum: [agent.snapshot.v1]
+            content:
+              $ref: '#/components/schemas/AgentSnapshotV1'
+            definition_schema_version:
+              type: string
+              nullable: true
+              enum: [null]
+            algorithm_profile:
+              type: string
+              nullable: true
+              enum: [null]
+            engine_version:
+              type: string
+              nullable: true
+              enum: [null]
+        - required: [definition_schema_version, engine_version]
+          properties:
+            kind:
+              enum: [experience]
+            definition_schema_version:
+              type: string
+              minLength: 1
+            engine_version:
+              type: string
+              minLength: 1
+      description: Published immutable snapshot from Product port; runtime verifies canonical hash, demo environment, definition/profile/engine registry and client capability before pinning. Delivery version differs from definition version. Null algorithm_profile identifies legacy; adaptive uses riasec.mean.bounds.v2. Same identity with different hash or immutable metadata is rejected. No draft resolution, active-release fallback or student data.
+  examples:
+    MinimalEnd:
+      value:
+        conversation_id: conv_demo
+        status: ended
+        revision: 1
+        closed_at: '2026-10-20T00:30:00Z'
+        expires_at: '2026-10-20T01:00:00Z'
+    ExactExpiry:
+      value:
+        conversation_id: conv_demo
+        status: expired
+        revision: 1
+        closed_at: '2026-10-20T01:00:00Z'
+        expires_at: '2026-10-20T01:00:00Z'
