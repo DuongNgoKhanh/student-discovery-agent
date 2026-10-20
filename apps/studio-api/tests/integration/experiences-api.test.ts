@@ -6,6 +6,9 @@ import { migrateProduct } from '@/infrastructure/db/migrate';
 import { closeProductDatabase, getProductDatabase } from '@/infrastructure/db/client';
 import { issueAccessToken } from '@/modules/auth/tokens';
 import { computeContentHash } from '@/modules/experiences/canonical';
+import { setPublishReportVerifier } from '@/modules/experiences/experiences.reports';
+import { experiences } from '@/infrastructure/db/schema';
+import { eq, inArray, sql } from 'drizzle-orm';
 
 let pg: PostgresHandle;
 let admin: string;
@@ -17,6 +20,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  setPublishReportVerifier(null);
   try {
     await closeProductDatabase();
   } finally {
@@ -30,7 +34,31 @@ beforeEach(async () => {
   vi.stubEnv('SECRET_KEY', 'integration-test-secret');
   admin = await issueAccessToken('admin', true);
   userToken = await issueAccessToken('123', false);
+  // No A-02/C-05 report service exists yet; release-path tests inject an accepting verifier explicitly.
+  setPublishReportVerifier({ verify: async () => true });
 });
+
+async function createWithValidDraft(suffix: string): Promise<{ expId: string; hash: string }> {
+  const created = await json(
+    await dispatch(
+      call('POST', '/admin/experiences', admin, {
+        name: `Exp ${suffix}`,
+        activity_type: 'personality_assessment',
+        idempotency_key: `create_${suffix}`,
+      }),
+    ),
+  );
+  const expId = created.data.id as string;
+  const saved = await dispatch(
+    call('PUT', `/admin/experiences/${expId}/draft`, admin, {
+      expected_revision: 0,
+      idempotency_key: `draft_${suffix}`,
+      content: validDefinition,
+    }),
+  );
+  expect(saved.status).toBe(200);
+  return { expId, hash: computeContentHash(validDefinition) };
+}
 
 const validDefinition = {
   schema_version: '1.0',
@@ -538,5 +566,102 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     expect((await dispatch(call('GET', '/admin/experiences/exp_1/draft', userToken))).status).toBe(403);
     expect((await dispatch(call('GET', '/admin/experience-releases/rel_1', userToken))).status).toBe(403);
   });
-});
 
+  it('10. Publish fails closed when validation/evaluation reports cannot be verified', async () => {
+    setPublishReportVerifier(null);
+    const { expId, hash } = await createWithValidDraft('closed_010');
+    const res = await dispatch(
+      call('POST', `/admin/experiences/${expId}/releases`, admin, {
+        expected_revision: 1,
+        content_hash: hash,
+        validation_id: 'val_unverified',
+        evaluation_id: 'eval_unverified',
+        approval_refs: [],
+        idempotency_key: 'pub_closed_010',
+      }),
+    );
+    expect(res.status).toBe(422);
+    const body = await json(res);
+    expect(body.error.code).toBe('PUBLISH_GATE_FAILED');
+    expect(body.error.details.issues[0].code).toBe('report_unverified');
+    const releases = await json(await dispatch(call('GET', `/admin/experiences/${expId}/releases`, admin)));
+    expect(releases.data.items).toEqual([]);
+  });
+
+  it('11. Concurrent creates with one idempotency key yield one experience and identical responses', async () => {
+    const body = { name: 'Exp concurrent 011', activity_type: 'personality_assessment', idempotency_key: 'create_011' };
+    const responses = await Promise.all(
+      Array.from({ length: 6 }, () => dispatch(call('POST', '/admin/experiences', admin, body))),
+    );
+    expect(responses.map((r) => r.status)).toEqual(Array(6).fill(201));
+    const bodies = await Promise.all(responses.map((r) => json(r)));
+    expect(new Set(bodies.map((b) => b.data.id)).size).toBe(1);
+    const rows = await getProductDatabase()
+      .select({ id: experiences.id })
+      .from(experiences)
+      .where(eq(experiences.name, body.name));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('12. Concurrent publishes with one idempotency key replay the same release', async () => {
+    const { expId, hash } = await createWithValidDraft('publish_012');
+    const body = {
+      expected_revision: 1,
+      content_hash: hash,
+      validation_id: 'val_012',
+      evaluation_id: 'eval_012',
+      approval_refs: ['appr_qa_pass'],
+      idempotency_key: 'pub_012',
+    };
+    const responses = await Promise.all([
+      dispatch(call('POST', `/admin/experiences/${expId}/releases`, admin, body)),
+      dispatch(call('POST', `/admin/experiences/${expId}/releases`, admin, body)),
+    ]);
+    expect(responses.map((r) => r.status)).toEqual([201, 201]);
+    const [first, second] = await Promise.all(responses.map((r) => json(r)));
+    expect(second.data.id).toBe(first.data.id);
+    const releases = await json(await dispatch(call('GET', `/admin/experiences/${expId}/releases`, admin)));
+    expect(releases.data.items).toHaveLength(1);
+  });
+
+  it('13. Keyset pagination keeps rows that share the boundary millisecond; malformed cursors are 400', async () => {
+    const ids: string[] = [];
+    for (const n of [1, 2, 3]) {
+      const created = await json(
+        await dispatch(
+          call('POST', '/admin/experiences', admin, {
+            name: `Exp page 013 ${n}`,
+            activity_type: 'personality_assessment',
+            idempotency_key: `create_page_013_${n}`,
+          }),
+        ),
+      );
+      ids.push(created.data.id as string);
+    }
+    // Future timestamps put these rows first; all three fall inside one JS millisecond.
+    const db = getProductDatabase();
+    for (const [index, id] of ids.entries()) {
+      await db
+        .update(experiences)
+        .set({ created_at: sql`${`2099-01-01T00:00:00.1231${index}0Z`}::timestamptz` })
+        .where(eq(experiences.id, id));
+    }
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 3; page += 1) {
+      const query: string = cursor ? `?limit=1&cursor=${cursor}` : '?limit=1';
+      const res = await json(await dispatch(call('GET', `/admin/experiences${query}`, admin)));
+      seen.push(...(res.data.items as Array<{ id: string }>).map((item) => item.id));
+      cursor = res.data.next_cursor as string | null;
+    }
+    expect(seen).toEqual([...ids].reverse());
+    const stored = await db.select({ id: experiences.id }).from(experiences).where(inArray(experiences.id, ids));
+    expect(stored).toHaveLength(3);
+
+    const malformed = Buffer.from(JSON.stringify({ created_at: 'not-a-time', id: 'exp_x' })).toString('base64url');
+    const bad = await dispatch(call('GET', `/admin/experiences?cursor=${malformed}`, admin));
+    expect(bad.status).toBe(400);
+    expect((await json(bad)).error.code).toBe('VAL_INVALID_REQUEST');
+  });
+});

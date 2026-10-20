@@ -8,6 +8,11 @@ import {
   idempotencyRecords,
 } from '@/infrastructure/db/schema';
 import { computeContentHash } from '@/modules/experiences/canonical';
+import { resourceIdSchema } from '@/modules/experiences/experiences.schemas';
+
+type ProductTransaction = Parameters<Parameters<ProductDatabase['transaction']>[0]>[0];
+/** The pool-backed database or an open transaction; repository calls join whichever they receive. */
+export type ProductExecutor = ProductDatabase | ProductTransaction;
 
 export type ExperienceRow = typeof experiences.$inferSelect;
 export type ExperienceDraftRow = typeof experienceDrafts.$inferSelect;
@@ -24,6 +29,23 @@ export interface ReleaseCursor {
   id: string;
 }
 
+// Cursor timestamps keep PostgreSQL's microsecond precision: a millisecond JS Date would make
+// keyset pagination skip rows that share the boundary millisecond.
+const CURSOR_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/;
+
+function isCursorTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && CURSOR_TIMESTAMP.test(value) && !Number.isNaN(Date.parse(value));
+}
+
+function isCursorId(value: unknown): value is string {
+  return resourceIdSchema.safeParse(value).success;
+}
+
+/** Microsecond-precision UTC text for a timestamptz column, used as the keyset cursor value. */
+function cursorTimestamp(column: typeof experiences.created_at | typeof experienceReleases.published_at) {
+  return sql<string>`to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+}
+
 export function encodeExperienceCursor(cursor: { created_at: Date | string; id: string }): string {
   const d = typeof cursor.created_at === 'string' ? cursor.created_at : cursor.created_at.toISOString();
   return Buffer.from(JSON.stringify({ created_at: d, id: cursor.id }), 'utf8').toString('base64url');
@@ -33,10 +55,10 @@ export function decodeExperienceCursor(cursorStr: string): ExperienceCursor {
   try {
     const raw = Buffer.from(cursorStr, 'base64url').toString('utf8');
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed.created_at !== 'string' || typeof parsed.id !== 'string') {
+    if (!parsed || !isCursorTimestamp(parsed.created_at) || !isCursorId(parsed.id)) {
       throw new Error('Malformed cursor');
     }
-    return parsed as ExperienceCursor;
+    return { created_at: parsed.created_at, id: parsed.id };
   } catch {
     throw new ProductError(400, 'VAL_INVALID_REQUEST', 'Invalid pagination cursor');
   }
@@ -51,17 +73,17 @@ export function decodeReleaseCursor(cursorStr: string): ReleaseCursor {
   try {
     const raw = Buffer.from(cursorStr, 'base64url').toString('utf8');
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed.published_at !== 'string' || typeof parsed.id !== 'string') {
+    if (!parsed || !isCursorTimestamp(parsed.published_at) || !isCursorId(parsed.id)) {
       throw new Error('Malformed cursor');
     }
-    return parsed as ReleaseCursor;
+    return { published_at: parsed.published_at, id: parsed.id };
   } catch {
     throw new ProductError(400, 'VAL_INVALID_REQUEST', 'Invalid pagination cursor');
   }
 }
 
 export async function findExperienceById(
-  db: ProductDatabase,
+  db: ProductExecutor,
   id: string,
 ): Promise<ExperienceRow | undefined> {
   const [row] = await db.select().from(experiences).where(eq(experiences.id, id)).limit(1);
@@ -69,7 +91,7 @@ export async function findExperienceById(
 }
 
 export async function findExperienceWithDraft(
-  db: ProductDatabase,
+  db: ProductExecutor,
   id: string,
 ): Promise<{ experience: ExperienceRow; draft: ExperienceDraftRow | null } | undefined> {
   const [row] = await db
@@ -90,7 +112,7 @@ export async function findExperienceWithDraft(
 }
 
 export async function listExperiences(
-  db: ProductDatabase,
+  db: ProductExecutor,
   opts: { limit: number; cursor?: string },
 ): Promise<{
   items: Array<{
@@ -113,6 +135,7 @@ export async function listExperiences(
         revision: experienceDrafts.revision,
         content_hash: experienceDrafts.content_hash,
       },
+      cursor_at: cursorTimestamp(experiences.created_at),
     })
     .from(experiences)
     .leftJoin(experienceDrafts, eq(experiences.id, experienceDrafts.experience_id))
@@ -125,10 +148,7 @@ export async function listExperiences(
     rows.pop();
     const last = rows[rows.length - 1];
     if (last) {
-      nextCursor = encodeExperienceCursor({
-        created_at: last.experience.created_at,
-        id: last.experience.id,
-      });
+      nextCursor = encodeExperienceCursor({ created_at: last.cursor_at, id: last.experience.id });
     }
   }
 
@@ -141,7 +161,7 @@ export async function listExperiences(
 }
 
 export async function insertExperienceWithDraft(
-  db: ProductDatabase,
+  db: ProductExecutor,
   input: {
     id: string;
     name: string;
@@ -197,7 +217,7 @@ export type PatchExperienceResult =
   | { status: 'conflict'; current: ExperienceRow };
 
 export async function patchExperienceMetadata(
-  db: ProductDatabase,
+  db: ProductExecutor,
   id: string,
   expectedRevision: number,
   patch: { name?: string; description?: string },
@@ -241,7 +261,7 @@ export async function patchExperienceMetadata(
 }
 
 export async function findDraftByExperienceId(
-  db: ProductDatabase,
+  db: ProductExecutor,
   experienceId: string,
 ): Promise<ExperienceDraftRow | undefined> {
   const [row] = await db
@@ -258,7 +278,7 @@ export type UpdateDraftResult =
   | { status: 'conflict'; current: ExperienceDraftRow };
 
 export async function updateDraftContent(
-  db: ProductDatabase,
+  db: ProductExecutor,
   experienceId: string,
   expectedRevision: number,
   newContent: Record<string, unknown>,
@@ -297,15 +317,21 @@ export type InsertReleaseResult =
   | { status: 'ok'; release: ExperienceReleaseRow }
   | { status: 'duplicate_version' };
 
-function isUniqueViolation(error: unknown): boolean {
-  for (let e: unknown = error; e && typeof e === 'object'; e = (e as { cause?: unknown }).cause) {
-    if ((e as { code?: unknown }).code === '23505') return true;
+const RELEASE_VERSION_UNIQUE = 'experience_releases_exp_id_def_ver_unique';
+
+/** Drizzle wraps the pg error in `cause`; only the definition-version constraint means a duplicate release. */
+function isDuplicateVersionViolation(error: unknown): boolean {
+  let e: unknown = error;
+  for (let depth = 0; depth < 5 && e && typeof e === 'object'; depth += 1) {
+    const { code, constraint } = e as { code?: unknown; constraint?: unknown };
+    if (code === '23505') return constraint === RELEASE_VERSION_UNIQUE;
+    e = (e as { cause?: unknown }).cause;
   }
   return false;
 }
 
 export async function insertExperienceRelease(
-  db: ProductDatabase,
+  db: ProductExecutor,
   input: {
     id: string;
     experience_id: string;
@@ -326,7 +352,7 @@ export async function insertExperienceRelease(
     if (!row) throw new Error('insert release returned no row');
     return { status: 'ok', release: row };
   } catch (err: unknown) {
-    if (isUniqueViolation(err)) {
+    if (isDuplicateVersionViolation(err)) {
       return { status: 'duplicate_version' };
     }
     throw err;
@@ -334,7 +360,7 @@ export async function insertExperienceRelease(
 }
 
 export async function findReleaseById(
-  db: ProductDatabase,
+  db: ProductExecutor,
   releaseId: string,
 ): Promise<ExperienceReleaseRow | undefined> {
   const [row] = await db
@@ -346,7 +372,7 @@ export async function findReleaseById(
 }
 
 export async function listExperienceReleases(
-  db: ProductDatabase,
+  db: ProductExecutor,
   experienceId: string,
   opts: { limit: number; cursor?: string },
 ): Promise<{ items: ExperienceReleaseRow[]; next_cursor: string | null }> {
@@ -360,7 +386,7 @@ export async function listExperienceReleases(
   }
 
   const rows = await db
-    .select()
+    .select({ release: experienceReleases, cursor_at: cursorTimestamp(experienceReleases.published_at) })
     .from(experienceReleases)
     .where(whereClause)
     .orderBy(desc(experienceReleases.published_at), desc(experienceReleases.id))
@@ -371,18 +397,15 @@ export async function listExperienceReleases(
     rows.pop();
     const last = rows[rows.length - 1];
     if (last) {
-      nextCursor = encodeReleaseCursor({
-        published_at: last.published_at,
-        id: last.id,
-      });
+      nextCursor = encodeReleaseCursor({ published_at: last.cursor_at, id: last.release.id });
     }
   }
 
-  return { items: rows, next_cursor: nextCursor };
+  return { items: rows.map((row) => row.release), next_cursor: nextCursor };
 }
 
 export async function findIdempotencyRecord(
-  db: ProductDatabase,
+  db: ProductExecutor,
   scope: string,
   key: string,
 ): Promise<IdempotencyRecordRow | undefined> {
@@ -395,7 +418,7 @@ export async function findIdempotencyRecord(
 }
 
 export async function saveIdempotencyRecord(
-  db: ProductDatabase,
+  db: ProductExecutor,
   record: {
     scope: string;
     key: string;
@@ -404,5 +427,23 @@ export async function saveIdempotencyRecord(
     response_body: Record<string, unknown>;
   },
 ): Promise<void> {
-  await db.insert(idempotencyRecords).values(record).onConflictDoNothing();
+  // No ON CONFLICT: callers hold the key's advisory lock, so a conflict here is a real fault, not a race.
+  await db.insert(idempotencyRecords).values(record);
+}
+
+/**
+ * Run `work` in one transaction that first takes a transaction-scoped advisory lock on (scope, key).
+ * Requests reusing a key serialize here; under READ COMMITTED the next one then sees the committed
+ * record and replays it. The record and the business write therefore commit or roll back together.
+ */
+export async function withIdempotencyLock<T>(
+  db: ProductDatabase,
+  scope: string,
+  key: string,
+  work: (tx: ProductExecutor) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${scope}|${key}`}, 0))`);
+    return work(tx);
+  });
 }

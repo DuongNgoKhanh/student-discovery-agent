@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import { computeContentHash } from '@/modules/experiences/canonical';
 import * as repo from '@/modules/experiences/experiences.repository';
+import { setPublishReportVerifier } from '@/modules/experiences/experiences.reports';
 import {
   createExperience,
   getExperience,
@@ -22,6 +23,8 @@ const mockAdmin = { sub: 'admin-user' };
 describe('experiences.service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The real lock opens a transaction; unit tests run the work directly against the mock DB.
+    vi.mocked(repo.withIdempotencyLock).mockImplementation((db, _scope, _key, work) => work(db));
   });
 
   describe('createExperience', () => {
@@ -383,6 +386,50 @@ describe('experiences.service', () => {
       evaluation_cases: [],
       approval_refs: ['appr_1'],
     };
+
+    beforeEach(() => {
+      setPublishReportVerifier({ verify: async () => true });
+    });
+
+    afterEach(() => {
+      setPublishReportVerifier(null);
+    });
+
+    it('fails closed with 422 PUBLISH_GATE_FAILED when reports cannot be verified', async () => {
+      setPublishReportVerifier(null);
+      vi.mocked(repo.findIdempotencyRecord).mockResolvedValue(undefined);
+      vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
+        draft_id: 'draft_1',
+        experience_id: 'exp_1',
+        revision: 2,
+        content_hash: 'sha256:expected_hash',
+        content: validDefinitionContent,
+        updated_by: 'admin',
+        updated_at: new Date(),
+      });
+
+      await expect(
+        publishExperienceRelease(
+          mockDb,
+          'exp_1',
+          {
+            expected_revision: 2,
+            content_hash: 'sha256:expected_hash',
+            validation_id: 'val_unknown',
+            evaluation_id: 'eval_unknown',
+            approval_refs: [],
+            idempotency_key: 'pub_key_closed',
+          },
+          mockAdmin,
+        ),
+      ).rejects.toMatchObject({
+        status: 422,
+        code: 'PUBLISH_GATE_FAILED',
+        details: { kind: 'validation', issues: [expect.objectContaining({ code: 'report_unverified' })] },
+      });
+      expect(repo.insertExperienceRelease).not.toHaveBeenCalled();
+      expect(repo.saveIdempotencyRecord).not.toHaveBeenCalled();
+    });
 
     it('publishes valid draft and returns 201 release DTO', async () => {
       vi.mocked(repo.findIdempotencyRecord).mockResolvedValue(undefined);
