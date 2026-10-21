@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool, type ClientBase } from 'pg';
 import legacy from '../fixtures/legacy/auth.json';
+import journal from '../../migrations/meta/_journal.json';
 import { startPostgres, type PostgresHandle } from '../helpers/postgres';
 import {
   createDatabase,
   createLegacyTables,
   describeTable,
+  type TableShape,
   regclass,
   sequenceState,
   withClient,
@@ -15,6 +17,7 @@ import { migrateProduct } from '@/infrastructure/db/migrate';
 import { insertUser } from '@/modules/users/users.repository';
 
 const LEGACY_CREATED_AT = '2026-01-02T03:04:05.123456+07:00';
+const MIGRATION_COUNT = journal.entries.length;
 
 let pg: PostgresHandle;
 let dbCounter = 0;
@@ -55,6 +58,22 @@ async function dumpRows(c: ClientBase, qualified: string): Promise<string[]> {
   return r.rows.map((row) => row.j as string);
 }
 
+/** 0004 is the only intended divergence from legacy DDL: users.updated_at is NOT NULL DEFAULT now(). */
+async function expectedShape(c: ClientBase, table: string): Promise<TableShape> {
+  const shape = await describeTable(c, 'ref', table);
+  if (table !== 'users') return shape;
+  return { ...shape, columns: shape.columns.map((col) =>
+    col.name === 'updated_at' ? { ...col, nullable: false, default: 'now()' } : col) };
+}
+
+/** Legacy rows keep every value except a NULL updated_at, which 0004 backfills from created_at. */
+function backfilled(rows: string[]): string[] {
+  return rows.map((row) => {
+    const r = JSON.parse(row) as { created_at: string; updated_at: string | null };
+    return JSON.stringify({ ...r, updated_at: r.updated_at ?? r.created_at });
+  });
+}
+
 async function journalCount(c: ClientBase): Promise<number | null> {
   if (!(await regclass(c, 'product.__drizzle_migrations'))) return null;
   const r = await c.query('SELECT count(*)::int AS n FROM product.__drizzle_migrations');
@@ -68,7 +87,7 @@ describe('Product migration', () => {
     await withClient(url, async (c) => {
       expect(await regclass(c, 'public.users')).toBeNull();
       expect(await regclass(c, 'public.versions')).toBeNull();
-      expect(await journalCount(c)).toBe(3);
+      expect(await journalCount(c)).toBe(MIGRATION_COUNT);
       expect(await regclass(c, 'product.experiences')).toBe('product.experiences');
       expect(await regclass(c, 'product.experience_drafts')).toBe('product.experience_drafts');
       expect(await regclass(c, 'product.experience_releases')).toBe('product.experience_releases');
@@ -90,7 +109,7 @@ describe('Product migration', () => {
       await createLegacyTables(c, ['users', 'versions'], 'ref');
       for (const table of ['users', 'versions']) {
         const product = await describeTable(c, 'product', table);
-        const reference = await describeTable(c, 'ref', table);
+        const reference = await expectedShape(c, table);
         expect(product).toEqual(reference);
       }
       expect(await c.query(`SELECT pg_get_serial_sequence('product.users', 'id') AS s`)).toMatchObject({
@@ -130,7 +149,7 @@ describe('Product migration', () => {
         expect(await regclass(c, 'public.users')).toBeNull();
         expect(await regclass(c, 'public.versions')).toBeNull();
         expect(await regclass(c, 'public.users_id_seq')).toBeNull();
-        expect(await dumpRows(c, 'product.users')).toEqual(usersBefore);
+        expect(await dumpRows(c, 'product.users')).toEqual(backfilled(usersBefore));
         expect(await dumpRows(c, 'product.versions')).toEqual(versionsBefore);
 
         // Hashes byte-identical.
@@ -195,12 +214,12 @@ describe('Product migration', () => {
 
       await withClient(url, async (c) => {
         expect(await regclass(c, `public.${present}`)).toBeNull();
-        expect(await dumpRows(c, `product.${present}`)).toEqual(before);
+        expect(await dumpRows(c, `product.${present}`)).toEqual(present === 'users' ? backfilled(before) : before);
         expect(await regclass(c, `product.${missing}`)).toBe(`product.${missing}`);
         expect(await dumpRows(c, `product.${missing}`)).toEqual([]);
         await createLegacyTables(c, [present, missing], 'ref');
         for (const t of [present, missing]) {
-          expect(await describeTable(c, 'product', t)).toEqual(await describeTable(c, 'ref', t));
+          expect(await describeTable(c, 'product', t)).toEqual(await expectedShape(c, t));
         }
       });
     },
@@ -217,7 +236,7 @@ describe('Product migration', () => {
 
     let snapshot: { users: string[]; versions: string[]; seq: unknown } | undefined;
     await withClient(url, async (c) => {
-      expect(await journalCount(c)).toBe(3);
+      expect(await journalCount(c)).toBe(MIGRATION_COUNT);
       snapshot = {
         users: await dumpRows(c, 'product.users'),
         versions: await dumpRows(c, 'product.versions'),
@@ -229,7 +248,7 @@ describe('Product migration', () => {
     await migrateProduct(url);
 
     await withClient(url, async (c) => {
-      expect(await journalCount(c)).toBe(3);
+      expect(await journalCount(c)).toBe(MIGRATION_COUNT);
       expect({
         users: await dumpRows(c, 'product.users'),
         versions: await dumpRows(c, 'product.versions'),

@@ -90,6 +90,24 @@ Các lựa chọn còn ở trạng thái Proposed vẫn cần chốt trước im
 
 [error-codes.json](error-codes.json) là registry duy nhất; [error_codes.md](error_codes.md), TypeScript/Python và OpenAPI enum được generate bằng `python3 scripts/generate-error-codes.py`. Envelope dùng canonical code; alias cũ ở `error.legacy_code`. Xem [API migration](../docs/operations/api-review-fixes.md).
 
+## Tương thích về sau
+
+Server chỉ được **thêm** vào contract đã phát hành: thêm field (optional với request), thêm endpoint,
+thêm giá trị enum. Server không đổi tên, đổi kiểu, đổi nghĩa hoặc bỏ field/endpoint trong cùng một
+phiên bản; thay đổi như vậy chờ phiên bản API hoặc envelope tiếp theo.
+
+Client phải:
+
+- bỏ qua field lạ trong response, không lỗi khi gặp field mới;
+- xử lý giá trị enum lạ theo nhánh mặc định an toàn (ví dụ hiển thị chung chung, coi như lỗi không retry);
+- không phụ thuộc vào thứ tự field trong JSON;
+- phân nhánh lỗi theo `error.code`, không theo `message`.
+
+Envelope hiện trả cả HTTP status lẫn `status` trong body, và `error.message` dạng text tiếng Anh.
+`status` trong body luôn bằng HTTP status. `message` chỉ để debug/log; web-ui hiện vẫn dùng `message`
+làm fallback hiển thị, nên chưa bỏ được. Ở phiên bản envelope tiếp theo: UI dịch thông báo theo
+`error.code`, sau đó bỏ `status` trong body và hạ `message` thành field debug.
+
 ## Kiểm tra contract và bảng parity
 
 Public gateway origin local của mọi YAML là `http://localhost:3000/api/v1`. Chạy `pnpm --dir apps/studio-api contracts:check`
@@ -105,7 +123,7 @@ Trạng thái parity giữa contract và triển khai hiện tại (Product API 
 | `/auth/session` | implemented (studio-api `/api/v1`) | Read-only verified metadata `{principal:{type,id},is_admin}`; missing/invalid/expired trả 401 với code riêng. |
 | `/auth/logout` | implemented (studio-api `/api/v1/auth/logout`) | Response `data: {ok:true}`. |
 | `/admin/auth/login` | implemented (studio-api `/api/v1`) | Không có mật khẩu mặc định; cần `ADMIN_PASSWORD`. |
-| `/me`, `/users`, `/admin/users*` (CRUD, restore, bulk) | implemented (studio-api `/api/v1`) | `/users` yêu cầu Bearer; bulk create thất bại trả `user_id: null`. |
+| `/me`, `/users`, `/admin/users*` (CRUD, restore, bulk) | implemented (studio-api `/api/v1`) | `/users` yêu cầu Bearer; tạo user trả 201; list admin mặc định chỉ user chưa xóa (`is_deleted=true` để xem đã xóa); bulk delete là `POST /admin/users/bulk/delete`; bulk create thất bại trả `user_id: null`; `updated_at` bằng `created_at` khi mới tạo. |
 | `/users/avatar/upload`, `/users/{user_id}/avatar` | implemented (studio-api `/api/v1`) | Avatar quá lớn trả 413. |
 | `/versions` (GET, POST 201) | implemented (studio-api `/api/v1`) | Public, không RBAC. |
 | `/download` | implemented (studio-api `/api/v1`) | Chỉ bucket avatar công khai; bucket khác hoặc `..` trả 404. |

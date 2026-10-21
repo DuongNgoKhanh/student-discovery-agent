@@ -49,8 +49,8 @@ export async function listUsers(
   includeDeleted = false,
 ): Promise<{ data: AdminUserProfile[]; pagination: PaginationMeta }> {
   const conds: SQL[] = [];
-  if (!includeDeleted) conds.push(eq(users.is_deleted, false));
-  else if (query.is_deleted !== undefined) conds.push(eq(users.is_deleted, query.is_deleted));
+  // Admins opt in to soft-deleted rows with `is_deleted=true`; the default stays on active users.
+  conds.push(eq(users.is_deleted, includeDeleted ? (query.is_deleted ?? false) : false));
   const like = (v: string) => `%${v.replace(/[\\%_]/g, '\\$&')}%`;
   if (query.name) conds.push(ilike(users.name, like(query.name)));
   if (query.email) conds.push(ilike(users.email, like(query.email)));

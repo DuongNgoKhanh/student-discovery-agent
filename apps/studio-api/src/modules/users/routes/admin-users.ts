@@ -4,8 +4,8 @@ import { readJsonBody } from '@/http/body';
 import { withHandler } from '@/http/handler';
 import { success } from '@/http/response';
 import { queryOf } from '@/modules/users/route-helpers';
-import { adminCreateSchema, bulkDeleteSchema, userQuerySchema } from '@/modules/users/users.schemas';
-import { bulkDeleteUsers, createUser, listUsers, toNewUser } from '@/modules/users/users.service';
+import { adminCreateSchema, userQuerySchema } from '@/modules/users/users.schemas';
+import { createUser, listUsers, toNewUser } from '@/modules/users/users.service';
 
 
 export const handleGet = withHandler(async (req, ctx) => {
@@ -17,12 +17,5 @@ export const handleGet = withHandler(async (req, ctx) => {
 export const handlePost = withHandler(async (req, ctx) => {
   await requireAdmin(req);
   const input = adminCreateSchema.parse(await readJsonBody(req));
-  return success(await createUser(getProductDatabase(), await toNewUser(input)), ctx);
-});
-
-export const handleDelete = withHandler(async (req, ctx) => {
-  await requireAdmin(req);
-  const { user_ids } = bulkDeleteSchema.parse(await readJsonBody(req));
-  const { data, summary, ...rest } = await bulkDeleteUsers(getProductDatabase(), user_ids, ctx);
-  return success(data, ctx, 200, { ...rest, meta: { summary } });
+  return success(await createUser(getProductDatabase(), await toNewUser(input)), ctx, 201);
 });

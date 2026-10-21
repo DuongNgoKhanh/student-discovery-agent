@@ -6,7 +6,7 @@ import { encodeExperienceCursor, decodeExperienceCursor } from '../experiences/e
 import { patchExperienceSchema, saveDraftSchema, toExperienceMetadataDTO, toExperienceDraftDTO } from '../experiences/experiences.schemas';
 vi.mock('@/infrastructure/storage/objects', () => ({ getObject: vi.fn() }));
 import { getObject } from '@/infrastructure/storage/objects';
-const row = { id: 4, email: 'private@example.test', name: 'Name', bio: 'private bio', position: 'Student', avatar_url: null, hashed_password: 'secret', is_deleted: false, created_at: new Date(), updated_at: null };
+const row = { id: 4, email: 'private@example.test', name: 'Name', bio: 'private bio', position: 'Student', avatar_url: null, hashed_password: 'secret', is_deleted: false, created_at: new Date(), updated_at: new Date() };
 describe('API review regressions', () => {
   it('public users expose only four safe fields while self/admin retain email', () => {
     expect(adminToPublic(toAdminProfile(row))).toEqual({ id: 4, name: 'Name', avatar_url: null, position: 'Student' });
