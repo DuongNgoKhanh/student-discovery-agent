@@ -11,7 +11,7 @@ const cookieNames = {
 const productSchema = z.object({
   DATABASE_URL: z.string({ required_error: 'DATABASE_URL is required' }).min(1, 'DATABASE_URL is required'),
   SECRET_KEY: z.string({ required_error: 'SECRET_KEY is required' }).min(1, 'SECRET_KEY is required'),
-  ACCESS_TOKEN_EXPIRE_MINUTES: z.coerce.number().int().min(30).max(90).default(60),
+  ACCESS_TOKEN_EXPIRE_MINUTES: z.coerce.number().int().min(15).max(60).default(30),
   REFRESH_TOKEN_EXPIRE_MINUTES: z.coerce.number().int().min(10080).max(43200).default(20160),
   RUNTIME_READY_URL: z.string().url().optional(),
   ...cookieNames,
