@@ -2,8 +2,8 @@ openapi: 3.0.3
 info:
   title: Student Discovery - Experience Releases
   version: 1.0.0
-  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md
-    để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
+  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md để
+    chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
 servers:
   - url: http://localhost:3000/api/v1
     description: Local development server
@@ -19,13 +19,13 @@ paths:
       tags:
         - Studio Releases
       summary: Publish immutable release từ validated snapshot
-      description: Check admin capability, exact draft revision/hash, supported rules/schema/engine, passing validation/evaluation
-        + mandatory cases and approval policy. Expert approval is separate from technical pass. Same key replays
-        created release; publish does not activate.
+      description: Check admin capability, exact draft revision/hash, supported rules/schema/engine, passing
+        validation/evaluation + mandatory cases and approval policy. Expert approval is separate from technical pass.
+        Same key replays created release; publish does not activate.
       security:
         - BearerAuth: []
       responses:
-        '201':
+        "201":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -36,37 +36,37 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperienceReleaseEnvelope'
-        '400':
+                $ref: "#/components/schemas/ExperienceReleaseEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PublishReleaseInput'
+              $ref: "#/components/schemas/PublishReleaseInput"
       parameters:
         - name: id
           in: path
@@ -85,7 +85,7 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -96,30 +96,30 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperienceReleasePageEnvelope'
-        '400':
+                $ref: "#/components/schemas/ExperienceReleasePageEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       parameters:
         - name: id
@@ -155,7 +155,7 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -166,30 +166,30 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperienceReleaseEnvelope'
-        '400':
+                $ref: "#/components/schemas/ExperienceReleaseEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       parameters:
         - name: release_id
@@ -210,7 +210,7 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -221,30 +221,30 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActiveReleaseEnvelope'
-        '400':
+                $ref: "#/components/schemas/ActiveReleaseEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       parameters:
         - name: id
@@ -268,13 +268,13 @@ paths:
       tags:
         - Studio Releases
       summary: Activate release với pointer concurrency guard
-      description: Resolve release to experience, check environment/support/approval and reject demo production.
-        Check both monotonic pointer expected_revision and expected_active_release_id. Commit active pointer + audit
-        atomically; existing activities/Agent releases remain pinned.
+      description: Resolve release to experience, check environment/support/approval and reject demo production. Check both
+        monotonic pointer expected_revision and expected_active_release_id. Commit active pointer + audit atomically;
+        existing activities/Agent releases remain pinned.
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -285,37 +285,37 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActiveReleaseEnvelope'
-        '400':
+                $ref: "#/components/schemas/ActiveReleaseEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ActivateReleaseInput'
+              $ref: "#/components/schemas/ActivateReleaseInput"
       parameters:
         - name: release_id
           in: path
@@ -331,13 +331,13 @@ paths:
       tags:
         - Studio Releases
       summary: Rollback active pointer tới release đã biết
-      description: Target must belong to experience/environment and be compatible/approved. Expected pointer revision
-        protects ABA even if expected_active_release_id repeats. Atomic pointer/audit; future activities pin target,
-        existing activities unchanged. Rollback is not revocation.
+      description: Target must belong to experience/environment and be compatible/approved. Expected pointer revision protects
+        ABA even if expected_active_release_id repeats. Atomic pointer/audit; future activities pin target, existing
+        activities unchanged. Rollback is not revocation.
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -348,40 +348,40 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActiveReleaseEnvelope'
-        '400':
+                $ref: "#/components/schemas/ActiveReleaseEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RollbackInput'
+              $ref: "#/components/schemas/RollbackInput"
             examples:
               rollback:
-                $ref: '#/components/examples/Rollback'
+                $ref: "#/components/examples/Rollback"
       parameters:
         - name: id
           in: path
@@ -396,10 +396,6 @@ components:
     PublishReleaseInput:
       type: object
       properties:
-        expected_revision:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
         content_hash:
           type: string
           pattern: ^sha256:[a-f0-9]{64}$
@@ -421,16 +417,20 @@ components:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        expected_draft_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
       required:
-        - expected_revision
+        - expected_draft_revision
         - content_hash
         - validation_id
         - evaluation_id
         - approval_refs
         - idempotency_key
       additionalProperties: false
-      description: Require registered supported rules + same hash/schema/engine passing reports and mandatory cases.
-        Reject DEC-04 placeholder/unsupported/stale reports. Expert approval where required. Publish does not activate.
+      description: Require registered supported rules + same hash/schema/engine passing reports and mandatory cases. Reject
+        DEC-04 placeholder/unsupported/stale reports. Expert approval where required. Publish does not activate.
     ExperienceRelease:
       type: object
       properties:
@@ -482,22 +482,17 @@ components:
         - published_at
         - published_by
       additionalProperties: true
-      description: Immutable snapshot; no PATCH/PUT to release. Every started activity pins this release; active
-        pointer change never migrates existing activity.
+      description: Immutable snapshot; no PATCH/PUT to release. Every started activity pins this release; active pointer
+        change never migrates existing activity.
     ExperienceReleasePage:
       type: object
       properties:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/ExperienceRelease'
-        next_cursor:
-          type: string
-          minLength: 1
-          nullable: true
+            $ref: "#/components/schemas/ExperienceRelease"
       required:
         - items
-        - next_cursor
       additionalProperties: true
     ActiveReleasePointer:
       type: object
@@ -560,8 +555,8 @@ components:
         - idempotency_key
         - reason
       additionalProperties: false
-      description: Target release in path. expected_revision refers to active pointer; expected_active_release_id
-        is an additional guard, not a replacement for monotonic revision (ABA prevention).
+      description: Target release in path. expected_revision refers to active pointer; expected_active_release_id is an
+        additional guard, not a replacement for monotonic revision (ABA prevention).
     RollbackInput:
       type: object
       properties:
@@ -608,7 +603,7 @@ components:
                 - data
               properties:
                 data:
-                  $ref: '#/components/schemas/ExperienceRelease'
+                  $ref: "#/components/schemas/ExperienceRelease"
         - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
     ExperienceReleasePageEnvelope:
       oneOf:
@@ -617,9 +612,19 @@ components:
             - type: object
               required:
                 - data
+                - meta
               properties:
                 data:
-                  $ref: '#/components/schemas/ExperienceReleasePage'
+                  $ref: "#/components/schemas/ExperienceReleasePage"
+                meta:
+                  allOf:
+                    - $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+                    - type: object
+                      required:
+                        - pagination
+                      properties:
+                        pagination:
+                          $ref: "#/components/schemas/PaginationMeta"
         - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
     ActiveReleaseEnvelope:
       oneOf:
@@ -630,8 +635,25 @@ components:
                 - data
               properties:
                 data:
-                  $ref: '#/components/schemas/ActiveReleasePointer'
+                  $ref: "#/components/schemas/ActiveReleasePointer"
         - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    PaginationMeta:
+      type: object
+      required:
+        - limit
+        - next_cursor
+        - has_more
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+      additionalProperties: false
   examples:
     Rollback:
       summary: Pointer revision thêm để tránh ABA.

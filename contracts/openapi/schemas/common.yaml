@@ -5,6 +5,7 @@ components:
       required:
         - status
         - success
+        - message
         - data
         - error
         - meta
@@ -37,11 +38,14 @@ components:
       properties:
         request_id:
           type: string
+          format: uuid
         trace_id:
           type: string
+          format: uuid
         timestamp:
           type: string
           format: date-time
+          pattern: \.\d{3}Z$
     ErrorDetail:
       type: object
       required:
@@ -50,7 +54,10 @@ components:
         - retryable
       properties:
         code:
+          $ref: 'error-codes.yaml#/components/schemas/ErrorCode'
+        legacy_code:
           type: string
+          description: Historical name when the transport canonicalized a registered alias.
         message:
           type: string
         retryable:
@@ -76,13 +83,15 @@ components:
         request_id:
           type: string
           minLength: 1
+          format: uuid
         trace_id:
           type: string
           minLength: 1
+          format: uuid
         timestamp:
           type: string
           format: date-time
-          pattern: Z$
+          pattern: \.\d{3}Z$
         replayed:
           type: boolean
       required:
@@ -134,6 +143,51 @@ components:
       additionalProperties: true
       description: Snapshot chỉ trả khi caller có quyền đọc; activity guard có thể gây conflict dù conversation
         guard đúng.
+    ProductMetadataRevisionConflictDetails:
+      type: object
+      description: Product metadata counter conflict; independent of the experience draft and runtime counters.
+      properties:
+        kind:
+          type: string
+          enum:
+            - revision_conflict
+        expected_metadata_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        actual_metadata_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+        - kind
+        - expected_metadata_revision
+        - actual_metadata_revision
+      additionalProperties: false
+    ProductDraftRevisionConflictDetails:
+      type: object
+      description: Product draft counter conflict on save or publish. Save may include the current draft hash.
+      properties:
+        kind:
+          type: string
+          enum:
+            - revision_conflict
+        expected_draft_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        actual_draft_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        current_content_hash:
+          type: string
+          pattern: ^sha256:[a-f0-9]{64}$
+      required:
+        - kind
+        - expected_draft_revision
+        - actual_draft_revision
+      additionalProperties: false
     StaleResultDetails:
       type: object
       properties:
@@ -236,9 +290,10 @@ components:
       type: object
       properties:
         code:
+          $ref: 'error-codes.yaml#/components/schemas/ErrorCode'
+        legacy_code:
           type: string
-          minLength: 1
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          description: Historical name when the transport canonicalized a registered alias.
         message:
           type: string
           minLength: 1
@@ -247,6 +302,8 @@ components:
         details:
           anyOf:
             - $ref: '#/components/schemas/RevisionConflictDetails'
+            - $ref: '#/components/schemas/ProductMetadataRevisionConflictDetails'
+            - $ref: '#/components/schemas/ProductDraftRevisionConflictDetails'
             - $ref: '#/components/schemas/StaleResultDetails'
             - $ref: '#/components/schemas/SnapshotConflictDetails'
             - $ref: '#/components/schemas/ValidationDetails'
@@ -277,14 +334,14 @@ components:
       additionalProperties: true
       description: |-
         Stable domain codes; unknown code/details kind có generic fallback.
-        400 INVALID_REQUEST: malformed JSON/duplicate keys/non-finite number.
-        401 AUTH_REQUIRED; 403 FORBIDDEN; 404 RESOURCE_NOT_FOUND gồm inaccessible resource.
-        409 REVISION_CONFLICT, IDEMPOTENCY_KEY_COLLISION, STALE_CLARIFICATION, STALE_RESULT_REVISION, STALE_REPORT, ACTIVE_RELEASE_CONFLICT.
-        410 CONVERSATION_ENDED, CONVERSATION_EXPIRED.
-        413 PAYLOAD_TOO_LARGE.
-        422 INVALID_INPUT, INVALID_ACTIVITY_TRANSITION, INVALID_QUESTION, INVALID_OPTION, RESULT_NOT_READY,
-            INCOMPATIBLE_SCHEMA, INCOMPATIBLE_RELEASE, EXPERIENCE_NOT_CONFIGURED, PUBLISH_GATE_FAILED, ENGINE_FAILURE.
-        429 RATE_LIMITED; 500 INTERNAL_ERROR; 503 SERVICE_UNAVAILABLE; 504 REQUEST_TIMEOUT.
+        400 VAL_INVALID_REQUEST: malformed JSON/duplicate keys/non-finite number.
+        401 AUTH_TOKEN_MISSING; 403 AUTHZ_FORBIDDEN; 404 RES_NOT_FOUND gồm inaccessible resource.
+        409 CONFLICT_REVISION, CONFLICT_IDEMPOTENCY_KEY, CONFLICT_STALE_CLARIFICATION, CONFLICT_STALE_RESULT_REVISION, CONFLICT_STALE_REPORT, CONFLICT_ACTIVE_RELEASE.
+        410 RES_CONVERSATION_ENDED, RES_CONVERSATION_EXPIRED.
+        413 VAL_PAYLOAD_TOO_LARGE.
+        422 VAL_INVALID_INPUT, VAL_INVALID_ACTIVITY_TRANSITION, VAL_INVALID_QUESTION, VAL_INVALID_OPTION, RES_RESULT_NOT_READY,
+            VAL_INCOMPATIBLE_SCHEMA, VAL_INCOMPATIBLE_RELEASE, RES_EXPERIENCE_NOT_CONFIGURED, PUBLISH_GATE_FAILED, SYS_ENGINE_FAILURE.
+        429 SYS_RATE_LIMITED; 500 SYS_INTERNAL_ERROR; 503 SYS_UNAVAILABLE; 504 SYS_REQUEST_TIMEOUT.
         Conflict/stale không auto-retry: sync state và tạo action mới. Transient retry giữ key/payload và budget.
         HTTP mapping này áp dụng Chat/Studio mới theo proposal; API scaffold cũ giữ quy ước hiện hữu.
     SuccessEnvelope:
@@ -312,6 +369,7 @@ components:
       required:
         - status
         - success
+        - message
         - data
         - error
         - meta
@@ -379,7 +437,7 @@ components:
             message: Input data validation failed
             data: null
             error:
-              code: VAL_UNPROCESSABLE
+              code: VAL_INVALID_INPUT
               message: Input data validation failed
               details: null
               retryable: false
@@ -567,7 +625,7 @@ components:
         success: false
         data: null
         error:
-          code: REVISION_CONFLICT
+          code: CONFLICT_REVISION
           message: Conversation đã thay đổi.
           retryable: false
           details:

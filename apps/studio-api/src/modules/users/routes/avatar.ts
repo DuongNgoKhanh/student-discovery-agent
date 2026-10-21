@@ -9,6 +9,6 @@ export const handleGet = withHandler<{ user_id: string }>(async (_req, _ctx, rou
   const obj = await readAvatar(getProductDatabase(), await userIdParam(route));
   if (!obj) throw new ProductError(404, 'RES_AVATAR_NOT_FOUND', 'Avatar not found');
   return new Response(obj.body, {
-    headers: { 'content-type': obj.contentType, 'content-length': String(obj.size), 'content-disposition': 'inline' },
+    headers: { 'x-content-type-options': 'nosniff', 'content-type': obj.contentType, 'content-length': String(obj.size), 'content-disposition': 'inline' },
   });
 });

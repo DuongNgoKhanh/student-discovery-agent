@@ -6,19 +6,21 @@ import { accessTokenTtlSeconds, refreshTokenTtlSeconds } from '@/modules/auth/to
 // without framework-specific cookie mutation or fetching the app itself.
 // ---------------------------------------------------------------------------
 
-function serialize(name: string, value: string, maxAge: number): string {
-  const parts = [`${name}=${value}`, 'Path=/', `Max-Age=${maxAge}`, 'HttpOnly', 'SameSite=Lax'];
+function serialize(name: string, value: string, maxAge: number, path = '/'): string {
+  const parts = [`${name}=${value}`, `Path=${path}`, `Max-Age=${maxAge}`, 'HttpOnly', 'SameSite=Lax'];
   if (maxAge === 0) parts.push('Expires=Thu, 01 Jan 1970 00:00:00 GMT');
   if (getAuthEnv().NODE_ENV === 'production') parts.push('Secure');
   return parts.join('; ');
 }
 
-/** Set the access cookie (and refresh cookie when given) with Max-Age = token TTL. */
-export function setAuthCookiesOn(res: Response, tokens: { access: string; refresh?: string }): Response {
+/** User access cookies retain expired JWTs until session expiry for refresh recovery; admin cookies use JWT TTL. */
+export function setAuthCookiesOn(res: Response, tokens: { access: string; refresh?: string; sessionMaxAge?: number }): Response {
   const env = getAuthEnv();
-  res.headers.append('set-cookie', serialize(env.AUTH_COOKIE_ACCESS, tokens.access, accessTokenTtlSeconds()));
+  res.headers.append('set-cookie', serialize(env.AUTH_COOKIE_ACCESS, tokens.access, tokens.sessionMaxAge ?? accessTokenTtlSeconds()));
   if (tokens.refresh !== undefined) {
-    res.headers.append('set-cookie', serialize(env.AUTH_COOKIE_REFRESH, tokens.refresh, refreshTokenTtlSeconds()));
+    // Remove the pre-migration root-scoped refresh cookie before setting the narrow one.
+    res.headers.append('set-cookie', serialize(env.AUTH_COOKIE_REFRESH, '', 0));
+    res.headers.append('set-cookie', serialize(env.AUTH_COOKIE_REFRESH, tokens.refresh, tokens.sessionMaxAge ?? refreshTokenTtlSeconds(), '/api/v1/auth'));
   }
   return res;
 }
@@ -27,7 +29,9 @@ export function setAuthCookiesOn(res: Response, tokens: { access: string; refres
 export function clearAuthCookiesOn(res: Response, which: ReadonlyArray<'access' | 'refresh'> = ['access', 'refresh']): Response {
   const env = getAuthEnv();
   for (const kind of which) {
-    res.headers.append('set-cookie', serialize(kind === 'access' ? env.AUTH_COOKIE_ACCESS : env.AUTH_COOKIE_REFRESH, '', 0));
+    const name = kind === 'access' ? env.AUTH_COOKIE_ACCESS : env.AUTH_COOKIE_REFRESH;
+    res.headers.append('set-cookie', serialize(name, '', 0));
+    if (kind === 'refresh') res.headers.append('set-cookie', serialize(name, '', 0, '/api/v1/auth'));
   }
   return res;
 }

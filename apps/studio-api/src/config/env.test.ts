@@ -8,14 +8,14 @@ describe('parseProductEnv', () => {
 
   it('applies TTL and cookie defaults', () => {
     const e = parseProductEnv(ok);
-    expect(e.ACCESS_TOKEN_EXPIRE_MINUTES).toBe(11520);
-    expect(e.REFRESH_TOKEN_EXPIRE_MINUTES).toBe(43200);
+    expect(e.ACCESS_TOKEN_EXPIRE_MINUTES).toBe(30);
+    expect(e.REFRESH_TOKEN_EXPIRE_MINUTES).toBe(20160);
     expect(e.AUTH_COOKIE_ACCESS).toBe('sda_access');
     expect(e.AUTH_COOKIE_REFRESH).toBe('sda_refresh');
   });
 
   it('coerces numeric TTL overrides', () => {
-    expect(parseProductEnv({ ...ok, ACCESS_TOKEN_EXPIRE_MINUTES: '5' }).ACCESS_TOKEN_EXPIRE_MINUTES).toBe(5);
+    expect(parseProductEnv({ ...ok, ACCESS_TOKEN_EXPIRE_MINUTES: '15' }).ACCESS_TOKEN_EXPIRE_MINUTES).toBe(15);
   });
 
   it('throws when DATABASE_URL is missing', () => {
@@ -51,8 +51,8 @@ describe('parseAuthEnv', () => {
   it('needs only SECRET_KEY, applies TTL defaults and has no admin password default', () => {
     expect(() => parseAuthEnv({})).toThrow();
     const e = parseAuthEnv({ SECRET_KEY: 's', ACCESS_TOKEN_EXPIRE_MINUTES: '', ADMIN_PASSWORD: '' });
-    expect(e.ACCESS_TOKEN_EXPIRE_MINUTES).toBe(11520);
-    expect(e.REFRESH_TOKEN_EXPIRE_MINUTES).toBe(43200);
+    expect(e.ACCESS_TOKEN_EXPIRE_MINUTES).toBe(30);
+    expect(e.REFRESH_TOKEN_EXPIRE_MINUTES).toBe(20160);
     expect(e.ADMIN_USERNAME).toBe('admin');
     expect(e.ADMIN_PASSWORD).toBeUndefined();
   });
@@ -80,3 +80,6 @@ describe('lazy getters', () => {
     expect(text).not.toContain('S3_');
   });
 });
+
+it.each(['14', '61'])('rejects unsafe access TTL %s', (value) => { expect(() => parseAuthEnv({ SECRET_KEY: 's', ACCESS_TOKEN_EXPIRE_MINUTES: value })).toThrow(); });
+it.each(['10079', '43201'])('rejects unsafe refresh TTL %s', (value) => { expect(() => parseAuthEnv({ SECRET_KEY: 's', REFRESH_TOKEN_EXPIRE_MINUTES: value })).toThrow(); });

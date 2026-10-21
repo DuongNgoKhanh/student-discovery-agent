@@ -2,8 +2,8 @@ openapi: 3.0.3
 info:
   title: Student Discovery - Admin Users
   version: 1.0.0
-  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md
-    để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
+  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md để
+    chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
 servers:
   - url: http://localhost:3000/api/v1
     description: Local development server
@@ -23,14 +23,6 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: page
-          in: query
-          required: false
-          description: Page number (starting from 1)
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
         - name: limit
           in: query
           required: false
@@ -43,10 +35,12 @@ paths:
         - name: order_by
           in: query
           required: false
-          description: Field to order results by
+          description: Stable ID ordering only; unsupported sorts are rejected.
           schema:
             type: string
-            default: created_at
+            enum:
+              - id
+            default: id
         - name: dir
           in: query
           required: false
@@ -81,22 +75,29 @@ paths:
           description: Filter by deleted status
           schema:
             type: boolean
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque signed cursor bound to collection filters and sort direction.
+          schema:
+            type: string
+            maxLength: 4096
       responses:
-        '200':
+        "200":
           description: Users list retrieved successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdminPaginatedUsersResponse'
-        '400':
+                $ref: "#/components/schemas/AdminPaginatedUsersResponse"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
-        '401':
+        "401":
           $ref: admin-auth-api.yaml#/components/responses/UnauthorizedError
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '422':
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ValidationError
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
     post:
       tags:
@@ -111,23 +112,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AdminUserCreate'
+              $ref: "#/components/schemas/AdminUserCreate"
       responses:
-        '200':
+        "200":
           description: User created successfully
           content:
             application/json:
               schema:
                 $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
-        '400':
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
-        '401':
+        "401":
           $ref: admin-auth-api.yaml#/components/responses/UnauthorizedError
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '422':
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ValidationError
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
     delete:
       tags:
@@ -142,23 +143,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AdminBulkUserDelete'
+              $ref: "#/components/schemas/AdminBulkUserDelete"
       responses:
-        '200':
+        "200":
           description: Bulk delete completed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdminUserBulkResponse'
-        '400':
+                $ref: "#/components/schemas/AdminUserBulkResponse"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
-        '401':
+        "401":
           $ref: admin-auth-api.yaml#/components/responses/UnauthorizedError
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '422':
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ValidationError
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
   /admin/users/bulk/create:
     post:
@@ -174,23 +175,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AdminBulkUserCreate'
+              $ref: "#/components/schemas/AdminBulkUserCreate"
       responses:
-        '200':
+        "200":
           description: Bulk create completed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdminUserBulkResponse'
-        '400':
+                $ref: "#/components/schemas/AdminUserBulkResponse"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
-        '401':
+        "401":
           $ref: admin-auth-api.yaml#/components/responses/UnauthorizedError
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '422':
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ValidationError
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
   /admin/users/bulk/update:
     put:
@@ -206,23 +207,23 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AdminBulkUserUpdate'
+              $ref: "#/components/schemas/AdminBulkUserUpdate"
       responses:
-        '200':
+        "200":
           description: Bulk update completed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AdminUserBulkResponse'
-        '400':
+                $ref: "#/components/schemas/AdminUserBulkResponse"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
-        '401':
+        "401":
           $ref: admin-auth-api.yaml#/components/responses/UnauthorizedError
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '422':
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ValidationError
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
   /admin/users/{user_id}:
     get:
@@ -241,21 +242,21 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: User retrieved successfully
           content:
             application/json:
               schema:
                 $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
-        '400':
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
-        '401':
+        "401":
           $ref: admin-auth-api.yaml#/components/responses/UnauthorizedError
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '500':
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
     put:
       tags:
@@ -277,25 +278,25 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AdminUserUpdate'
+              $ref: "#/components/schemas/AdminUserUpdate"
       responses:
-        '200':
+        "200":
           description: User updated successfully
           content:
             application/json:
               schema:
                 $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
-        '400':
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
-        '401':
+        "401":
           $ref: admin-auth-api.yaml#/components/responses/UnauthorizedError
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '422':
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ValidationError
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
     delete:
       tags:
@@ -313,21 +314,21 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: User soft deleted successfully
           content:
             application/json:
               schema:
                 $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
-        '400':
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
-        '401':
+        "401":
           $ref: admin-auth-api.yaml#/components/responses/UnauthorizedError
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '500':
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
   /admin/users/{user_id}/restore:
     post:
@@ -346,21 +347,21 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: User restored successfully
           content:
             application/json:
               schema:
                 $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
-        '400':
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
-        '401':
+        "401":
           $ref: admin-auth-api.yaml#/components/responses/UnauthorizedError
-        '403':
-          $ref: '#/components/responses/ForbiddenError'
-        '404':
-          $ref: '#/components/responses/NotFoundError'
-        '500':
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
 components:
   schemas:
@@ -402,12 +403,12 @@ components:
         created_at:
           type: string
           format: date-time
-          example: '2025-04-18T12:00:00Z'
+          example: 2025-04-18T12:00:00Z
         updated_at:
           type: string
           format: date-time
           nullable: true
-          example: '2025-04-19T09:30:00Z'
+          example: 2025-04-19T09:30:00Z
     AdminUserCreate:
       type: object
       required:
@@ -474,7 +475,7 @@ components:
         users:
           type: array
           items:
-            $ref: '#/components/schemas/AdminUserCreate'
+            $ref: "#/components/schemas/AdminUserCreate"
     AdminBulkUserUpdate:
       type: object
       required:
@@ -492,7 +493,7 @@ components:
                 type: integer
                 example: 1
               updates:
-                $ref: '#/components/schemas/AdminUserUpdate'
+                $ref: "#/components/schemas/AdminUserUpdate"
     AdminBulkUserDelete:
       type: object
       required:
@@ -547,9 +548,6 @@ components:
       required:
         - success
         - data
-        - total_processed
-        - total_success
-        - total_failed
         - status
         - error
         - meta
@@ -564,16 +562,7 @@ components:
         data:
           type: array
           items:
-            $ref: '#/components/schemas/AdminUserBulkResult'
-        total_processed:
-          type: integer
-          example: 3
-        total_success:
-          type: integer
-          example: 3
-        total_failed:
-          type: integer
-          example: 0
+            $ref: "#/components/schemas/AdminUserBulkResult"
         status:
           type: integer
           description: HTTP status; inspect success even for HTTP 200.
@@ -585,41 +574,50 @@ components:
               enum:
                 - null
         meta:
-          $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+          allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+            - type: object
+              required:
+                - summary
+              properties:
+                summary:
+                  type: object
+                  required:
+                    - total_processed
+                    - total_success
+                    - total_failed
+                  properties:
+                    total_processed:
+                      type: integer
+                      example: 3
+                    total_success:
+                      type: integer
+                      example: 3
+                    total_failed:
+                      type: integer
+                      example: 0
     PaginationMeta:
       type: object
       required:
-        - page
         - limit
-        - total
-        - total_pages
-        - has_next
-        - has_prev
+        - next_cursor
+        - has_more
       properties:
-        page:
-          type: integer
-          example: 1
         limit:
           type: integer
-          example: 20
-        total:
-          type: integer
-          example: 123
-        total_pages:
-          type: integer
-          example: 7
-        has_next:
+          minimum: 1
+          maximum: 100
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
           type: boolean
-          example: true
-        has_prev:
-          type: boolean
-          example: false
+      additionalProperties: false
     AdminPaginatedUsersResponse:
       type: object
       required:
         - success
         - data
-        - pagination
         - status
         - error
         - meta
@@ -632,11 +630,15 @@ components:
           example: Users retrieved successfully
           nullable: true
         data:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminUserResponse'
-        pagination:
-          $ref: '#/components/schemas/PaginationMeta'
+          type: object
+          required:
+            - items
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdminUserResponse"
+          additionalProperties: false
         status:
           type: integer
           description: HTTP status; inspect success even for HTTP 200.
@@ -648,7 +650,14 @@ components:
               enum:
                 - null
         meta:
-          $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+          allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+            - type: object
+              required:
+                - pagination
+              properties:
+                pagination:
+                  $ref: "#/components/schemas/PaginationMeta"
   responses:
     NotFoundError:
       description: Resource not found
@@ -669,7 +678,7 @@ components:
             meta:
               request_id: req-example
               trace_id: trace-example
-              timestamp: '2026-10-12T03:00:00Z'
+              timestamp: 2026-10-12T03:00:00Z
     ForbiddenError:
       description: Forbidden - Admin access required
       content:
@@ -682,14 +691,14 @@ components:
             message: Admin access required
             data: null
             error:
-              code: AUTHZ_INSUFFICIENT_PERMISSION
+              code: AUTHZ_FORBIDDEN
               message: Admin access required
               details: null
               retryable: false
             meta:
               request_id: req-example
               trace_id: trace-example
-              timestamp: '2026-10-12T03:00:00Z'
+              timestamp: 2026-10-12T03:00:00Z
   securitySchemes:
     BearerAuth:
       type: http

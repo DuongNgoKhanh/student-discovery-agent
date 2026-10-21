@@ -9,6 +9,13 @@ info:
     Verified owner comes only from signed caller context, environment only from runtime config (demo).
     TTL 3600 seconds from creation never slides. Content read/write blocked after end/exact expiry.
     Content retention 86400 seconds after effective closure; trace retention 86400 seconds from event.
+    Caller authentication precedes service readiness. Missing either caller header returns 401
+    AUTH_CALLER_CONTEXT_MISSING; malformed/duplicate headers, invalid or expired signatures, or an
+    unavailable verifier return 401 AUTH_CALLER_CONTEXT_INVALID. These failures are nonretryable
+    and disclose no service readiness. A valid signature is required before returning 503.
+    Authenticated unavailable responses include Retry-After (seconds) and retryable=true;
+    error.details.kind is not_configured for missing service configuration/capabilities, or
+    dependency_down for an unavailable database/dependency. Health remains a liveness check.
     Contract registration does not claim implementation in the public TypeScript routes or clients.
 servers:
   - url: /api/v1/internal
@@ -104,15 +111,15 @@ paths:
       summary: Commit one structured interaction turn
       description: |
         B-02 subset of the public ConversationTurnInput union: only interaction set_name and submit_answer with an
-        option payload execute. Well-formed message/text/confirm/edit requests return 422 INVALID_ACTIVITY_TRANSITION
-        after owner/lifecycle, replay and revision guards; malformed input returns 422 INVALID_INPUT.
+        option payload execute. Well-formed message/text/confirm/edit requests return 422 VAL_INVALID_ACTIVITY_TRANSITION
+        after owner/lifecycle, replay and revision guards; malformed input returns 422 VAL_INVALID_INPUT.
         Replay identity is (owner, conversation.turn, conversation_id, idempotency_key); the fingerprint covers the
         normalized request (NFC/whitespace-normalized name, key order ignored) including expected_revision and
         expected_activity_revision only when sent. Replay returns the stored status/data with fresh meta.
         The engine runs outside the write transaction; the commit rechecks lifecycle, replay and captured revisions,
         then atomically writes activity/answers, conversation revision (+1 each), result when completed, user and
         assistant messages and one outcome. Completed without a configured completion projector returns 503.
-        Revision conflicts return 409 REVISION_CONFLICT with resource_kind and readable snapshots.
+        Revision conflicts return 409 CONFLICT_REVISION with resource_kind and readable snapshots.
       requestBody:
         required: true
         content:
@@ -260,14 +267,59 @@ components:
       $ref: ../schemas/session-lifecycle.yaml#/components/schemas/ReleaseDescriptor
   responses:
     RuntimeError:
-      description: 'Typed error; data null for lifecycle failures, no forbidden state in details. 401 invalid caller, 404 unknown/mismatched owner, 409 revision/key/current-result conflict, 410 closed/expired, 413 byte limit, 422 invalid input/cursor, 503 required dependency unavailable. No auth or RAM-only fallback.'
+      description: |
+        Typed error; data null for lifecycle failures, no forbidden state in details.
+        401 AUTH_CALLER_CONTEXT_MISSING or AUTH_CALLER_CONTEXT_INVALID is nonretryable,
+        evaluated before readiness, and never includes Retry-After or readiness details.
+        404 unknown/mismatched owner, 409 revision/key/current-result conflict, 410 closed/expired,
+        413 byte limit, 422 invalid input/cursor. Authenticated 503 SYS_UNAVAILABLE is retryable,
+        includes Retry-After and details.kind=not_configured or dependency_down. No RAM-only fallback.
       headers:
         Cache-Control:
           schema:
             type: string
             enum: [no-store]
+        Retry-After:
+          description: Present only for authenticated 503 responses; suggested delay in seconds.
+          schema:
+            type: integer
+            minimum: 1
+          example: 5
       content:
         application/json:
           schema:
             $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+          examples:
+            missingCaller:
+              value:
+                status: 401
+                success: false
+                message: Authentication context is required.
+                data: null
+                error: {code: AUTH_CALLER_CONTEXT_MISSING, message: Authentication context is required., retryable: false, details: null}
+                meta: {request_id: 11111111-1111-4111-8111-111111111111, trace_id: 22222222-2222-4222-8222-222222222222, timestamp: '2026-10-21T00:00:00.000Z', replayed: false}
+            invalidCaller:
+              value:
+                status: 401
+                success: false
+                message: Authentication context is invalid.
+                data: null
+                error: {code: AUTH_CALLER_CONTEXT_INVALID, message: Authentication context is invalid., retryable: false, details: null}
+                meta: {request_id: 11111111-1111-4111-8111-111111111111, trace_id: 22222222-2222-4222-8222-222222222222, timestamp: '2026-10-21T00:00:00.000Z', replayed: false}
+            notConfigured:
+              value:
+                status: 503
+                success: false
+                message: The service is temporarily unavailable.
+                data: null
+                error: {code: SYS_UNAVAILABLE, message: The service is temporarily unavailable., retryable: true, details: {kind: not_configured}}
+                meta: {request_id: 11111111-1111-4111-8111-111111111111, trace_id: 22222222-2222-4222-8222-222222222222, timestamp: '2026-10-21T00:00:00.000Z', replayed: false}
+            dependencyDown:
+              value:
+                status: 503
+                success: false
+                message: The service is temporarily unavailable.
+                data: null
+                error: {code: SYS_UNAVAILABLE, message: The service is temporarily unavailable., retryable: true, details: {kind: dependency_down}}
+                meta: {request_id: 11111111-1111-4111-8111-111111111111, trace_id: 22222222-2222-4222-8222-222222222222, timestamp: '2026-10-21T00:00:00.000Z', replayed: false}
 

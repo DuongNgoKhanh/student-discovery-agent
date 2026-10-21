@@ -23,8 +23,8 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Chưa đăng nhập / access hết hạn → /login, giữ đích đến qua ?next= (đã sanitize)
-  if (!isAdminArea && !authed) {
+  // Missing credentials → /login, giữ đích đến qua ?next= (đã sanitize)
+  if (!isAdminArea && !authed && !(payload?.sub && payload.type === 'access' && payload.admin !== true)) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';
     url.search = '';

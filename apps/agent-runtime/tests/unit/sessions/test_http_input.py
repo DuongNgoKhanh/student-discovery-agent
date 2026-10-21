@@ -64,15 +64,16 @@ def test_oversize_stream_stops_without_trusting_content_length(length):
     assert received == [32768, 32768, 1]
 
 
-def test_missing_runtime_config_preserves_health_and_returns_503(monkeypatch):
+def test_missing_runtime_config_preserves_health_and_requires_caller_context(monkeypatch):
     from fastapi.testclient import TestClient
     for key in ("RUNTIME_DATABASE_URL", "RUNTIME_INTERNAL_KEYRING", "RUNTIME_ENVIRONMENT"):
         monkeypatch.delenv(key, raising=False)
     with TestClient(create_app()) as client:
-        assert client.get("/health").json() == {"status": "healthy"}
+        assert client.get("/health").json() == {"status": "ok"}
         response = client.get("/api/v1/internal/conversations/missing")
-    assert response.status_code == 503
-    assert response.json()["error"]["code"] == "SERVICE_UNAVAILABLE"
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "AUTH_CALLER_CONTEXT_MISSING"
+    assert response.json()["error"]["retryable"] is False
 
 
 def configured_settings(**changes):
@@ -90,22 +91,25 @@ def test_keyring_configuration_is_explicit_and_secret_safe():
     assert "sentinel-config-password" not in repr(settings) + repr(runtime)
     runtime.engine.dispose()
     for key, value in (("RUNTIME_INTERNAL_KEYRING", SecretStr('{"active":"not-base64-sentinel"}')),
-                       ("RUNTIME_INTERNAL_KEYRING", SecretStr('{}')), ("RUNTIME_INTERNAL_KEYRING", None),
-                       ("RUNTIME_DATABASE_URL", None), ("RUNTIME_ENVIRONMENT", None)):
+                       ("RUNTIME_INTERNAL_KEYRING", SecretStr('{}')), ("RUNTIME_INTERNAL_KEYRING", None)):
         changed = settings.model_copy(update={key: value})
         assert build_runtime(changed) is None
     no_cursor = build_runtime(settings.model_copy(update={"RUNTIME_CURSOR_SIGNING_KEY": None}))
     assert no_cursor is not None and no_cursor.history is None and no_cursor.results is not None
     no_cursor.engine.dispose()
     same_key = SecretStr(base64.b64encode(b"internal-test-key" * 2).decode())
-    assert build_runtime(settings.model_copy(update={"RUNTIME_CURSOR_SIGNING_KEY": same_key})) is None
+    for key, value in (("RUNTIME_DATABASE_URL", None), ("RUNTIME_ENVIRONMENT", None),
+                       ("RUNTIME_CURSOR_SIGNING_KEY", same_key)):
+        unavailable = build_runtime(settings.model_copy(update={key: value}))
+        assert unavailable is not None and unavailable.verifier is not None
+        assert unavailable.conversations is None and unavailable.history is None
 
 
 def test_malformed_runtime_environment_does_not_break_health_import():
     result = subprocess.run([sys.executable, "-c",
         "from agent_runtime.main import create_app; from fastapi.testclient import TestClient; "
         "c=TestClient(create_app()); assert c.get('/health').status_code == 200; "
-        "assert c.get('/api/v1/internal/conversations/x').status_code == 503"],
+        "assert c.get('/api/v1/internal/conversations/x').status_code == 401"],
         env={**os.environ, "RUNTIME_SESSION_TTL_SECONDS": "secret-config-sentinel"},
         capture_output=True, text=True)
     assert result.returncode == 0, "health import must survive invalid runtime settings without exposing config"
@@ -127,4 +131,4 @@ def test_malformed_raw_target_is_safe_400(raw_path, query):
         "client": ("127.0.0.1", 1), "server": ("test", 80)}, receive, send))
     assert sent[0]["status"] == 400
     body = json.loads(sent[1]["body"])
-    assert body["error"]["code"] == "INVALID_REQUEST" and body["error"]["details"] is None
+    assert body["error"]["code"] == "VAL_INVALID_REQUEST" and body["error"]["details"] is None

@@ -15,6 +15,13 @@
       "when": 1792121145682,
       "tag": "0002_experience_drafts_and_releases",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792121145683,
+      "tag": "0003_auth_refresh_sessions",
+      "breakpoints": true
     }
   ]
 }

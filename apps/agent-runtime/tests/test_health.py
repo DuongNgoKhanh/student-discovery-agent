@@ -16,7 +16,7 @@ def test_health_without_product_dependencies(monkeypatch):
     with TestClient(main.create_app()) as client:
         response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "healthy"}
+    assert response.json() == {"status": "ok"}
 
     paths = set(main.create_app().openapi()["paths"])
     allowed = {

@@ -403,7 +403,7 @@ components:
             pattern: \S
           uniqueItems: true
           default: []
-          description: Absent/empty means legacy-only (algorithm_profile null). Explicit adaptive implies ActivityView v2 and requires the full block manifest; no implicit legacy fallback or block expansion. Supported profile is riasec.mean.bounds.v2; unknown profiles negotiate to 422 INCOMPATIBLE_SCHEMA after owner/lifecycle/replay checks.
+          description: Absent/empty means legacy-only (algorithm_profile null). Explicit adaptive implies ActivityView v2 and requires the full block manifest; no implicit legacy fallback or block expansion. Supported profile is riasec.mean.bounds.v2; unknown profiles negotiate to 422 VAL_INCOMPATIBLE_SCHEMA after owner/lifecycle/replay checks.
       required:
         - idempotency_key
       additionalProperties: false
@@ -414,8 +414,8 @@ components:
         Create key scoped theo anonymous owner/operation; retry cùng owner giữ key/payload.
         Mất cả cookie và response khởi tạo không cho phép replay xuyên owner bằng idempotency_key.
         Nếu không khai báo supported_blocks, dùng bộ block v1 của MVP; chỉ gửi block/schema client được hỗ trợ.
-        Idempotency keys are at most 256 ASCII identifier characters. Structurally malformed input returns 422 INVALID_INPUT.
-        Unsupported capability versions/profiles or incomplete adaptive manifests return 422 INCOMPATIBLE_SCHEMA after owner/lifecycle/replay lookup and before Product resolution or writes.
+        Idempotency keys are at most 256 ASCII identifier characters. Structurally malformed input returns 422 VAL_INVALID_INPUT.
+        Unsupported capability versions/profiles or incomplete adaptive manifests return 422 VAL_INCOMPATIBLE_SCHEMA after owner/lifecycle/replay lookup and before Product resolution or writes.
         Demo TTL is exactly 3600 seconds from creation and never slides. Validate and pin capability before create.
     EndConversationInput:
       type: object

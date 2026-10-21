@@ -63,17 +63,17 @@ def test_http_boundary_rejections_preserve_envelope(turn_http):
     before = turn_counts(rig)
     body = request_for(rig, "set_name", key="name").model_dump(mode="json", exclude_unset=True)
     path = f"/conversations/{rig.conversation_id}/turns"
-    assert_error(post_turn(client, rig, body | {"owner_id": "spoof"}), 422, "INVALID_INPUT")
-    assert_error(post_turn(client, rig, body | {"schema_version": 2}), 422, "INVALID_INPUT")
-    assert_error(post_turn(client, rig, b'{"type":"interaction","type":"message"}'), 400, "INVALID_REQUEST")
-    assert_error(post_turn(client, rig, body, path=path + "?debug=1"), 422, "INVALID_INPUT")
-    assert_error(post_turn(client, rig, body, owner="stranger"), 404, "RESOURCE_NOT_FOUND")
-    assert_error(post_turn(client, rig, json.dumps(body | {"pad": "x" * 70000}).encode()), 413, "PAYLOAD_TOO_LARGE")
+    assert_error(post_turn(client, rig, body | {"owner_id": "spoof"}), 422, "VAL_INVALID_INPUT")
+    assert_error(post_turn(client, rig, body | {"schema_version": 2}), 422, "VAL_INVALID_INPUT")
+    assert_error(post_turn(client, rig, b'{"type":"interaction","type":"message"}'), 400, "VAL_INVALID_REQUEST")
+    assert_error(post_turn(client, rig, body, path=path + "?debug=1"), 422, "VAL_INVALID_INPUT")
+    assert_error(post_turn(client, rig, body, owner="stranger"), 404, "RES_NOT_FOUND")
+    assert_error(post_turn(client, rig, json.dumps(body | {"pad": "x" * 70000}).encode()), 413, "VAL_PAYLOAD_TOO_LARGE")
     message = {"type": "message", "content": {"text": "hi"}, "expected_revision": 1, "idempotency_key": "msg"}
-    assert_error(post_turn(client, rig, message), 422, "INVALID_ACTIVITY_TRANSITION")
+    assert_error(post_turn(client, rig, message), 422, "VAL_INVALID_ACTIVITY_TRANSITION")
     unsigned = client.post("/api/v1/internal" + path, content=json.dumps(body).encode(),
                            headers={"X-Caller-Context": "bad", "X-Internal-Caller": "sda-product-bff"})
-    assert_error(unsigned, 401, "AUTH_REQUIRED")
+    assert_error(unsigned, 401, "AUTH_CALLER_CONTEXT_INVALID")
     assert turn_counts(rig) == before
 
 
@@ -91,7 +91,7 @@ def test_terminal_fixture_projector_commits_atomically(turn_http):
             before = turn_counts(rig)
             missing = post_turn(bare, rig, request)
             if missing.status_code == 503:
-                assert_error(missing, 503, "SERVICE_UNAVAILABLE")
+                assert_error(missing, 503, "SYS_UNAVAILABLE")
                 assert missing.json()["error"]["retryable"] is True
                 assert turn_counts(rig) == before
                 break
@@ -106,4 +106,4 @@ def test_terminal_fixture_projector_commits_atomically(turn_http):
     result = signed_call(client, rig, "GET", f"/activities/{rig.activity_id}/result").json()["data"]
     assert result["result_id"] == data["blocks"][0]["result_id"] and result["data"]["display_name"] == "Ngân"
     late = request_for(rig, "set_name", key="late")
-    assert_error(post_turn(client, rig, late), 422, "INVALID_ACTIVITY_TRANSITION")
+    assert_error(post_turn(client, rig, late), 422, "VAL_INVALID_ACTIVITY_TRANSITION")

@@ -2,8 +2,8 @@ openapi: 3.0.3
 info:
   title: Student Discovery - Experience Configuration
   version: 1.0.0
-  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md
-    để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
+  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong admin-api.yaml; xem README.md để
+    chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
 servers:
   - url: http://localhost:3000/api/v1
     description: Local development server
@@ -23,7 +23,7 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -34,30 +34,30 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperiencePageEnvelope'
-        '400':
+                $ref: "#/components/schemas/ExperiencePageEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       parameters:
         - name: cursor
@@ -85,7 +85,7 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '201':
+        "201":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -96,37 +96,37 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperienceMetadataEnvelope'
-        '400':
+                $ref: "#/components/schemas/ExperienceMetadataEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateExperienceInput'
+              $ref: "#/components/schemas/CreateExperienceInput"
       x-required-permission: experience.config.write
   /admin/experiences/{id}:
     get:
@@ -138,7 +138,7 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -149,30 +149,30 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperienceMetadataEnvelope'
-        '400':
+                $ref: "#/components/schemas/ExperienceMetadataEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       parameters:
         - name: id
@@ -192,7 +192,7 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -203,37 +203,37 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperienceMetadataEnvelope'
-        '400':
+                $ref: "#/components/schemas/ExperienceMetadataEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchExperienceInput'
+              $ref: "#/components/schemas/PatchExperienceInput"
       parameters:
         - name: id
           in: path
@@ -253,7 +253,7 @@ paths:
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -264,30 +264,30 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperienceDraftEnvelope'
-        '400':
+                $ref: "#/components/schemas/ExperienceDraftEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       parameters:
         - name: id
@@ -303,13 +303,13 @@ paths:
       tags:
         - Studio Experiences
       summary: Lưu draft với optimistic locking
-      description: Allow incomplete JSON object draft, reject malformed/oversized input. expected_revision belongs
-        to draft; same key/payload replays original save before stale revision check. Atomic update increases draft
-        revision/hash; previous reports become stale. No changes to pinned released activities.
+      description: Allow incomplete JSON object draft, reject malformed/oversized input. expected_draft_revision belongs to draft;
+        same key/payload replays original save before stale revision check. Atomic update increases draft revision/hash;
+        previous reports become stale. No changes to pinned released activities.
       security:
         - BearerAuth: []
       responses:
-        '200':
+        "200":
           description: Validated envelope; status matches HTTP response.
           headers:
             Cache-Control:
@@ -320,40 +320,40 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperienceDraftEnvelope'
-        '400':
+                $ref: "#/components/schemas/ExperienceDraftEnvelope"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
-        '401':
+        "401":
           $ref: ../schemas/common.yaml#/components/responses/ChatError401
-        '403':
+        "403":
           $ref: ../schemas/common.yaml#/components/responses/ChatError403
-        '404':
+        "404":
           $ref: ../schemas/common.yaml#/components/responses/ChatError404
-        '409':
+        "409":
           $ref: ../schemas/common.yaml#/components/responses/ChatError409
-        '410':
+        "410":
           $ref: ../schemas/common.yaml#/components/responses/ChatError410
-        '413':
+        "413":
           $ref: ../schemas/common.yaml#/components/responses/ChatError413
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ChatError422
-        '429':
+        "429":
           $ref: ../schemas/common.yaml#/components/responses/ChatError429
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/ChatError500
-        '503':
+        "503":
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
-        '504':
+        "504":
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SaveDraftInput'
+              $ref: "#/components/schemas/SaveDraftInput"
             examples:
               draft:
-                $ref: '#/components/examples/IncompleteDraft'
+                $ref: "#/components/examples/IncompleteDraft"
       parameters:
         - name: id
           in: path
@@ -390,7 +390,7 @@ components:
         choices:
           type: array
           items:
-            $ref: '#/components/schemas/AssessmentDefinitionOption'
+            $ref: "#/components/schemas/AssessmentDefinitionOption"
           minItems: 2
       required:
         - question_id
@@ -459,8 +459,8 @@ components:
         - engine_version
         - payload
       additionalProperties: false
-      description: Transport only. Payload MUST be validated against a supported registered rule schema. DEC-04
-        unresolved; no rule schema is registered by this contract.
+      description: Transport only. Payload MUST be validated against a supported registered rule schema. DEC-04 unresolved; no
+        rule schema is registered by this contract.
       x-pending-decision: DEC-04
     AssessmentGoldenCase:
       type: object
@@ -521,7 +521,7 @@ components:
         schema_version:
           type: string
           enum:
-            - '1.0'
+            - "1.0"
         definition_id:
           type: string
           pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
@@ -536,22 +536,22 @@ components:
         questions:
           type: array
           items:
-            $ref: '#/components/schemas/AssessmentDefinitionQuestion'
+            $ref: "#/components/schemas/AssessmentDefinitionQuestion"
           minItems: 6
         houses:
           type: array
           items:
-            $ref: '#/components/schemas/AssessmentHouseMetadata'
+            $ref: "#/components/schemas/AssessmentHouseMetadata"
           minItems: 6
           maxItems: 6
         selection_rules:
-          $ref: '#/components/schemas/AssessmentRuleDocument'
+          $ref: "#/components/schemas/AssessmentRuleDocument"
         scoring_rules:
-          $ref: '#/components/schemas/AssessmentRuleDocument'
+          $ref: "#/components/schemas/AssessmentRuleDocument"
         coverage_rules:
-          $ref: '#/components/schemas/AssessmentRuleDocument'
+          $ref: "#/components/schemas/AssessmentRuleDocument"
         tie_policy:
-          $ref: '#/components/schemas/AssessmentRuleDocument'
+          $ref: "#/components/schemas/AssessmentRuleDocument"
         templates:
           type: object
           additionalProperties:
@@ -560,7 +560,7 @@ components:
         evaluation_cases:
           type: array
           items:
-            $ref: '#/components/schemas/AssessmentGoldenCase'
+            $ref: "#/components/schemas/AssessmentGoldenCase"
         approval_refs:
           type: array
           items:
@@ -595,10 +595,6 @@ components:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        revision:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
         name:
           type: string
           minLength: 1
@@ -606,7 +602,8 @@ components:
           type: string
         activity_type:
           type: string
-          description: Kiểu Activity/engine của Experience. MVP hỗ trợ personality_assessment; kiểu mới cần schema/version được hỗ trợ.
+          description: Kiểu Activity/engine của Experience. MVP hỗ trợ personality_assessment; kiểu mới cần schema/version được hỗ
+            trợ.
           enum:
             - personality_assessment
         created_at:
@@ -624,22 +621,26 @@ components:
               type: string
               minLength: 1
               pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-            revision:
-              type: integer
-              minimum: 0
-              maximum: 9007199254740991
             content_hash:
               type: string
               pattern: ^sha256:[a-f0-9]{64}$
+            draft_revision:
+              type: integer
+              minimum: 0
+              maximum: 9007199254740991
           required:
             - draft_id
-            - revision
+            - draft_revision
             - content_hash
           additionalProperties: true
           nullable: true
+        metadata_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
       required:
         - id
-        - revision
+        - metadata_revision
         - name
         - description
         - activity_type
@@ -653,14 +654,9 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/ExperienceMetadata'
-        next_cursor:
-          type: string
-          minLength: 1
-          nullable: true
+            $ref: "#/components/schemas/ExperienceMetadata"
       required:
         - items
-        - next_cursor
       additionalProperties: true
     CreateExperienceInput:
       type: object
@@ -687,10 +683,6 @@ components:
     PatchExperienceInput:
       type: object
       properties:
-        expected_revision:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
         idempotency_key:
           type: string
           minLength: 1
@@ -700,12 +692,16 @@ components:
           minLength: 1
         description:
           type: string
+        expected_metadata_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
       required:
-        - expected_revision
+        - expected_metadata_revision
         - idempotency_key
       additionalProperties: false
-      description: Require at least one metadata field. expected_revision thuộc resource metadata; không đổi immutable
-        releases hoặc draft content ngầm.
+      description: expected_metadata_revision guards metadata only. A changed PATCH increments metadata_revision; identical
+        metadata preserves the counter and timestamp. Draft content and draft_revision are independent.
       anyOf:
         - required:
             - name
@@ -722,10 +718,6 @@ components:
           type: string
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        revision:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
         content_hash:
           type: string
           pattern: ^sha256:[a-f0-9]{64}$
@@ -740,24 +732,24 @@ components:
           type: string
           format: date-time
           pattern: Z$
+        draft_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
       required:
         - experience_id
         - draft_id
-        - revision
+        - draft_revision
         - content_hash
         - content
         - updated_by
         - updated_at
       additionalProperties: true
-      description: Incomplete JSON draft allowed; save không phải validation. Definition hoàn chỉnh phải theo ExperienceDefinitionDocument
-        và registered DEC-04 rule schemas; no code/secrets.
+      description: Incomplete JSON draft allowed; save không phải validation. Definition hoàn chỉnh phải theo
+        ExperienceDefinitionDocument và registered DEC-04 rule schemas; no code/secrets.
     SaveDraftInput:
       type: object
       properties:
-        expected_revision:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
         idempotency_key:
           type: string
           minLength: 1
@@ -765,11 +757,18 @@ components:
         content:
           type: object
           additionalProperties: true
+        expected_draft_revision:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
       required:
-        - expected_revision
+        - expected_draft_revision
         - idempotency_key
         - content
       additionalProperties: false
+      description: expected_draft_revision guards draft content. Changed content_hash increments draft_revision; identical
+        canonical content preserves revision and timestamp. Idempotent replays return their cached result before the
+        revision check.
     ExperienceMetadataEnvelope:
       oneOf:
         - allOf:
@@ -779,7 +778,7 @@ components:
                 - data
               properties:
                 data:
-                  $ref: '#/components/schemas/ExperienceMetadata'
+                  $ref: "#/components/schemas/ExperienceMetadata"
         - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
     ExperiencePageEnvelope:
       oneOf:
@@ -788,9 +787,19 @@ components:
             - type: object
               required:
                 - data
+                - meta
               properties:
                 data:
-                  $ref: '#/components/schemas/ExperiencePage'
+                  $ref: "#/components/schemas/ExperiencePage"
+                meta:
+                  allOf:
+                    - $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+                    - type: object
+                      required:
+                        - pagination
+                      properties:
+                        pagination:
+                          $ref: "#/components/schemas/PaginationMeta"
         - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
     ExperienceDraftEnvelope:
       oneOf:
@@ -801,16 +810,33 @@ components:
                 - data
               properties:
                 data:
-                  $ref: '#/components/schemas/ExperienceDraft'
+                  $ref: "#/components/schemas/ExperienceDraft"
         - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    PaginationMeta:
+      type: object
+      required:
+        - limit
+        - next_cursor
+        - has_more
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+      additionalProperties: false
   examples:
     IncompleteDraft:
       summary: Draft chưa hoàn chỉnh vẫn lưu được.
       value:
-        expected_revision: 1
         idempotency_key: save_draft_001
         content:
           questions: []
+        expected_draft_revision: 1
   securitySchemes:
     BearerAuth:
       type: http

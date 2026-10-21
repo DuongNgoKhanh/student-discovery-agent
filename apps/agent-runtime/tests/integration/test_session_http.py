@@ -63,7 +63,13 @@ def assert_error(response, status, code):
     payload = response.json()
     assert payload["status"] == status and payload["success"] is False
     assert payload["data"] is None and payload["error"]["code"] == code
-    assert payload["error"]["details"] is None
+    if status == 503:
+        assert payload["error"]["details"]["kind"] in {"not_configured", "dependency_down"}
+        assert payload["error"]["retryable"] is True
+        assert int(response.headers["retry-after"]) > 0
+    else:
+        assert payload["error"]["details"] is None
+        assert payload["error"]["retryable"] is False
     assert response.headers["cache-control"] == "no-store"
     assert payload["meta"]["request_id"] and payload["meta"]["trace_id"]
 
@@ -95,16 +101,16 @@ def test_end_replay_and_closed_content_precedence(http, rig, valid_v1_doc):
     for path in (f"/conversations/{parent.id}", f"/conversations/{parent.id}/messages?cursor=bad&limit=bad",
                  f"/activities/{child.id}/result?expected_result_revision=999",
                  "/results/result-fixed/share-card?expected_result_revision=999"):
-        assert_error(call(http, rig, "GET", path), 410, "CONVERSATION_ENDED")
-        assert_error(call(http, rig, "GET", path, owner="other"), 404, "RESOURCE_NOT_FOUND")
+        assert_error(call(http, rig, "GET", path), 410, "RES_CONVERSATION_ENDED")
+        assert_error(call(http, rig, "GET", path, owner="other"), 404, "RES_NOT_FOUND")
 
 
 @pytest.mark.parametrize("raw", [b'{"a":1,"a":2}', b'{"a":NaN}', b'{"a":1e400}', b'[]', b'{', b'"\xff"'])
 def test_bad_json_safe_and_auth_first(http, rig, raw, caplog):
-    assert_error(call(http, rig, "POST", "/conversations", raw=raw), 400, "INVALID_REQUEST")
+    assert_error(call(http, rig, "POST", "/conversations", raw=raw), 400, "VAL_INVALID_REQUEST")
     invalid = http[0].post(PREFIX + "/conversations", content=raw,
         headers={"X-Caller-Context": "not-a-token", "X-Internal-Caller": "sda-product-bff"})
-    assert_error(invalid, 401, "AUTH_REQUIRED")
+    assert_error(invalid, 401, "AUTH_CALLER_CONTEXT_INVALID")
     assert not caplog.records
 
 
@@ -113,7 +119,7 @@ def test_bad_json_safe_and_auth_first(http, rig, raw, caplog):
     ("/conversations/missing:end", {"expected_revision": 0})])
 def test_http_schema_version_safe_422(http, rig, version, path, extra):
     response = call(http, rig, "POST", path, {"idempotency_key": "key", "schema_version": version, **extra})
-    assert_error(response, 422, "INVALID_INPUT")
+    assert_error(response, 422, "VAL_INVALID_INPUT")
     assert "input" not in response.json()["error"] and "ctx" not in response.text
 
 
@@ -123,13 +129,13 @@ def test_internal_raw_path_and_query_binding(http, rig):
     encoded = PREFIX + "/conversations/%" + format(ord(cid[0]), "02X") + cid[1:]
     assert http[0].get(encoded, headers=headers(rig, "GET", encoded)).status_code == 200
     assert_error(http[0].get(encoded, headers=headers(rig, "GET", PREFIX + "/conversations/" + cid)),
-                 401, "AUTH_REQUIRED")
+                 401, "AUTH_CALLER_CONTEXT_INVALID")
     target = PREFIX + f"/conversations/{cid}/messages?limit=1&cursor=bad"
     changed = PREFIX + f"/conversations/{cid}/messages?cursor=bad&limit=1"
-    assert_error(http[0].get(changed, headers=headers(rig, "GET", target)), 401, "AUTH_REQUIRED")
+    assert_error(http[0].get(changed, headers=headers(rig, "GET", target)), 401, "AUTH_CALLER_CONTEXT_INVALID")
     raw = b'{"idempotency_key":"changed"}'
     assert_error(http[0].post(PREFIX + "/conversations", content=raw + b" ",
-        headers=headers(rig, "POST", PREFIX + "/conversations", raw)), 401, "AUTH_REQUIRED")
+        headers=headers(rig, "POST", PREFIX + "/conversations", raw)), 401, "AUTH_CALLER_CONTEXT_INVALID")
 
 
 def test_verifier_precedes_db_and_enforces_jwt_cap(http, rig):
@@ -140,7 +146,7 @@ def test_verifier_precedes_db_and_enforces_jwt_cap(http, rig):
     try:
         response = http[0].get(PREFIX + "/conversations/missing", headers={
             "X-Internal-Caller": "sda-product-bff", "X-Caller-Context": "x" * 8193})
-        assert_error(response, 401, "AUTH_REQUIRED")
+        assert_error(response, 401, "AUTH_CALLER_CONTEXT_INVALID")
         assert queries == []
     finally:
         event.remove(rig[0], "before_cursor_execute", record)
@@ -149,7 +155,7 @@ def test_verifier_precedes_db_and_enforces_jwt_cap(http, rig):
 def test_source_outage_keeps_pinned_reads_and_replay(http, rig):
     created = call(http, rig, "POST", "/conversations", {"idempotency_key": "key"}).json()["data"]
     rig[4].unavailable = True
-    assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": "new"}), 503, "SERVICE_UNAVAILABLE")
+    assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": "new"}), 503, "SYS_UNAVAILABLE")
     assert call(http, rig, "GET", "/conversations/" + created["conversation"]["id"]).status_code == 200
     replay = call(http, rig, "POST", "/conversations", {"idempotency_key": "key"})
     assert replay.status_code == 201 and replay.json()["data"] == created
@@ -159,9 +165,9 @@ def test_exact_expiry_with_fresh_token(http, rig):
     created = call(http, rig, "POST", "/conversations", {"idempotency_key": "key"}).json()["data"]
     rig[2].set(rig[2].now() + timedelta(seconds=3600))
     assert_error(call(http, rig, "GET", "/conversations/" + created["conversation"]["id"]),
-        410, "CONVERSATION_EXPIRED")
+        410, "RES_CONVERSATION_EXPIRED")
     assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": "key"}),
-        410, "CONVERSATION_EXPIRED")
+        410, "RES_CONVERSATION_EXPIRED")
 
 
 def test_no_public_product_routes_or_seed_routes(http, rig):
@@ -175,8 +181,8 @@ def test_no_public_product_routes_or_seed_routes(http, rig):
 
 
 def test_unknown_internal_operation_has_safe_envelope(http, rig):
-    assert_error(call(http, rig, "GET", "/seed"), 404, "RESOURCE_NOT_FOUND")
-    assert_error(call(http, rig, "DELETE", "/conversations"), 405, "METHOD_NOT_ALLOWED")
+    assert_error(call(http, rig, "GET", "/seed"), 404, "RES_NOT_FOUND")
+    assert_error(call(http, rig, "DELETE", "/conversations"), 405, "VAL_METHOD_NOT_ALLOWED")
 
 
 def test_sync_db_never_runs_on_asgi_event_loop(http, rig):
@@ -212,23 +218,23 @@ def test_cursor_and_results_remain_guarded_after_real_http_end(http, rig, valid_
     assert result.status_code == share.status_code == 200
     assert result.json()["data"]["result_revision"] == share.json()["data"]["result_revision"] == 2
     assert_error(call(http, rig, "GET", f"/activities/{child.id}/result?expected_result_revision=999"),
-        409, "STALE_RESULT_REVISION")
+        409, "CONFLICT_STALE_RESULT_REVISION")
     assert call(http, rig, "POST", f"/conversations/{parent.id}:end",
         {"expected_revision": parent.revision, "idempotency_key": "end"}).status_code == 200
     assert_error(call(http, rig, "GET", f"/conversations/{parent.id}/messages?cursor={cursor}&limit=1"),
-        410, "CONVERSATION_ENDED")
+        410, "RES_CONVERSATION_ENDED")
 
 
 def test_legacy_manifest_missing_text_preserves_replay_and_collision_order(http, rig):
     first = call(http, rig, "POST", "/conversations", {"idempotency_key": "key"})
     changed = {"idempotency_key": "new", "supported_blocks": [{"type": "personality_card", "schema_versions": [1]}]}
     rig[4].unavailable = True
-    assert_error(call(http, rig, "POST", "/conversations", changed), 422, "INCOMPATIBLE_SCHEMA")
+    assert_error(call(http, rig, "POST", "/conversations", changed), 422, "VAL_INCOMPATIBLE_SCHEMA")
     changed["idempotency_key"] = "key"
-    assert_error(call(http, rig, "POST", "/conversations", changed), 409, "IDEMPOTENCY_KEY_COLLISION")
+    assert_error(call(http, rig, "POST", "/conversations", changed), 409, "CONFLICT_IDEMPOTENCY_KEY")
     cid = first.json()["data"]["conversation"]["id"]
     call(http, rig, "POST", f"/conversations/{cid}:end", {"expected_revision": 0, "idempotency_key": "end"})
-    assert_error(call(http, rig, "POST", "/conversations", changed), 410, "CONVERSATION_ENDED")
+    assert_error(call(http, rig, "POST", "/conversations", changed), 410, "RES_CONVERSATION_ENDED")
 
 
 def test_production_builder_without_product_keeps_pinned_reads(rig, test_database, valid_v1_doc):
@@ -249,7 +255,7 @@ def test_production_builder_without_product_keeps_pinned_reads(rig, test_databas
                          f"/activities/{child.id}/result", "/results/result-fixed/share-card"):
                 assert call(h, rig, "GET", path).status_code == 200
             assert_error(call(h, rig, "POST", "/conversations", {"idempotency_key": "key"}),
-                503, "SERVICE_UNAVAILABLE")
+                503, "SYS_UNAVAILABLE")
     finally:
         runtime.engine.dispose()
 
@@ -263,8 +269,8 @@ def test_real_database_disconnect_returns_503_and_health_stays_live(http, rig, t
         try:
             admin.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = %s", (name,))
             assert_error(call(http, rig, "GET", "/conversations/" + created["conversation"]["id"]),
-                503, "SERVICE_UNAVAILABLE")
-            assert http[0].get("/health").json() == {"status": "healthy"}
+                503, "SYS_UNAVAILABLE")
+            assert http[0].get("/health").json() == {"status": "ok"}
         finally:
             admin.execute(sql.SQL("ALTER DATABASE {} ALLOW_CONNECTIONS true").format(sql.Identifier(name)))
 
@@ -278,11 +284,11 @@ def test_expired_and_wrong_method_tokens_never_reach_database(http, rig):
         queries.append(True)
     event.listen(rig[0], "before_cursor_execute", record)
     try:
-        assert_error(http[0].get(target, headers=expired), 401, "AUTH_REQUIRED")
-        assert_error(http[0].get(target, headers=headers(rig, "POST", target)), 401, "AUTH_REQUIRED")
+        assert_error(http[0].get(target, headers=expired), 401, "AUTH_CALLER_CONTEXT_INVALID")
+        assert_error(http[0].get(target, headers=headers(rig, "POST", target)), 401, "AUTH_CALLER_CONTEXT_INVALID")
         assert_error(http[0].get(target, headers={"X-Caller-Context": headers(rig, "GET", target)["X-Caller-Context"]}),
-            403, "FORBIDDEN")
-        assert_error(http[0].get(target, headers={"X-Internal-Caller": "sda-product-bff"}), 401, "AUTH_REQUIRED")
+            401, "AUTH_CALLER_CONTEXT_MISSING")
+        assert_error(http[0].get(target, headers={"X-Internal-Caller": "sda-product-bff"}), 401, "AUTH_CALLER_CONTEXT_MISSING")
         assert queries == []
     finally:
         event.remove(rig[0], "before_cursor_execute", record)
@@ -291,29 +297,29 @@ def test_expired_and_wrong_method_tokens_never_reach_database(http, rig):
 def test_safe_validation_and_unclassified_failure_do_not_expose_input(http, rig, caplog):
     sentinel = "private-name-and-provider-output-sentinel"
     response = call(http, rig, "POST", "/conversations", {"idempotency_key": "key", "owner_id": sentinel})
-    assert_error(response, 422, "INVALID_INPUT")
+    assert_error(response, 422, "VAL_INVALID_INPUT")
     assert sentinel not in response.text
 
     def unavailable(environment):
         raise RuntimeError(sentinel)
     rig[4].resolve_active_agent = unavailable
     response = call(http, rig, "POST", "/conversations", {"idempotency_key": "key"})
-    assert_error(response, 500, "INTERNAL_ERROR")
+    assert_error(response, 500, "SYS_INTERNAL_ERROR")
     assert sentinel not in response.text + caplog.text
 
 
 def test_missing_capabilities_fail_closed_individually(http, rig):
     http[1].history = None
-    assert_error(call(http, rig, "GET", "/conversations/missing/messages"), 503, "SERVICE_UNAVAILABLE")
+    assert_error(call(http, rig, "GET", "/conversations/missing/messages"), 503, "SYS_UNAVAILABLE")
     http[1].verifier = None
-    assert_error(call(http, rig, "GET", "/conversations/missing"), 503, "SERVICE_UNAVAILABLE")
+    assert_error(call(http, rig, "GET", "/conversations/missing"), 401, "AUTH_CALLER_CONTEXT_INVALID")
     assert http[0].get("/health").status_code == 200
 
 
 def test_internal_trailing_slash_is_not_redirected_to_a_different_signed_target(http, rig):
     target = PREFIX + "/conversations/"
     response = http[0].get(target, headers=headers(rig, "GET", target), follow_redirects=False)
-    assert_error(response, 404, "RESOURCE_NOT_FOUND")
+    assert_error(response, 404, "RES_NOT_FOUND")
 
 
 def test_database_pool_exhaustion_is_503(http, rig, test_database):
@@ -323,7 +329,7 @@ def test_database_pool_exhaustion_is_503(http, rig, test_database):
     rig[5].uow = RuntimeUnitOfWork(engine)
     try:
         with engine.connect():
-            assert_error(call(http, rig, "GET", "/conversations/missing"), 503, "SERVICE_UNAVAILABLE")
+            assert_error(call(http, rig, "GET", "/conversations/missing"), 503, "SYS_UNAVAILABLE")
     finally:
         rig[5].uow = original
         engine.dispose()
@@ -334,4 +340,4 @@ def test_unclassified_database_error_is_safe_500(http, rig):
         with rig[1].begin() as session:
             session.execute(text("SELECT 1 / 0"))
     rig[4].resolve_active_agent = faulty_query
-    assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": "key"}), 500, "INTERNAL_ERROR")
+    assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": "key"}), 500, "SYS_INTERNAL_ERROR")

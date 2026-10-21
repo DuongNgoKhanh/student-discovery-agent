@@ -39,7 +39,7 @@ paths:
       tags:
         - Authentication
       summary: Register a new user with email and password
-      description: Create a new user account and return authentication tokens.
+      description: Create a new account and short-lived access token. Refresh is an opaque, rotating HttpOnly cookie only. Registration is rate limited to 20 attempts per trusted peer and 5 per email per 15 minutes.
       operationId: registerUser
       requestBody:
         required: true
@@ -58,6 +58,18 @@ paths:
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          description: CONFLICT_EMAIL_EXISTS - email is already registered
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/common.yaml#/components/schemas/ErrorResponse
+        '429':
+          description: AUTH_RATE_LIMITED - too many registration attempts
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/common.yaml#/components/schemas/ErrorResponse
         '500':
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
   /auth/login:
@@ -65,7 +77,7 @@ paths:
       tags:
         - Authentication
       summary: Authenticate user with email and password
-      description: Authenticate an existing user and return JWT access and refresh tokens.
+      description: Authenticate an existing user and return a short-lived access JWT. The rotating refresh credential is set only as an HttpOnly cookie (SameSite=Lax; Path=/api/v1/auth; Secure in production). Access defaults to 30 minutes (15-60), refresh sessions to 14 days (7-30).
       operationId: loginUser
       requestBody:
         required: true
@@ -91,10 +103,12 @@ paths:
       tags:
         - Authentication
       summary: Refresh access token
-      description: Exchange a refresh token for a new access token
+      description: Rotate the HttpOnly refresh cookie and issue an access JWT. Requires matching external Origin (PRODUCT_BASE_URL when configured) or Sec-Fetch-Site same-origin. Reuse revokes the session family. Refresh credentials are never accepted in JSON. The access JWT expires in 30 minutes by default; the user access cookie remains until the absolute refresh-session expiry so clients can recognize AUTH_TOKEN_EXPIRED and recover. Admin access cookies expire with their JWT.
       operationId: refreshToken
+      security:
+        - RefreshCookie: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -110,6 +124,12 @@ paths:
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: AUTH_CSRF_REJECTED - request did not prove same-origin
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/common.yaml#/components/schemas/ErrorResponse
         '500':
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
   /auth/logout:
@@ -117,7 +137,7 @@ paths:
       tags:
         - Authentication
       summary: Log out
-      description: Clear the access and refresh cookies. Always responds with an envelope whose data is {ok:true}.
+      description: Revoke the refresh session and its linked user access tokens (or the family named by a valid, unexpired access JWT when the refresh cookie is absent), then clear both cookie paths including legacy root refresh cookies. Requires matching external Origin (PRODUCT_BASE_URL when configured) or Sec-Fetch-Site same-origin. Returns data {ok:true}.
       operationId: logoutUser
       responses:
         '200':
@@ -126,6 +146,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LogoutResponse'
+        '403':
+          description: AUTH_CSRF_REJECTED - request did not prove same-origin
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/common.yaml#/components/schemas/ErrorResponse
         '500':
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
 components:
@@ -134,6 +160,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    RefreshCookie:
+      type: apiKey
+      in: cookie
+      name: sda_refresh
+      description: HttpOnly rotating opaque credential. Cookie path is /api/v1/auth; production cookies use Secure.
     AccessCookie:
       type: apiKey
       in: cookie
@@ -141,16 +172,40 @@ components:
       description: HttpOnly access cookie; name may be configured by deployment.
   schemas:
     SessionMetadata:
-      type: object
-      required:
-        - userId
-        - isAdmin
-      properties:
-        userId:
-          type: string
-          description: JWT subject; numeric user ID as a string, or admin.
-        isAdmin:
-          type: boolean
+      description: Typed principal metadata. Numeric database user IDs remain numeric elsewhere; the session principal ID is a string.
+      oneOf:
+        - type: object
+          required: [principal, is_admin]
+          properties:
+            principal:
+              type: object
+              required: [type, id]
+              properties:
+                type:
+                  type: string
+                  enum: [user]
+                id:
+                  type: string
+                  pattern: '^[1-9]\d*$'
+            is_admin:
+              type: boolean
+              enum: [false]
+        - type: object
+          required: [principal, is_admin]
+          properties:
+            principal:
+              type: object
+              required: [type, id]
+              properties:
+                type:
+                  type: string
+                  enum: [admin]
+                id:
+                  type: string
+                  enum: [admin]
+            is_admin:
+              type: boolean
+              enum: [true]
     SessionResponse:
       allOf:
         - $ref: ../schemas/common.yaml#/components/schemas/ApiResponse
@@ -162,13 +217,8 @@ components:
               $ref: '#/components/schemas/SessionMetadata'
     RefreshTokenRequest:
       type: object
-      required:
-        - refresh_token
-      properties:
-        refresh_token:
-          type: string
-          description: The refresh token to exchange for a new access token
-          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      additionalProperties: false
+      description: Optional empty JSON object. The refresh credential is read only from the cookie.
     LoginRequest:
       type: object
       required:
@@ -246,7 +296,7 @@ components:
                 expires_in:
                   type: integer
                   description: Token expiration time in seconds
-                  example: 3600
+                  example: 1800
     AuthResponse:
       type: object
       required:
@@ -265,15 +315,13 @@ components:
           nullable: true
         data:
           type: object
+          required: [user, access_token, token_type, expires_in]
           properties:
             user:
               $ref: profile-api.yaml#/components/schemas/UserProfile
             access_token:
               type: string
               description: JWT access token
-            refresh_token:
-              type: string
-              description: Refresh token for obtaining new access tokens
             token_type:
               type: string
               enum:
@@ -311,7 +359,7 @@ components:
                     - true
   responses:
     UnauthorizedError:
-      description: Unauthorized - Invalid, missing, or expired authentication token
+      description: AUTH_TOKEN_MISSING requires login; AUTH_TOKEN_INVALID requires login; AUTH_TOKEN_EXPIRED allows one refresh attempt. Revoked sessions return AUTH_TOKEN_INVALID.
       content:
         application/json:
           schema:
@@ -322,7 +370,7 @@ components:
             message: You are not logged in or your session has expired. Please log in again.
             data: null
             error:
-              code: AUTH_INVALID_TOKEN
+              code: AUTH_TOKEN_INVALID
               message: You are not logged in or your session has expired. Please log in again.
               details: null
               retryable: false

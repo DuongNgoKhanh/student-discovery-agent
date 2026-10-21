@@ -1,11 +1,17 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { api } from './client';
 
-afterEach(() => vi.restoreAllMocks());
+beforeEach(() => {
+  let tail: Promise<unknown> = Promise.resolve();
+  vi.stubGlobal('navigator', { locks: { request: (_name: string, callback: () => Promise<unknown>) => {
+    const next = tail.then(callback); tail = next.catch(() => {}); return next;
+  } } });
+});
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 const ok = (data: unknown) => new Response(JSON.stringify({ success: true, data }), { status: 200 });
 const unauthorized = () =>
-  new Response(JSON.stringify({ success: false, error: { code: 'UNAUTHORIZED' } }), { status: 401 });
+  new Response(JSON.stringify({ success: false, error: { code: 'AUTH_TOKEN_EXPIRED' } }), { status: 401 });
 
 describe('api', () => {
   it('gọi /api/v1/<path> và unwrap data', async () => {
@@ -48,4 +54,19 @@ describe('api', () => {
     await expect(api.post('auth/login', { email: 'a', password: 'b' })).rejects.toBeDefined();
     expect(spy).toHaveBeenCalledTimes(1);
   });
+});
+
+it.each(['AUTH_TOKEN_INVALID', 'AUTH_TOKEN_MISSING'])('does not refresh %s', async code => {
+  const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ success:false, error:{code} }, { status:401 }));
+  await expect(api.get('me')).rejects.toMatchObject({code});
+  expect(spy).toHaveBeenCalledTimes(1);
+});
+it('coalesces concurrent expiration refreshes before retrying each request', async () => {
+  let refreshes=0; let calls=0;
+  vi.spyOn(globalThis,'fetch').mockImplementation(async (path) => {
+    if (path === '/api/v1/auth/refresh') { refreshes++; await new Promise(resolve=>setTimeout(resolve,5)); return ok({}); }
+    calls++; return calls<=2 ? unauthorized() : ok({id:1});
+  });
+  expect(await Promise.all([api.get('me'),api.get('me')])).toEqual([{id:1},{id:1}]);
+  expect(refreshes).toBe(1);
 });

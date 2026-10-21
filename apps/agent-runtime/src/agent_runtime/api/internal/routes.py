@@ -18,7 +18,7 @@ router = APIRouter(prefix=PREFIX)
 def _service(request, name):
     service = getattr(request.state.runtime, name)
     if service is None:
-        raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE")
+        raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "not_configured"})
     return service
 
 

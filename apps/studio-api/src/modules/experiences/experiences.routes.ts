@@ -32,8 +32,8 @@ type ReleaseParams = { release_id: string };
 export const handleListExperiences = withHandler(async (req, ctx) => {
   await requireAdmin(req);
   const query = paginationQuerySchema.parse(queryOf(req));
-  const data = await listExperiences(getProductDatabase(), query);
-  return success(data, ctx);
+  const { items, next_cursor } = await listExperiences(getProductDatabase(), query);
+  return success({ items }, ctx, 200, { meta: { pagination: { limit: query.limit, next_cursor, has_more: next_cursor !== null } } });
 });
 
 export const handleCreateExperience = withHandler(async (req, ctx) => {
@@ -85,8 +85,8 @@ export const handleListExperienceReleases = withHandler<IdParams>(async (req, ct
   await requireAdmin(req);
   const id = resourceIdSchema.parse(route.params.id);
   const query = paginationQuerySchema.parse(queryOf(req));
-  const data = await listExperienceReleases(getProductDatabase(), id, query);
-  return success(data, ctx);
+  const { items, next_cursor } = await listExperienceReleases(getProductDatabase(), id, query);
+  return success({ items }, ctx, 200, { meta: { pagination: { limit: query.limit, next_cursor, has_more: next_cursor !== null } } });
 });
 
 export const handleReadExperienceRelease = withHandler<ReleaseParams>(async (req, ctx, route) => {

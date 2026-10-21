@@ -79,13 +79,13 @@ def test_semantic_identity_over_http(turn_http):
     for change in ({"action": "submit_answer", "payload": {"question_id": "q_r_01", "option_id": "q_r_01_opt_3"}},
                    {"expected_activity_revision": 1}, {"expected_revision": 2}):
         response = post_turn(client, rig, body | change)
-        assert (response.status_code, response.json()["error"]["code"]) == (409, "IDEMPOTENCY_KEY_COLLISION")
+        assert (response.status_code, response.json()["error"]["code"]) == (409, "CONFLICT_IDEMPOTENCY_KEY")
         assert response.json()["error"]["details"] is None
 
 
-@pytest.mark.parametrize("closure,status,code", [("end", 410, "CONVERSATION_ENDED"),
-                                                 ("expiry", 410, "CONVERSATION_EXPIRED"),
-                                                 ("owner", 404, "RESOURCE_NOT_FOUND")])
+@pytest.mark.parametrize("closure,status,code", [("end", 410, "RES_CONVERSATION_ENDED"),
+                                                 ("expiry", 410, "RES_CONVERSATION_EXPIRED"),
+                                                 ("owner", 404, "RES_NOT_FOUND")])
 def test_closed_replay_never_exposes_saved_data(turn_http, closure, status, code):
     client, rig = turn_http
     request = request_for(rig, "set_name", key="name")

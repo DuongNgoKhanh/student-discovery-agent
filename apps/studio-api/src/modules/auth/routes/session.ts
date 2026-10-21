@@ -1,10 +1,10 @@
-import { ProductError } from '@/http/errors';
 import { withHandler } from '@/http/handler';
 import { success } from '@/http/response';
-import { getSessionFromRequest } from '../session';
+import { sessionMetadata } from '../session';
+import { requireAccessClaims } from '../auth.service';
 
 export const handleGet = withHandler(async (req, ctx) => {
-  const session = await getSessionFromRequest(req);
-  if (!session) throw new ProductError(401, 'AUTH_INVALID_TOKEN', 'Invalid or expired session');
+  const claims = await requireAccessClaims(req);
+  const session = sessionMetadata(claims);
   return success(session, ctx);
 });

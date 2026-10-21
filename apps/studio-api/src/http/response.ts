@@ -1,5 +1,5 @@
 import { ZodError } from 'zod';
-import { ProductError } from '@/http/errors';
+import { ProductError, transportError } from '@/http/errors';
 import type { RequestContext } from '@/http/types';
 
 function meta(ctx: RequestContext) {
@@ -13,15 +13,9 @@ function json(body: unknown, status: number, ctx: RequestContext): Response {
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'no-store',
       'x-request-id': ctx.requestId,
+      'x-trace-id': ctx.traceId,
     },
   });
-}
-
-/** Contract (common.yaml ErrorDetail.details) allows only object|null. */
-function normalizeDetails(details: unknown): Record<string, unknown> | null {
-  if (details === undefined || details === null) return null;
-  if (typeof details === 'object' && !Array.isArray(details)) return details as Record<string, unknown>;
-  return { value: details };
 }
 
 export function success<T>(
@@ -30,8 +24,10 @@ export function success<T>(
   status = 200,
   extra: Record<string, unknown> = {},
 ): Response {
+  const { meta: extensions, ...fields } = extra;
+  const metadata = extensions && typeof extensions === 'object' && !Array.isArray(extensions) ? extensions : {};
   return json(
-    { message: null, status, success: true, data, error: null, meta: meta(ctx), ...extra },
+    { message: null, status, success: true, data, error: null, ...fields, meta: { ...metadata, ...meta(ctx) } },
     status,
     ctx,
   );
@@ -56,16 +52,17 @@ export function failure(error: unknown, ctx: RequestContext): Response {
     console.error('[http] unhandled error', { requestId: ctx.requestId, traceId: ctx.traceId, error });
     e = new ProductError(500, 'INTERNAL_ERROR', 'Internal server error', false);
   }
+  const projected = transportError(e);
   return json(
     {
-      status: e.status,
+      status: projected.status,
       success: false,
-      message: e.message,
+      message: projected.error.message,
       data: null,
-      error: { code: e.code, message: e.message, retryable: e.retryable, details: normalizeDetails(e.details) },
+      error: projected.error,
       meta: meta(ctx),
     },
-    e.status,
+    projected.status,
     ctx,
   );
 }

@@ -18,12 +18,10 @@ paths:
       tags:
         - Download
       summary: Download an object as an attachment
-      description: |
-        Public (no authentication). `object_name` has the form `<bucket>/<key>`.
-        Only the public avatar bucket is allowed (decided policy change, implemented in Task 6):
-        any other bucket, or a key containing `..`, returns 404, as does a missing object.
-        Success returns the raw bytes as `application/octet-stream` with
-        `Content-Disposition: attachment; filename=<key's last segment>`.
+      description: "Public avatars remain readable across users without authentication. Only the configured public avatar
+        bucket is allowed. Private buckets, NUL/control characters, backslashes, malformed encodings, and dot-segment
+        traversal (including repeated percent encoding) return 404 before storage lookup. Success returns
+        application/octet-stream with a sanitized quoted attachment filename and X-Content-Type-Options: nosniff."
       operationId: downloadFile
       parameters:
         - name: object_name
@@ -34,21 +32,26 @@ paths:
             type: string
           example: sda-public/avatar_1.png
       responses:
-        '200':
+        "200":
           description: Binary object content
           headers:
             Content-Disposition:
               description: attachment; filename=<file name>
               schema:
                 type: string
+            X-Content-Type-Options:
+              schema:
+                type: string
+                enum:
+                  - nosniff
           content:
             application/octet-stream:
               schema:
                 type: string
                 format: binary
-        '404':
+        "404":
           $ref: profile-api.yaml#/components/responses/NotFoundError
-        '422':
+        "422":
           $ref: ../schemas/common.yaml#/components/responses/ValidationError
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError

@@ -115,7 +115,7 @@ class TurnHandler:
         if completed:
             if self.completion is None:
                 # Never persist the final answer as a fake in-progress step.
-                raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE")
+                raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "not_configured"})
             context = CompletionContext(snapshot=snapshot, answers=answers, selection=selection,
                                         next_activity_revision=snapshot.activity.revision + 1)
             bundle = self._checked_bundle(snapshot, selection, name, self.completion.prepare(context))

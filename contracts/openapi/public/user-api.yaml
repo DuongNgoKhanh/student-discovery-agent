@@ -1,48 +1,94 @@
 openapi: 3.0.3
 info:
   title: Backend API - User Management
-  description: |
+  description: >
     User management and authentication endpoints for Backend API.
 
+
     Supports:
+
     - Email/password authentication flow
+
     - User profile management (CRUD)
+
     - User avatar management
+
     - Token refresh mechanism
 
+
     Chat-first contract theo docs/prd/chat_first_assessment_api_proposal.md (Proposed, 12/10/2026).
+
     Conversation → Activities → Results; resource model rộng hơn MVP 6 câu/card trong SRS v0.3.
-    Legacy v1 personality_assessment; adaptive v2 personality_assessment_adaptive uses riasec.mean.bounds.v2; các loại career_interest/skill/career_exploration là extension sau.
-    Conversation pin Agent Release; activity pin Experience Release. Structured option interaction không bắt buộc gọi LLM.
-    Natural text đi qua Agent; start_activity và answer mapping chỉ là validated commands, Engine giữ state/scoring correctness.
-    Runtime sở hữu conversation/messages/activity/result; Studio/Product sở hữu definition/draft/release/audit; không ghi chéo bảng.
+
+    Legacy v1 personality_assessment; adaptive v2 personality_assessment_adaptive uses riasec.mean.bounds.v2; các loại
+    career_interest/skill/career_exploration là extension sau.
+
+    Conversation pin Agent Release; activity pin Experience Release. Structured option interaction không bắt buộc gọi
+    LLM.
+
+    Natural text đi qua Agent; start_activity và answer mapping chỉ là validated commands, Engine giữ state/scoring
+    correctness.
+
+    Runtime sở hữu conversation/messages/activity/result; Studio/Product sở hữu definition/draft/release/audit; không
+    ghi chéo bảng.
+
 
     Wire choices đề xuất để define docs: synchronous JSON (chưa SSE); persisted committed messages/blocks;
-    immutable result_id mới mỗi snapshot + result_revision tăng theo activity; :end/:activate/:rollback dùng nhất quán custom methods.
+
+    immutable result_id mới mỗi snapshot + result_revision tăng theo activity; :end/:activate/:rollback dùng nhất quán
+    custom methods.
+
     Các lựa chọn này cần baseline theo §9 proposal trước implementation. Không tự thêm API server render ảnh.
+
     expected_revision của public turn/end thuộc conversation; activity và result có revision riêng.
+
     Option/text phải thuộc current question; proposal binds activity/question/activity revision.
+
     General chat không tự tăng progress hoặc invalidate result. Completion activity không đóng conversation.
-    Commit parent/activity/state/messages/outcome nguyên tử; LLM ngoài transaction chỉ commit khi captured guards còn đúng và chưa đóng/hết hạn.
+
+    Commit parent/activity/state/messages/outcome nguyên tử; LLM ngoài transaction chỉ commit khi captured guards còn
+    đúng và chưa đóng/hết hạn.
+
     Owner/lifecycle kiểm trước replay; committed replay trước stale revision; collision payload không chạy lại.
+
     Client giữ state revision mới hơn khi response đến muộn; retry/auth refresh giữ nguyên body/key/revision.
 
-    DEC-01: edit option ở in_progress/completed, bỏ suffix sau k và invalidate proposal/result cũ; tên no digits/emoji và không đổi sau bước tên.
+
+    DEC-01: edit option ở in_progress/completed, bỏ suffix sau k và invalidate proposal/result cũ; tên no digits/emoji
+    và không đổi sau bước tên.
+
     DEC-02: summary.v1 share PNG/demo, full share qua projection version riêng; layout/limits/assets còn mở.
-    DEC-03 demo B-01: fixed TTL 3600 seconds from creation, no sliding; end/expiry blocks content reads/writes. Minimal end acknowledgement only; content retention 86400 seconds from effective closure, traces 86400 seconds from event. Production policy remains separate.
+
+    DEC-03 demo B-01: fixed TTL 3600 seconds from creation, no sliding; end/expiry blocks content reads/writes. Minimal
+    end acknowledgement only; content retention 86400 seconds from effective closure, traces 86400 seconds from event.
+    Production policy remains separate.
+
     DEC-04 hoãn rules/scoring/coverage/tie/golden outcomes; JSON structure hợp lệ không đủ để publish.
+
     DEC-05 text auto-accept khi policy đã duyệt/membership/revision hợp lệ, mơ hồ hỏi lại.
+
     DEC-06 LLM từ phase đầu; provider/model/budget còn mở. DEC-07 học sinh chat anonymous; POST /conversations
-    tự cấp owner cookie khi thiếu, không cần login/bootstrap API riêng. Admin login/RBAC; CSRF/token format/TTL/proof còn mở.
+
+    tự cấp owner cookie khi thiếu, không cần login/bootstrap API riêng. Admin login/RBAC; CSRF/token format/TTL/proof
+    còn mở.
+
     DEC-08 workload/rate/input limits/benchmark chốt sau; không có default số production tự đặt.
 
-    Public output có thể thêm optional fields; requests/share allowlist strict. Unknown block/type/version có controlled incompatibility.
+
+    Public output có thể thêm optional fields; requests/share allowlist strict. Unknown block/type/version có controlled
+    incompatibility.
+
     Các block có stable block_id/type/schema_version; messages/turns có IDs ổn định để replay/history không duplicate.
+
     Timestamp UTC Z, safe integer revisions, SHA-256 canonical JSON RFC8785 cho snapshot hash.
-    Envelope status/success/data/error/meta. Chat/Studio mới dùng 409 conflict/stale, 422 semantic invalid; scaffold cũ giữ HTTP mapping hiện hữu.
+
+    Envelope status/success/data/error/meta. Chat/Studio mới dùng 409 conflict/stale, 422 semantic invalid; scaffold cũ
+    giữ HTTP mapping hiện hữu.
+
 
 
     Mục lục tổng hợp: mỗi resource có YAML riêng; xem README.md.
+
     Schema/response/example dùng $ref tới định nghĩa gốc; không sửa bản alias ở đây.
   version: 1.0.0
   contact:
@@ -281,6 +327,8 @@ components:
       $ref: ../schemas/typed-blocks.yaml#/components/schemas/AssessmentQuestionBlockV2
     AssessmentClarificationBlockV2:
       $ref: ../schemas/typed-blocks.yaml#/components/schemas/AssessmentClarificationBlockV2
+    PublicUserProfile:
+      $ref: profile-api.yaml#/components/schemas/PublicUserProfile
   responses:
     BadRequestError:
       $ref: ../schemas/common.yaml#/components/responses/BadRequestError

@@ -9,6 +9,6 @@ import { success } from '@/http/response';
 
 export const handlePost = withHandler(async (req, ctx) => {
   const input = loginSchema.parse(await readJsonBody(req));
-  const data = await login(getProductDatabase(), input);
-  return setAuthCookiesOn(success(data, ctx), { access: data.access_token, refresh: data.refresh_token });
+  const result = await login(getProductDatabase(), input);
+  return setAuthCookiesOn(success(result.data, ctx), { access: result.data.access_token, refresh: result.refresh_token, sessionMaxAge: result.session_max_age });
 });

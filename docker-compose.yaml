@@ -59,6 +59,7 @@ services:
       S3_BUCKET: ${S3_BUCKET:-sda-private}
       MINIO_PUBLIC_BUCKET_NAME: ${MINIO_PUBLIC_BUCKET_NAME:-sda-public}
       PRODUCT_BASE_URL: ${PRODUCT_BASE_URL:-http://localhost:3000}
+      RUNTIME_READY_URL: ${RUNTIME_READY_URL:-http://agent-runtime:8000/ready}
     expose:
       - "3001"
     depends_on:
@@ -86,7 +87,7 @@ services:
     expose:
       - "8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5

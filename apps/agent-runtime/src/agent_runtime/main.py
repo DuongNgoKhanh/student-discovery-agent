@@ -1,3 +1,5 @@
+from collections.abc import Awaitable, Callable
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
@@ -10,7 +12,10 @@ from agent_runtime.api.internal.routes import router
 from agent_runtime.sessions.errors import RuntimeSessionError
 
 
-def create_app(runtime: RuntimeContainer | None = None) -> FastAPI:
+def create_app(
+    runtime: RuntimeContainer | None = None,
+    readiness_probe: Callable[[RuntimeContainer | None], dict] | Callable[[RuntimeContainer | None], Awaitable[dict]] | None = None,
+) -> FastAPI:
     if runtime is None:
         try:
             from agent_runtime.config.settings import Settings
@@ -19,6 +24,9 @@ def create_app(runtime: RuntimeContainer | None = None) -> FastAPI:
         except Exception:
             runtime = None
     app = FastAPI(title="Agent Runtime", redirect_slashes=False)
+    app.state.runtime = runtime
+    if readiness_probe is not None:
+        app.state.readiness_probe = readiness_probe
     app.include_router(health.router)
     app.include_router(router)
     app.add_middleware(InternalBoundary, runtime=runtime)

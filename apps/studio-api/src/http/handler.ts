@@ -2,11 +2,11 @@ import { failure } from '@/http/response';
 import type { RequestContext, RouteContext } from '@/http/types';
 import type { Handler } from 'hono';
 
-const SAFE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
+const UUID_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function idFrom(req: Request, header: string): string {
   const v = req.headers.get(header);
-  return v && SAFE_ID.test(v) ? v : crypto.randomUUID();
+  return v && UUID_ID.test(v) ? v.toLowerCase() : crypto.randomUUID();
 }
 
 /** Keep router-specific context out of controllers and business services. */

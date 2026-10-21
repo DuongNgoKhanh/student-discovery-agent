@@ -29,19 +29,19 @@ pytestmark = pytest.mark.integration
 def test_negotiation_follows_replay_lifecycle_before_product(http, rig, capability):
     before = counts(rig)
     assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": "key", **capability}),
-                 422, "INCOMPATIBLE_SCHEMA")
+                 422, "VAL_INCOMPATIBLE_SCHEMA")
     assert counts(rig) == before and rig[4].resolve_calls == 0
     created = call(http, rig, "POST", "/conversations", {"idempotency_key": "key"})
     cid = created.json()["data"]["conversation"]["id"]
     before = counts(rig)
     assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": "key", **capability}),
-                 409, "IDEMPOTENCY_KEY_COLLISION")
+                 409, "CONFLICT_IDEMPOTENCY_KEY")
     assert counts(rig) == before and rig[4].resolve_calls == 1
     assert call(http, rig, "POST", f"/conversations/{cid}:end",
                 {"idempotency_key": "end", "expected_revision": 0}).status_code == 200
     before = counts(rig)
     assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": "key", **capability}),
-                 410, "CONVERSATION_ENDED")
+                 410, "RES_CONVERSATION_ENDED")
     assert counts(rig) == before and rig[4].resolve_calls == 1
 
 
@@ -53,7 +53,7 @@ def test_negotiation_follows_replay_lifecycle_before_product(http, rig, capabili
 ])
 def test_malformed_capability_is_structural_invalid_input(http, rig, capability):
     assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": "key", **capability}),
-                 422, "INVALID_INPUT")
+                 422, "VAL_INVALID_INPUT")
     assert counts(rig) == (0, 0, 0, 0) and rig[4].resolve_calls == 0
 
 
@@ -61,14 +61,14 @@ def test_malformed_capability_is_structural_invalid_input(http, rig, capability)
 def test_oversize_keys_never_resolve_product_or_write_create_end(http, rig, length):
     generator = random.Random(9001)
     key = "".join(generator.choice(string.ascii_letters + string.digits) for _ in range(length))
-    assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": key}), 422, "INVALID_INPUT")
+    assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": key}), 422, "VAL_INVALID_INPUT")
     assert counts(rig) == (0, 0, 0, 0) and rig[4].resolve_calls == 0
     created = call(http, rig, "POST", "/conversations", {"idempotency_key": "k" * 256})
     assert created.status_code == 201
     cid = created.json()["data"]["conversation"]["id"]
     before = counts(rig)
     assert_error(call(http, rig, "POST", f"/conversations/{cid}:end",
-                 {"idempotency_key": key, "expected_revision": 0}), 422, "INVALID_INPUT")
+                 {"idempotency_key": key, "expected_revision": 0}), 422, "VAL_INVALID_INPUT")
     assert counts(rig) == before and rig[4].resolve_calls == 1
     assert call(http, rig, "GET", f"/conversations/{cid}").json()["data"]["revision"] == 0
     assert call(http, rig, "POST", f"/conversations/{cid}:end",
@@ -83,7 +83,7 @@ def test_invalid_owner_http_auth_and_direct_port_reject_before_sql_product(http,
     event.listen(rig[0], "before_cursor_execute", record)
     try:
         assert_error(call(http, rig, "POST", "/conversations", {"idempotency_key": "key"}, owner=owner),
-                     401, "AUTH_REQUIRED")
+                     401, "AUTH_CALLER_CONTEXT_INVALID")
         with pytest.raises(RuntimeSessionError) as caught:
             rig[5].create(replace(rig[3], owner_id=owner), CreateConversationInput(idempotency_key="key"))
         assert (caught.value.status, caught.value.code) == (401, "AUTH_REQUIRED")

@@ -7,3 +7,4 @@ export {
   experienceReleases,
   idempotencyRecords,
 } from '@/modules/experiences/experiences.table';
+export { authSessions, authRefreshTokens, authRegistrationLimits } from '@/modules/auth/auth.table';

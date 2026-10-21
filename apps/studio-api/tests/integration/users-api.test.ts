@@ -60,10 +60,11 @@ describe('GET /users', () => {
   it('requires a user token and lists non-deleted users with pagination', async () => {
     const { token } = await seedUser('list-a@example.test');
     expect((await listUsers(call('GET', '/users'))).status).toBe(401);
-    const body = await json(await listUsers(call('GET', '/users?limit=1&order_by=bogus&dir=sideways', token)));
-    expect(body.data).toHaveLength(1);
-    expect(body.pagination).toMatchObject({ page: 1, limit: 1 });
-    expect(body.data[0]).not.toHaveProperty('is_deleted');
+    const body = await json(await listUsers(call('GET', '/users?limit=1&order_by=id&dir=desc', token)));
+    expect(body.data.items).toHaveLength(1);
+    expect(body.meta.pagination).toMatchObject({ limit: 1 });
+    expect(body.meta.request_id).toEqual(expect.any(String));
+    expect(Object.keys(body.data.items[0]).sort()).toEqual(['avatar_url', 'id', 'name', 'position']);
   });
 });
 
@@ -81,3 +82,21 @@ const getMe = dispatch;
 const putMe = dispatch;
 const listUsers = dispatch;
 const login = dispatch;
+
+it('public directory rejects private email and deletion filters', async () => {
+  const { token } = await seedUser('directory-filter@example.test');
+  expect((await dispatch(call('GET', '/users?email=directory-filter@example.test', token))).status).toBe(422);
+  expect((await dispatch(call('GET', '/users?is_deleted=true', token))).status).toBe(422);
+});
+
+it('user cursors are bound to name filters and direction', async () => {
+  const { token } = await seedUser('cursor-first@example.test', { name: 'Cursor Person' });
+  await seedUser('cursor-second@example.test', { name: 'Cursor Person' });
+  const first = await json(await dispatch(call('GET', '/users?limit=1&name=Cursor&dir=asc', token)));
+  expect(first.meta.pagination.has_more).toBe(true);
+  const cursor = encodeURIComponent(first.meta.pagination.next_cursor);
+  const second = await json(await dispatch(call('GET', `/users?limit=1&name=Cursor&dir=asc&cursor=${cursor}`, token)));
+  expect(second.data.items[0].id).not.toBe(first.data.items[0].id);
+  expect((await dispatch(call('GET', `/users?name=Different&dir=asc&cursor=${cursor}`, token))).status).toBe(400);
+  expect((await dispatch(call('GET', `/users?name=Cursor&dir=desc&cursor=${cursor}`, token))).status).toBe(400);
+});

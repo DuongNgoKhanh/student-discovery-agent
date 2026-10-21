@@ -1,0 +1,287 @@
+{
+  "version": 1,
+  "codes": {
+    "AUTHZ_FORBIDDEN": {
+      "description": "Authz forbidden.",
+      "ui_action": "Show permission error; do not retry.",
+      "aliases": [
+        "AUTHZ_INSUFFICIENT_PERMISSION",
+        "FORBIDDEN"
+      ]
+    },
+    "AUTH_CALLER_CONTEXT_INVALID": {
+      "description": "Auth caller context invalid.",
+      "ui_action": "Report a server integration authentication failure; repair the caller signer, not user login.",
+      "aliases": []
+    },
+    "AUTH_CALLER_CONTEXT_MISSING": {
+      "description": "Auth caller context missing.",
+      "ui_action": "Report a server integration authentication failure; repair the caller signer, not user login.",
+      "aliases": []
+    },
+    "AUTH_CSRF_REJECTED": {
+      "description": "Auth csrf rejected.",
+      "ui_action": "Correct the same-origin request configuration or reload; do not automatically retry.",
+      "aliases": []
+    },
+    "AUTH_INVALID_CREDENTIALS": {
+      "description": "Auth invalid credentials.",
+      "ui_action": "Sign in again; refresh only AUTH_TOKEN_EXPIRED once.",
+      "aliases": []
+    },
+    "AUTH_RATE_LIMITED": {
+      "description": "Auth rate limited.",
+      "ui_action": "Wait for the registration cooldown; do not retry or prompt for login automatically.",
+      "aliases": []
+    },
+    "AUTH_TOKEN_EXPIRED": {
+      "description": "Auth token expired.",
+      "ui_action": "Refresh once under the browser coordinator, then retry once; otherwise sign in.",
+      "aliases": []
+    },
+    "AUTH_TOKEN_INVALID": {
+      "description": "Auth token invalid.",
+      "ui_action": "Show sign-in; do not automatically refresh a revoked or invalid session.",
+      "aliases": [
+        "AUTH_INVALID_TOKEN"
+      ]
+    },
+    "AUTH_TOKEN_MISSING": {
+      "description": "Auth token missing.",
+      "ui_action": "Show sign-in; do not automatically refresh.",
+      "aliases": [
+        "AUTH_REQUIRED"
+      ]
+    },
+    "CONFLICT_ACTIVE_RELEASE": {
+      "description": "Conflict active release.",
+      "ui_action": "Reload current state and ask for a new action; do not automatically retry.",
+      "aliases": [
+        "ACTIVE_RELEASE_CONFLICT"
+      ]
+    },
+    "CONFLICT_EMAIL_EXISTS": {
+      "description": "Conflict email exists.",
+      "ui_action": "Choose another email or sign in to the existing account.",
+      "aliases": [
+        "VAL_EMAIL_ALREADY_EXISTS"
+      ]
+    },
+    "CONFLICT_IDEMPOTENCY_KEY": {
+      "description": "Conflict idempotency key.",
+      "ui_action": "Create a new key for a new action; retry an existing key only with its original payload.",
+      "aliases": [
+        "IDEMPOTENCY_KEY_COLLISION"
+      ]
+    },
+    "CONFLICT_REVISION": {
+      "description": "Conflict revision.",
+      "ui_action": "Reload current state and ask for a new action; do not automatically retry.",
+      "aliases": [
+        "REVISION_CONFLICT"
+      ]
+    },
+    "CONFLICT_STALE_CLARIFICATION": {
+      "description": "Conflict stale clarification.",
+      "ui_action": "Reload current state and ask for a new action; do not automatically retry.",
+      "aliases": [
+        "STALE_CLARIFICATION"
+      ]
+    },
+    "CONFLICT_STALE_REPORT": {
+      "description": "Conflict stale report.",
+      "ui_action": "Reload current state and ask for a new action; do not automatically retry.",
+      "aliases": [
+        "STALE_REPORT"
+      ]
+    },
+    "CONFLICT_STALE_RESULT_REVISION": {
+      "description": "Conflict stale result revision.",
+      "ui_action": "Reload current state and ask for a new action; do not automatically retry.",
+      "aliases": [
+        "STALE_RESULT_REVISION"
+      ]
+    },
+    "CONFLICT_VERSION_EXISTS": {
+      "description": "Conflict version exists.",
+      "ui_action": "Reload current state and ask for a new action; do not automatically retry.",
+      "aliases": [
+        "VAL_VERSION_ALREADY_EXISTS"
+      ]
+    },
+    "PUBLISH_GATE_FAILED": {
+      "description": "Publish gate failed.",
+      "ui_action": "Show publish gate details and repair the draft.",
+      "aliases": []
+    },
+    "RES_AVATAR_NOT_FOUND": {
+      "description": "Res avatar not found.",
+      "ui_action": "Show unavailable/missing resource or terminal state; do not automatically retry.",
+      "aliases": []
+    },
+    "RES_CONVERSATION_ENDED": {
+      "description": "Res conversation ended.",
+      "ui_action": "Show unavailable/missing resource or terminal state; do not automatically retry.",
+      "aliases": [
+        "CONVERSATION_ENDED"
+      ]
+    },
+    "RES_CONVERSATION_EXPIRED": {
+      "description": "Res conversation expired.",
+      "ui_action": "Show unavailable/missing resource or terminal state; do not automatically retry.",
+      "aliases": [
+        "CONVERSATION_EXPIRED"
+      ]
+    },
+    "RES_EXPERIENCE_NOT_CONFIGURED": {
+      "description": "Res experience not configured.",
+      "ui_action": "Show unavailable/missing resource or terminal state; do not automatically retry.",
+      "aliases": [
+        "EXPERIENCE_NOT_CONFIGURED"
+      ]
+    },
+    "RES_NOT_FOUND": {
+      "description": "Res not found.",
+      "ui_action": "Show unavailable/missing resource or terminal state; do not automatically retry.",
+      "aliases": [
+        "RESOURCE_NOT_FOUND"
+      ]
+    },
+    "RES_OBJECT_NOT_FOUND": {
+      "description": "Res object not found.",
+      "ui_action": "Show unavailable/missing resource or terminal state; do not automatically retry.",
+      "aliases": []
+    },
+    "RES_RESULT_NOT_READY": {
+      "description": "Res result not ready.",
+      "ui_action": "Show unavailable/missing resource or terminal state; do not automatically retry.",
+      "aliases": [
+        "RESULT_NOT_READY"
+      ]
+    },
+    "RES_USER_NOT_FOUND": {
+      "description": "Res user not found.",
+      "ui_action": "Show unavailable/missing resource or terminal state; do not automatically retry.",
+      "aliases": []
+    },
+    "RES_VERSION_NOT_FOUND": {
+      "description": "Res version not found.",
+      "ui_action": "Show unavailable/missing resource or terminal state; do not automatically retry.",
+      "aliases": []
+    },
+    "SYS_ENGINE_FAILURE": {
+      "description": "Sys engine failure.",
+      "ui_action": "Use bounded backoff only when retryable; retain idempotency key and payload.",
+      "aliases": [
+        "ENGINE_FAILURE"
+      ]
+    },
+    "SYS_INTERNAL_ERROR": {
+      "description": "Sys internal error.",
+      "ui_action": "Use bounded backoff only when retryable; retain idempotency key and payload.",
+      "aliases": [
+        "INTERNAL_ERROR"
+      ]
+    },
+    "SYS_RATE_LIMITED": {
+      "description": "Sys rate limited.",
+      "ui_action": "Wait for the server cooldown before a bounded retry.",
+      "aliases": [
+        "RATE_LIMITED"
+      ]
+    },
+    "SYS_REQUEST_TIMEOUT": {
+      "description": "Sys request timeout.",
+      "ui_action": "Use bounded backoff only when retryable; retain idempotency key and payload.",
+      "aliases": [
+        "REQUEST_TIMEOUT"
+      ]
+    },
+    "SYS_UNAVAILABLE": {
+      "description": "Sys unavailable.",
+      "ui_action": "For not_configured repair configuration; for dependency_down use bounded backoff and Retry-After when retryable.",
+      "aliases": [
+        "SERVICE_UNAVAILABLE"
+      ]
+    },
+    "VAL_INCOMPATIBLE_RELEASE": {
+      "description": "Val incompatible release.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": [
+        "INCOMPATIBLE_RELEASE"
+      ]
+    },
+    "VAL_INCOMPATIBLE_SCHEMA": {
+      "description": "Val incompatible schema.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": [
+        "INCOMPATIBLE_SCHEMA"
+      ]
+    },
+    "VAL_INVALID_ACTIVITY_TRANSITION": {
+      "description": "Val invalid activity transition.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": [
+        "INVALID_ACTIVITY_TRANSITION"
+      ]
+    },
+    "VAL_INVALID_AVATAR": {
+      "description": "Val invalid avatar.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": []
+    },
+    "VAL_INVALID_INPUT": {
+      "description": "Val invalid input.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": [
+        "INVALID_INPUT",
+        "VAL_UNPROCESSABLE"
+      ]
+    },
+    "VAL_INVALID_OPTION": {
+      "description": "Val invalid option.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": [
+        "INVALID_OPTION"
+      ]
+    },
+    "VAL_INVALID_PASSWORD": {
+      "description": "Val invalid password.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": []
+    },
+    "VAL_INVALID_QUESTION": {
+      "description": "Val invalid question.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": [
+        "INVALID_QUESTION"
+      ]
+    },
+    "VAL_INVALID_REQUEST": {
+      "description": "Val invalid request.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": [
+        "INVALID_REQUEST"
+      ]
+    },
+    "VAL_METHOD_NOT_ALLOWED": {
+      "description": "Val method not allowed.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": [
+        "METHOD_NOT_ALLOWED"
+      ]
+    },
+    "VAL_PAYLOAD_TOO_LARGE": {
+      "description": "Val payload too large.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": [
+        "PAYLOAD_TOO_LARGE"
+      ]
+    },
+    "VAL_UNSUPPORTED_MEDIA_TYPE": {
+      "description": "Val unsupported media type.",
+      "ui_action": "Show validation feedback and correct the request.",
+      "aliases": []
+    }
+  }
+}

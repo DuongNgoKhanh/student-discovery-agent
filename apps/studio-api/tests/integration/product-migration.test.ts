@@ -68,11 +68,21 @@ describe('Product migration', () => {
     await withClient(url, async (c) => {
       expect(await regclass(c, 'public.users')).toBeNull();
       expect(await regclass(c, 'public.versions')).toBeNull();
-      expect(await journalCount(c)).toBe(2);
+      expect(await journalCount(c)).toBe(3);
       expect(await regclass(c, 'product.experiences')).toBe('product.experiences');
       expect(await regclass(c, 'product.experience_drafts')).toBe('product.experience_drafts');
       expect(await regclass(c, 'product.experience_releases')).toBe('product.experience_releases');
       expect(await regclass(c, 'product.idempotency_records')).toBe('product.idempotency_records');
+      for (const table of ['auth_sessions', 'auth_refresh_tokens', 'auth_registration_limits']) {
+        expect(await regclass(c, `product.${table}`)).toBe(`product.${table}`);
+      }
+      const refreshShape = await describeTable(c, 'product', 'auth_refresh_tokens');
+      expect(refreshShape.columns.map(({ name, type, nullable }) => ({ name, type, nullable }))).toEqual([
+        { name: 'token_hash', type: 'character varying(64)', nullable: false },
+        { name: 'session_id', type: 'uuid', nullable: false },
+        { name: 'consumed_at', type: 'timestamp with time zone', nullable: true },
+      ]);
+      expect(refreshShape.constraints.some((constraint) => constraint.includes('FOREIGN KEY (session_id)'))).toBe(true);
       const execution = await c.query(`SELECT 1 FROM pg_namespace WHERE nspname = 'execution'`);
       expect(execution.rowCount).toBe(0);
 
@@ -207,7 +217,7 @@ describe('Product migration', () => {
 
     let snapshot: { users: string[]; versions: string[]; seq: unknown } | undefined;
     await withClient(url, async (c) => {
-      expect(await journalCount(c)).toBe(2);
+      expect(await journalCount(c)).toBe(3);
       snapshot = {
         users: await dumpRows(c, 'product.users'),
         versions: await dumpRows(c, 'product.versions'),
@@ -219,7 +229,7 @@ describe('Product migration', () => {
     await migrateProduct(url);
 
     await withClient(url, async (c) => {
-      expect(await journalCount(c)).toBe(2);
+      expect(await journalCount(c)).toBe(3);
       expect({
         users: await dumpRows(c, 'product.users'),
         versions: await dumpRows(c, 'product.versions'),

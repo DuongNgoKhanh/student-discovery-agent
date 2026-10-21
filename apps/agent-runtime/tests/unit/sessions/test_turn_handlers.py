@@ -141,7 +141,10 @@ def test_terminal_without_completion_port_is_unavailable(handler, valid_v2_doc):
     assert done.next_state.progress.total == done.next_state.progress.completed < 30  # adaptive, not hardcoded
     assert done.next_state.current_result_id == done.completion.result_id
     request = _option(last, biased_option(last.activity.state.current_question.question_id))
-    _error(lambda: handler.prepare(last, request), 503, "SERVICE_UNAVAILABLE")
+    with pytest.raises(RuntimeSessionError) as caught:
+        handler.prepare(last, request)
+    assert (caught.value.status, caught.value.code) == (503, "SERVICE_UNAVAILABLE")
+    assert caught.value.details == {"kind": "not_configured"}
 
 
 @pytest.mark.parametrize("mutate", [

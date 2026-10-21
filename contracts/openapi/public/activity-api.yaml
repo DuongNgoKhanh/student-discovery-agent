@@ -20,7 +20,7 @@ paths:
         - Activity Results
       summary: Đọc current valid result của activity
       description: Resolve parent conversation and verify owner/read policy first. Return latest valid immutable
-        snapshot with full card data. Insufficient answers/engine failure → RESULT_NOT_READY; invalidation/mismatch
+        snapshot with full card data. Insufficient answers/engine failure → RES_RESULT_NOT_READY; invalidation/mismatch
         → stale error. Never expose internal scores/evidence or rebuild result using another active release.
       x-runtime-lifecycle: Parent ownership/lifecycle checked before projection; ended/expired returns 410 with data null. Noncurrent or superseded results are not exported as valid. Student data uses Cache-Control no-store.
       security:
@@ -77,7 +77,7 @@ paths:
             type: integer
             minimum: 1
             maximum: 9007199254740991
-          description: Guard against old/invalidated result generation; mismatch → 409 STALE_RESULT_REVISION.
+          description: Guard against old/invalidated result generation; mismatch → 409 CONFLICT_STALE_RESULT_REVISION.
 components:
   schemas:
     ResultView:

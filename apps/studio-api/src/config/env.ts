@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { z, ZodError } from 'zod';
 
 const nodeEnv = z.enum(['development', 'test', 'production']).default('development');
@@ -10,8 +11,9 @@ const cookieNames = {
 const productSchema = z.object({
   DATABASE_URL: z.string({ required_error: 'DATABASE_URL is required' }).min(1, 'DATABASE_URL is required'),
   SECRET_KEY: z.string({ required_error: 'SECRET_KEY is required' }).min(1, 'SECRET_KEY is required'),
-  ACCESS_TOKEN_EXPIRE_MINUTES: z.coerce.number().int().positive().default(11520),
-  REFRESH_TOKEN_EXPIRE_MINUTES: z.coerce.number().int().positive().default(43200),
+  ACCESS_TOKEN_EXPIRE_MINUTES: z.coerce.number().int().min(15).max(60).default(30),
+  REFRESH_TOKEN_EXPIRE_MINUTES: z.coerce.number().int().min(10080).max(43200).default(20160),
+  RUNTIME_READY_URL: z.string().url().optional(),
   ...cookieNames,
   NODE_ENV: nodeEnv,
 });
@@ -33,6 +35,9 @@ const authSchema = z.object({
   SECRET_KEY: productSchema.shape.SECRET_KEY,
   ACCESS_TOKEN_EXPIRE_MINUTES: z.preprocess(blankToUndefined, productSchema.shape.ACCESS_TOKEN_EXPIRE_MINUTES),
   REFRESH_TOKEN_EXPIRE_MINUTES: z.preprocess(blankToUndefined, productSchema.shape.REFRESH_TOKEN_EXPIRE_MINUTES),
+  AUTH_TRUSTED_PROXY_HOSTS: z.string().max(1024).default('').transform(value => value.split(',').map(host => host.trim()).filter(Boolean))
+    .refine(hosts => hosts.length <= 16 && hosts.every(host => isIP(host) > 0 || /^(?:[a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+$/.test(host)), 'Expected explicit proxy IP addresses or DNS names'),
+  PRODUCT_BASE_URL: z.preprocess(blankToUndefined, z.string().url().optional()),
   ADMIN_USERNAME: z.preprocess(blankToUndefined, z.string().default('admin')),
   ADMIN_PASSWORD: z.preprocess(blankToUndefined, z.string().optional()),
   ...cookieNames,

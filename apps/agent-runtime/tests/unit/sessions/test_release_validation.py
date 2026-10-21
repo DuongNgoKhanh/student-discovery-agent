@@ -18,10 +18,10 @@ def validate(descriptor, validator=None, capabilities=None, environment="demo"):
                             validator=validator or ExperienceValidator())
 
 
-def assert_error(code, action, status=422):
+def assert_error(code, action, status=422, details=None):
     with pytest.raises(RuntimeSessionError) as error:
         action()
-    assert (error.value.status, error.value.code, error.value.details) == (status, code, None)
+    assert (error.value.status, error.value.code, error.value.details) == (status, code, details)
 
 
 @pytest.mark.parametrize("changes", [
@@ -122,5 +122,7 @@ def test_shared_jcs_vectors_are_unchanged():
 
 def test_default_product_source_fails_closed():
     source = ProductUnavailable()
-    assert_error("SERVICE_UNAVAILABLE", lambda: source.resolve_active_agent("demo"), status=503)
-    assert_error("SERVICE_UNAVAILABLE", lambda: source.resolve_active_experience("demo", "exp", None), status=503)
+    assert_error("SERVICE_UNAVAILABLE", lambda: source.resolve_active_agent("demo"), status=503,
+                 details={"kind": "not_configured"})
+    assert_error("SERVICE_UNAVAILABLE", lambda: source.resolve_active_experience("demo", "exp", None), status=503,
+                 details={"kind": "not_configured"})
