@@ -16,13 +16,13 @@ export function toUserProfile(row: UserRow): UserProfile {
     bio: row.bio,
     position: row.position,
     created_at: row.created_at.toISOString(),
-    updated_at: row.updated_at ? row.updated_at.toISOString() : null,
+    updated_at: row.updated_at.toISOString(),
   };
 }
 
 /** Admin projection: public profile plus `is_deleted`; still never the hash. */
 export function toAdminProfile(row: UserRow): AdminUserProfile {
-  return { ...toUserProfile(row), created_at: row.created_at.toISOString(), is_deleted: row.is_deleted };
+  return { ...toUserProfile(row), created_at: row.created_at.toISOString(), updated_at: row.updated_at.toISOString(), is_deleted: row.is_deleted };
 }
 
 /** Public directory projection excludes private account details. */

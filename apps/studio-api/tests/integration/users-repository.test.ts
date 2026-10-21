@@ -41,7 +41,6 @@ describe('users repository', () => {
       hashed_password: legacy.argon2_hash,
       name: 'Insert',
       is_deleted: false,
-      updated_at: null,
       avatar_url: null,
       bio: null,
       position: null,
@@ -49,6 +48,7 @@ describe('users repository', () => {
     expect(user.id).toBeGreaterThan(0);
     expect(user.created_at).toBeInstanceOf(Date);
     expect(user.created_at.getTime()).toBeGreaterThan(before - 60_000);
+    expect(user.updated_at).toEqual(user.created_at);
   });
 
   it('rejects a duplicate email via the unique constraint', async () => {
@@ -116,7 +116,7 @@ describe('users repository', () => {
     expectTypeOf<UserRow>().toEqualTypeOf<{
       id: number;
       created_at: Date;
-      updated_at: Date | null;
+      updated_at: Date;
       is_deleted: boolean;
       email: string;
       hashed_password: string | null;

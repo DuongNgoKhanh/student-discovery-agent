@@ -73,6 +73,8 @@ paths:
     $ref: admin-user-api.yaml#/paths/~1admin~1users
   /admin/users/bulk/create:
     $ref: admin-user-api.yaml#/paths/~1admin~1users~1bulk~1create
+  /admin/users/bulk/delete:
+    $ref: admin-user-api.yaml#/paths/~1admin~1users~1bulk~1delete
   /admin/users/bulk/update:
     $ref: admin-user-api.yaml#/paths/~1admin~1users~1bulk~1update
   /admin/users/{user_id}:

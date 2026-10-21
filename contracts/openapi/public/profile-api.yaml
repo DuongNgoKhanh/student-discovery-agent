@@ -183,8 +183,7 @@ components:
         updated_at:
           type: string
           format: date-time
-          description: Last update timestamp
-          nullable: true
+          description: Last update timestamp; equals created_at until the first update
           example: 2024-01-20T14:45:00Z
     UserInfoResponse:
       allOf:
