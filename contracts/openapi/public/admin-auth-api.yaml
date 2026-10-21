@@ -118,7 +118,7 @@ components:
             message: Authentication required or token invalid
             data: null
             error:
-              code: AUTH_INVALID_TOKEN
+              code: AUTH_TOKEN_INVALID
               message: Authentication required or token invalid
               details: null
               retryable: false

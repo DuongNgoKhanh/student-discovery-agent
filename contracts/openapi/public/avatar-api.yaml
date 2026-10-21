@@ -2,8 +2,8 @@ openapi: 3.0.3
 info:
   title: Student Discovery - Avatars
   version: 1.0.0
-  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong user-api.yaml; xem README.md
-    để chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
+  description: Contract theo resource. Quy ước chung và các quyết định còn mở nằm trong user-api.yaml; xem README.md để
+    chọn nhóm API. Schema dùng chung được tham chiếu bằng $ref.
 servers:
   - url: http://localhost:3000/api/v1
     description: Local development server
@@ -39,23 +39,23 @@ paths:
                   format: binary
                   description: Image file (PNG or JPEG, max 1MB)
       responses:
-        '200':
+        "200":
           description: Avatar uploaded successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AvatarUploadResponse'
-        '400':
+                $ref: "#/components/schemas/AvatarUploadResponse"
+        "400":
           $ref: ../schemas/common.yaml#/components/responses/BadRequestError
-        '401':
+        "401":
           $ref: auth-api.yaml#/components/responses/UnauthorizedError
-        '413':
+        "413":
           description: Payload too large - file exceeds maximum size (1MB)
           content:
             application/json:
               schema:
                 $ref: ../schemas/common.yaml#/components/schemas/ErrorResponse
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
       x-codeSamples:
         - lang: curl
@@ -78,7 +78,7 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Avatar image retrieved successfully
           content:
             image/png:
@@ -89,9 +89,15 @@ paths:
               schema:
                 type: string
                 format: binary
-        '404':
+          headers:
+            X-Content-Type-Options:
+              schema:
+                type: string
+                enum:
+                  - nosniff
+        "404":
           $ref: profile-api.yaml#/components/responses/NotFoundError
-        '500':
+        "500":
           $ref: ../schemas/common.yaml#/components/responses/InternalServerError
 components:
   schemas:

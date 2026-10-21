@@ -88,8 +88,7 @@ Việc chia file giữ nguyên contract: revision/idempotency, kiểm tra stale 
 khả năng thêm optional response fields và quy tắc version của typed blocks/projection.
 Các lựa chọn còn ở trạng thái Proposed vẫn cần chốt trước implementation.
 
-[error_codes.md](error_codes.md) là tài liệu mã lỗi hiện có; mã lỗi Chat/Studio và HTTP response tương ứng
-được mô tả trong [schemas/common.yaml](openapi/schemas/common.yaml).
+[error-codes.json](error-codes.json) là registry duy nhất; [error_codes.md](error_codes.md), TypeScript/Python và OpenAPI enum được generate bằng `python3 scripts/generate-error-codes.py`. Envelope dùng canonical code; alias cũ ở `error.legacy_code`. Xem [API migration](../docs/operations/api-review-fixes.md).
 
 ## Kiểm tra contract và bảng parity
 
@@ -102,8 +101,8 @@ Trạng thái parity giữa contract và triển khai hiện tại (Product API 
 
 | Endpoint | Trạng thái | Ghi chú |
 | --- | --- | --- |
-| `/auth/register`, `/auth/login`, `/auth/refresh` | implemented (studio-api `/api/v1`) | `AuthResponse` phẳng trong `data`. |
-| `/auth/session` | implemented (studio-api `/api/v1`) | Read-only verified metadata `{userId,isAdmin}`; access invalid/expired trả 401. |
+| `/auth/register`, `/auth/login`, `/auth/refresh` | implemented (studio-api `/api/v1`) | Access/user trong `data`; refresh chỉ qua HttpOnly cookie và xoay vòng server-side. |
+| `/auth/session` | implemented (studio-api `/api/v1`) | Read-only verified metadata `{principal:{type,id},is_admin}`; missing/invalid/expired trả 401 với code riêng. |
 | `/auth/logout` | implemented (studio-api `/api/v1/auth/logout`) | Response `data: {ok:true}`. |
 | `/admin/auth/login` | implemented (studio-api `/api/v1`) | Không có mật khẩu mặc định; cần `ADMIN_PASSWORD`. |
 | `/me`, `/users`, `/admin/users*` (CRUD, restore, bulk) | implemented (studio-api `/api/v1`) | `/users` yêu cầu Bearer; bulk create thất bại trả `user_id: null`. |

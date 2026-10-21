@@ -81,7 +81,7 @@ paths:
             type: integer
             minimum: 1
             maximum: 9007199254740991
-          description: Guard against old/invalidated result generation; mismatch → 409 STALE_RESULT_REVISION.
+          description: Guard against old/invalidated result generation; mismatch → 409 CONFLICT_STALE_RESULT_REVISION.
         - name: projection_version
           in: query
           required: false

@@ -5,7 +5,9 @@
     "type": "interaction",
     "activity_id": "act_demo",
     "action": "set_name",
-    "payload": {"display_name": "Ngân"},
+    "payload": {
+      "display_name": "Ngân"
+    },
     "expected_revision": 1,
     "expected_activity_revision": 0,
     "idempotency_key": "name_001"
@@ -15,14 +17,19 @@
     "type": "interaction",
     "activity_id": "act_demo",
     "action": "submit_answer",
-    "payload": {"question_id": "q_r_01", "option_id": "q_r_01_opt_3"},
+    "payload": {
+      "question_id": "q_r_01",
+      "option_id": "q_r_01_opt_3"
+    },
     "expected_revision": 2,
     "expected_activity_revision": 1,
     "idempotency_key": "answer_001"
   },
   "message_input": {
     "type": "message",
-    "content": {"text": "Xin chào"},
+    "content": {
+      "text": "Xin chào"
+    },
     "expected_revision": 2,
     "idempotency_key": "message_001"
   },
@@ -30,7 +37,10 @@
     "type": "interaction",
     "activity_id": "act_demo",
     "action": "submit_answer",
-    "payload": {"question_id": "q_r_01", "text": "Khá thích"},
+    "payload": {
+      "question_id": "q_r_01",
+      "text": "Khá thích"
+    },
     "expected_revision": 2,
     "idempotency_key": "text_001"
   },
@@ -38,7 +48,11 @@
     "type": "interaction",
     "activity_id": "act_demo",
     "action": "confirm_answer",
-    "payload": {"proposal_id": "prop_1", "question_id": "q_r_01", "candidate_id": "cand_1"},
+    "payload": {
+      "proposal_id": "prop_1",
+      "question_id": "q_r_01",
+      "candidate_id": "cand_1"
+    },
     "expected_revision": 2,
     "idempotency_key": "confirm_001"
   },
@@ -46,7 +60,10 @@
     "type": "interaction",
     "activity_id": "act_demo",
     "action": "edit_answer",
-    "payload": {"question_id": "q_r_01", "option_id": "q_r_01_opt_4"},
+    "payload": {
+      "question_id": "q_r_01",
+      "option_id": "q_r_01_opt_4"
+    },
     "expected_revision": 3,
     "idempotency_key": "edit_001"
   },
@@ -72,45 +89,88 @@
       "current_question": {
         "question_id": "q_i_01",
         "title": "Test question",
-        "options": [{"id": "q_i_01_opt_1", "label": "Rating 1"}, {"id": "q_i_01_opt_2", "label": "Rating 2"}]
+        "options": [
+          {
+            "id": "q_i_01_opt_1",
+            "label": "Rating 1"
+          },
+          {
+            "id": "q_i_01_opt_2",
+            "label": "Rating 2"
+          }
+        ]
       },
       "clarification": null,
-      "answers": [{
-        "answer_id": "ans_demo_1",
-        "question_id": "q_r_01",
-        "option_id": "q_r_01_opt_2",
-        "ordinal": 1,
-        "accepted_activity_revision": 2,
-        "source": "option",
-        "question": {
+      "answers": [
+        {
+          "answer_id": "ans_demo_1",
           "question_id": "q_r_01",
-          "title": "Test question",
-          "options": [{"id": "q_r_01_opt_1", "label": "Rating 1"}, {"id": "q_r_01_opt_2", "label": "Rating 2"}]
+          "option_id": "q_r_01_opt_2",
+          "ordinal": 1,
+          "accepted_activity_revision": 2,
+          "source": "option",
+          "question": {
+            "question_id": "q_r_01",
+            "title": "Test question",
+            "options": [
+              {
+                "id": "q_r_01_opt_1",
+                "label": "Rating 1"
+              },
+              {
+                "id": "q_r_01_opt_2",
+                "label": "Rating 2"
+              }
+            ]
+          }
         }
-      }],
-      "progress": {"completed": 1, "min_total": 12, "max_total": 30, "total": null, "phase": "baseline"},
+      ],
+      "progress": {
+        "completed": 1,
+        "min_total": 12,
+        "max_total": 30,
+        "total": null,
+        "phase": "baseline"
+      },
       "result": null,
       "is_demo": true,
       "created_at": "2026-10-20T03:00:00Z",
       "expires_at": null
     },
-    "blocks": [{
-      "block_id": "blk_demo_2",
-      "type": "assessment_question",
-      "schema_version": 2,
-      "activity_id": "act_demo",
-      "question_id": "q_i_01",
-      "title": "Test question",
-      "options": [{"id": "q_i_01_opt_1", "label": "Rating 1"}, {"id": "q_i_01_opt_2", "label": "Rating 2"}],
-      "progress": {"completed": 1, "min_total": 12, "max_total": 30, "total": null, "phase": "baseline"}
-    }]
+    "blocks": [
+      {
+        "block_id": "blk_demo_2",
+        "type": "assessment_question",
+        "schema_version": 2,
+        "activity_id": "act_demo",
+        "question_id": "q_i_01",
+        "title": "Test question",
+        "options": [
+          {
+            "id": "q_i_01_opt_1",
+            "label": "Rating 1"
+          },
+          {
+            "id": "q_i_01_opt_2",
+            "label": "Rating 2"
+          }
+        ],
+        "progress": {
+          "completed": 1,
+          "min_total": 12,
+          "max_total": 30,
+          "total": null,
+          "phase": "baseline"
+        }
+      }
+    ]
   },
   "conflict_error": {
     "status": 409,
     "success": false,
     "data": null,
     "error": {
-      "code": "REVISION_CONFLICT",
+      "code": "CONFLICT_REVISION",
       "message": "REVISION_CONFLICT",
       "retryable": false,
       "details": {
@@ -120,7 +180,8 @@
         "actual_revision": 2,
         "conversation": null,
         "activity": null
-      }
+      },
+      "legacy_code": "REVISION_CONFLICT"
     },
     "meta": {
       "request_id": "00000000000000000000000000000001",

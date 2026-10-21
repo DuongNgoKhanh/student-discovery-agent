@@ -147,7 +147,7 @@ components:
               format: display-name
               description: 'Input: NFC + trim/collapse Unicode whitespace; letters, marks attached to a letter
                 cluster, and spaces; no digits/emoji/punctuation/markup. 1..50 Unicode code points measured after
-                normalization (no raw maxLength). Case and diacritics are preserved; invalid names return 422 INVALID_INPUT.'
+                normalization (no raw maxLength). Case and diacritics are preserved; invalid names return 422 VAL_INVALID_INPUT.'
           required:
             - display_name
           additionalProperties: false
