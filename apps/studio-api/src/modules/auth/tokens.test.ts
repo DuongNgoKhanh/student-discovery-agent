@@ -34,9 +34,9 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('verifyToken with Python-issued HS256 tokens', () => {
-  it('accepts_python_hashes_and_access_claims', async () => {
-    expect(await verifyToken(legacy.access_token, 'access')).toMatchObject({ sub: '7', type: 'access' });
+describe('HS256 verification and access contract migration', () => {
+  it('verifies current user access and keeps refresh types separate', async () => {
+    expect(await verifyToken(await issueAccessToken('7'), 'access')).toMatchObject({ sub: '7', type: 'access' });
     await expect(verifyToken(legacy.refresh_token, 'access')).rejects.toThrow();
   });
 
@@ -49,8 +49,8 @@ describe('verifyToken with Python-issued HS256 tokens', () => {
     await expect(verifyToken(legacy.access_token, 'refresh')).rejects.toThrow();
   });
 
-  it('verifies the legacy admin token with admin flag', async () => {
-    expect(await verifyToken(legacy.admin_access_token, 'access')).toMatchObject({
+  it('verifies current admin access with the admin flag', async () => {
+    expect(await verifyToken(await issueAccessToken('admin', true), 'access')).toMatchObject({
       sub: 'admin',
       type: 'access',
       admin: true,
@@ -67,7 +67,7 @@ describe('verifyToken with Python-issued HS256 tokens', () => {
   });
 
   it('pins HS256: rejects alg none and other HMAC algorithms', async () => {
-    const payload = { sub: '7', type: 'access', exp: legacy.clock + 60 };
+    const payload = { sub: '7', type: 'access', ver: 2, exp: legacy.clock + 60 };
     const none = `${b64({ alg: 'none', typ: 'JWT' })}.${b64(payload)}.`;
     await expect(verifyToken(none, 'access')).rejects.toThrow();
     const hs512Input = `${b64({ alg: 'HS512', typ: 'JWT' })}.${b64(payload)}`;
@@ -85,30 +85,30 @@ describe('verifyToken with Python-issued HS256 tokens', () => {
   });
 });
 
-describe('issue*Token (Python-compatible claims)', () => {
-  it('access token: HS256, exactly {sub,exp,type}, TTL 691200s, raw UTF-8 secret', async () => {
+describe('issue*Token (versioned access and bounded lifetimes)', () => {
+  it('access token: HS256, versioned {sub,exp,type}, TTL 1800s, raw UTF-8 secret', async () => {
     const token = await issueAccessToken('7');
     const { header, payload } = parts(token);
     expect(header.alg).toBe('HS256');
-    expect(payload).toEqual({ sub: '7', type: 'access', exp: legacy.clock + 691200 });
+    expect(payload).toEqual({ sub: '7', type: 'access', ver: 2, exp: legacy.clock + 1800 });
     // Same HMAC as PyJWT with settings.SECRET_KEY as raw bytes.
     expect(token).toBe(sign(header, payload));
   });
 
-  it('refresh token: exactly {sub,exp,type}, TTL 2592000s', async () => {
+  it('refresh token: exactly {sub,exp,type}, TTL 1209600s', async () => {
     const { payload } = parts(await issueRefreshToken('7'));
-    expect(payload).toEqual({ sub: '7', type: 'refresh', exp: legacy.clock + 2592000 });
+    expect(payload).toEqual({ sub: '7', type: 'refresh', exp: legacy.clock + 1209600 });
   });
 
   it('admin access token: {sub:admin, admin:true, type:access, exp}', async () => {
     const token = await issueAccessToken('admin', true);
-    expect(parts(token).payload).toEqual({ sub: 'admin', admin: true, type: 'access', exp: legacy.clock + 691200 });
+    expect(parts(token).payload).toEqual({ sub: 'admin', admin: true, type: 'access', ver: 2, exp: legacy.clock + 1800 });
     expect(await verifyToken(token, 'access')).toMatchObject({ admin: true });
   });
 
   it('honours TTL env overrides', async () => {
-    vi.stubEnv('ACCESS_TOKEN_EXPIRE_MINUTES', '1');
-    expect(parts(await issueAccessToken('7')).payload.exp).toBe(legacy.clock + 60);
+    vi.stubEnv('ACCESS_TOKEN_EXPIRE_MINUTES', '15');
+    expect(parts(await issueAccessToken('7')).payload.exp).toBe(legacy.clock + 900);
   });
 
   it('round-trips and keeps types apart', async () => {
@@ -116,4 +116,9 @@ describe('issue*Token (Python-compatible claims)', () => {
     await expect(verifyToken(refresh, 'access')).rejects.toThrow();
     expect(await verifyToken(refresh, 'refresh')).toMatchObject({ sub: '9', type: 'refresh' });
   });
+});
+
+it('invalidates previously issued long-lived access JWTs during the session security upgrade', async () => {
+  await expect(verifyToken(legacy.access_token, 'access')).rejects.toMatchObject({code:'AUTH_INVALID_TOKEN'});
+  await expect(verifyToken(legacy.admin_access_token, 'access')).rejects.toMatchObject({code:'AUTH_INVALID_TOKEN'});
 });

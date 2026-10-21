@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { dispatch } from '../helpers/api';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -14,14 +15,15 @@ import { requireAdmin, requireUser } from '@/modules/auth/auth.service';
 
 const SECRET = 'integration-test-secret';
 const ADMIN_PASSWORD = 'Adm1n!integration';
-const ACCESS_TTL = 691200;
-const REFRESH_TTL = 2592000;
+const ACCESS_TTL = 1800;
+const REFRESH_TTL = 1209600;
 const STRONG = 'Str0ng!Pass';
 
 // Envelope check against contracts/openapi/schemas/common.yaml ApiResponse.
 const common = parse(readFileSync(resolve(__dirname, '../../../../contracts/openapi/schemas/common.yaml'), 'utf8'));
 const ajv = new Ajv({ strict: false, allErrors: true });
 ajv.addFormat('date-time', true);
+ajv.addSchema({ $id: 'error-codes.yaml', ...parse(readFileSync(resolve(__dirname, '../../../../contracts/openapi/schemas/error-codes.yaml'), 'utf8')) });
 ajv.addSchema({ $id: 'common', components: common.components });
 const validateEnvelope = ajv.compile({ $ref: 'common#/components/schemas/ApiResponse' });
 
@@ -38,18 +40,19 @@ afterAll(async () => {
     await pg?.stop();
   }
 });
-beforeEach(() => {
+beforeEach(async () => {
   vi.unstubAllEnvs();
   vi.stubEnv('DATABASE_URL', pg.url);
   vi.stubEnv('SECRET_KEY', SECRET);
   vi.stubEnv('ADMIN_USERNAME', 'root');
   vi.stubEnv('ADMIN_PASSWORD', ADMIN_PASSWORD);
+  await getProductDatabase().execute(sql`TRUNCATE product.auth_registration_limits`);
 });
 
 function post(path: string, body?: unknown, headers: Record<string, string> = {}) {
   return new Request(`http://localhost/api/v1${path}`, {
     method: 'POST',
-    headers: body === undefined ? headers : { 'content-type': 'application/json', ...headers },
+    headers: body === undefined ? { origin: 'http://localhost', ...headers } : { origin: 'http://localhost', 'content-type': 'application/json', ...headers },
     body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
   });
 }
@@ -80,18 +83,18 @@ function setCookies(res: Response): Record<string, SetCookie> {
   }
   return out;
 }
-function expectAuthCookie(c: SetCookie | undefined, maxAge: number) {
+function expectAuthCookie(c: SetCookie | undefined, maxAge: number, path = '/') {
   expect(c).toBeDefined();
   expect(c!.attrs.httponly).toBe(true);
   expect(String(c!.attrs.samesite).toLowerCase()).toBe('lax');
-  expect(c!.attrs.path).toBe('/');
+  expect(c!.attrs.path).toBe(path);
   expect(c!.attrs['max-age']).toBe(String(maxAge));
 }
-function expectDeleted(c: SetCookie | undefined) {
+function expectDeleted(c: SetCookie | undefined, path = '/') {
   expect(c).toBeDefined();
   expect(c!.value).toBe('');
   expect(c!.attrs['max-age']).toBe('0');
-  expect(c!.attrs.path).toBe('/');
+  expect(c!.attrs.path).toBe(path);
 }
 let seq = 0;
 const email = () => `user${++seq}-${Date.now()}@example.test`;
@@ -109,13 +112,13 @@ describe('POST /auth/register', () => {
     expect(body.data.user).not.toHaveProperty('hashed_password');
     expect(typeof body.data.user.id).toBe('number');
     expect(await verifyToken(body.data.access_token, 'access')).toMatchObject({ sub: String(body.data.user.id) });
-    expect(await verifyToken(body.data.refresh_token, 'refresh')).toMatchObject({ sub: String(body.data.user.id) });
+    expect(body.data).not.toHaveProperty('refresh_token');
 
     const cookies = setCookies(res);
-    expectAuthCookie(cookies.sda_access, ACCESS_TTL);
-    expectAuthCookie(cookies.sda_refresh, REFRESH_TTL);
+    expectAuthCookie(cookies.sda_access, REFRESH_TTL);
+    expectAuthCookie(cookies.sda_refresh, REFRESH_TTL, '/api/v1/auth');
     expect(cookies.sda_access!.value).toBe(body.data.access_token);
-    expect(cookies.sda_refresh!.value).toBe(body.data.refresh_token);
+    expect(cookies.sda_refresh!.value).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(cookies.sda_access!.attrs.secure).toBeUndefined();
 
     const row = await findUserByEmail(getProductDatabase(), addr);
@@ -139,13 +142,13 @@ describe('POST /auth/register', () => {
     expect(cookies.sda_refresh!.attrs.secure).toBe(true);
   });
 
-  it('duplicate email is a structured 400 error without cookies', async () => {
+  it('duplicate email is a structured 409 error without cookies', async () => {
     const addr = email();
     expect((await register(post('/auth/register', { email: addr, password: STRONG }))).status).toBe(200);
     const res = await register(post('/auth/register', { email: addr, password: STRONG }));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(409);
     const body = await json(res);
-    expect(body).toMatchObject({ success: false, data: null, error: { code: 'VAL_EMAIL_ALREADY_EXISTS', retryable: false } });
+    expect(body).toMatchObject({ success: false, data: null, error: { code: 'CONFLICT_EMAIL_EXISTS', retryable: false } });
     expect(res.headers.getSetCookie()).toEqual([]);
   });
 
@@ -161,7 +164,7 @@ describe('POST /auth/register', () => {
   it('invalid email -> 422 INVALID_INPUT; malformed JSON -> 400', async () => {
     const bad = await register(post('/auth/register', { email: 'nope', password: STRONG }));
     expect(bad.status).toBe(422);
-    expect((await json(bad)).error.code).toBe('INVALID_INPUT');
+    expect((await json(bad)).error.code).toBe('VAL_INVALID_INPUT');
     const malformed = await register(post('/auth/register', '{"email":'));
     expect(malformed.status).toBe(400);
     expect((await json(malformed)).error.code).toBe('VAL_INVALID_REQUEST');
@@ -179,8 +182,8 @@ describe('POST /auth/login', () => {
       expect(body.data).toMatchObject({ token_type: 'bearer', expires_in: ACCESS_TTL, user: { id: user.id, email: user.email } });
       expect(body.data).not.toHaveProperty('token');
       const cookies = setCookies(res);
-      expectAuthCookie(cookies.sda_access, ACCESS_TTL);
-      expectAuthCookie(cookies.sda_refresh, REFRESH_TTL);
+      expectAuthCookie(cookies.sda_access, REFRESH_TTL);
+      expectAuthCookie(cookies.sda_refresh, REFRESH_TTL, '/api/v1/auth');
       expect((await findUserByEmail(db, user.email))!.hashed_password).toBe(hash);
     }
   });
@@ -231,48 +234,24 @@ describe('JSON content type is required (CSRF hardening)', () => {
 });
 
 describe('POST /auth/refresh', () => {
-  it('body refresh_token: returns access only, sets access cookie, leaves refresh cookie untouched', async () => {
-    const token = await issueRefreshToken('42');
-    const res = await refresh(post('/auth/refresh', { refresh_token: token }));
+  it('rotates the cookie only and returns short access credentials', async () => {
+    const registered = await register(post('/auth/register', { email: email(), password: STRONG }));
+    const original = setCookies(registered).sda_refresh!.value;
+    const res = await refresh(post('/auth/refresh', {}, { cookie: `sda_refresh=${original}` }));
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(Object.keys(body.data).sort()).toEqual(['access_token', 'expires_in', 'token_type']);
-    expect(body.data).toMatchObject({ token_type: 'bearer', expires_in: ACCESS_TTL });
-    expect(await verifyToken(body.data.access_token, 'access')).toMatchObject({ sub: '42' });
+    expect(body.data.expires_in).toBe(ACCESS_TTL);
     const cookies = setCookies(res);
-    expectAuthCookie(cookies.sda_access, ACCESS_TTL);
+    expect(cookies.sda_refresh!.value).not.toBe(original);
+    expect(cookies.sda_refresh!.attrs.path).toBe('/api/v1/auth');
     expect(cookies.sda_access!.value).toBe(body.data.access_token);
-    expect(cookies).not.toHaveProperty('sda_refresh');
   });
-
-  it('falls back to the sda_refresh cookie when the body has none', async () => {
-    const token = await issueRefreshToken('43');
-    for (const r of [
-      post('/auth/refresh', undefined, { cookie: `other=1; sda_refresh=${token}` }),
-      post('/auth/refresh', {}, { cookie: `sda_refresh=${token}` }),
-    ]) {
-      const res = await refresh(r);
-      expect(res.status).toBe(200);
-      const body = await json(res);
-      expect(await verifyToken(body.data.access_token, 'access')).toMatchObject({ sub: '43' });
-      expect(setCookies(res)).not.toHaveProperty('sda_refresh');
-    }
-  });
-
-  it('rejects access tokens, tampered tokens and missing tokens with 401', async () => {
-    const access = await issueAccessToken('42');
-    const good = await issueRefreshToken('42');
-    const tampered = good.slice(0, -2) + (good.endsWith('AA') ? 'BB' : 'AA');
-    for (const r of [
-      post('/auth/refresh', { refresh_token: access }),
-      post('/auth/refresh', { refresh_token: tampered }),
-      post('/auth/refresh', { refresh_token: legacy.refresh_token }), // signed with another secret
-      post('/auth/refresh', {}),
-    ]) {
-      const res = await refresh(r);
+  it('rejects missing, stateless legacy and invalid refresh cookies', async () => {
+    for (const cookie of ['', 'garbage', legacy.refresh_token, await issueRefreshToken('42')]) {
+      const res = await refresh(post('/auth/refresh', undefined, { cookie: `sda_refresh=${cookie}` }));
       expect(res.status).toBe(401);
-      expect((await json(res)).error.code).toBe('AUTH_INVALID_TOKEN');
-      expect(res.headers.getSetCookie()).toEqual([]);
+      expect((await json(res)).error.code).toBe(cookie ? 'AUTH_TOKEN_INVALID' : 'AUTH_TOKEN_MISSING');
     }
   });
 });
@@ -284,7 +263,7 @@ describe('POST /auth/logout', () => {
     expect((await json(res)).data).toEqual({ ok: true });
     const cookies = setCookies(res);
     expectDeleted(cookies.sda_access);
-    expectDeleted(cookies.sda_refresh);
+    expectDeleted(cookies.sda_refresh, '/api/v1/auth');
   });
 });
 
@@ -302,7 +281,7 @@ describe('POST /admin/auth/login', () => {
     const cookies = setCookies(res);
     expectAuthCookie(cookies.sda_access, ACCESS_TTL);
     expect(cookies.sda_access!.value).toBe(body.data.access_token);
-    expectDeleted(cookies.sda_refresh);
+    expectDeleted(cookies.sda_refresh, '/api/v1/auth');
   });
 
   it('wrong username or password -> 401 without cookies', async () => {
@@ -369,7 +348,7 @@ describe('requireUser', () => {
       req({ authorization: `Bearer ${await issueAccessToken('7abc')}` }),
     ];
     for (const r of cases) {
-      await expect(requireUser(r, db)).rejects.toMatchObject({ status: 401, code: 'AUTH_INVALID_TOKEN' });
+      await expect(requireUser(r, db)).rejects.toMatchObject({ status: 401, code: r.headers.has('authorization') || r.headers.has('cookie') ? 'AUTH_INVALID_TOKEN' : 'AUTH_TOKEN_MISSING' });
     }
   });
 });
@@ -392,7 +371,7 @@ describe('requireAdmin', () => {
       req({ authorization: `Bearer ${await issueRefreshToken('5')}` }),
       req({ authorization: 'Bearer nope', cookie: `sda_access=${admin}` }),
     ]) {
-      await expect(requireAdmin(r)).rejects.toMatchObject({ status: 401, code: 'AUTH_INVALID_TOKEN' });
+      await expect(requireAdmin(r)).rejects.toMatchObject({ status: 401, code: r.headers.has('authorization') ? 'AUTH_INVALID_TOKEN' : 'AUTH_TOKEN_MISSING' });
     }
   });
 });

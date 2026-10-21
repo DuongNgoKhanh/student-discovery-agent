@@ -33,10 +33,8 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 }) satisfies z.ZodType<unknown, z.ZodTypeDef, components['schemas']['LoginRequest']>;
 
-/** Body is optional: browser flow falls back to the refresh cookie. */
-export const refreshSchema = z
-  .object({ refresh_token: z.string().min(1).optional() })
-  .optional();
+/** Refresh credentials are accepted only in the HttpOnly cookie. */
+export const refreshSchema = z.object({}).strict().optional();
 
 export const adminLoginSchema = z.object({
   username: z.string().min(1),
@@ -49,6 +47,6 @@ export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
 
 type AuthResponseData = components['schemas']['AuthResponse']['data'];
 /** Flat auth payload (`data.user` + tokens directly in `data`, never `data.token`). */
-export type AuthData = Required<AuthResponseData>;
+export type AuthData = Omit<Required<AuthResponseData>, 'refresh_token'>;
 export type TokenRefreshData = components['schemas']['TokenRefreshResponse']['data'];
 export type AdminTokenData = AdminComponents['schemas']['AdminTokenResponse'];
