@@ -12,6 +12,7 @@ import { ProductError } from '@/http/errors';
 const doc = parse(readFileSync(resolve(__dirname, '../../../../contracts/openapi/schemas/common.yaml'), 'utf8'));
 const ajv = new Ajv({ strict: false, allErrors: true });
 ajv.addFormat('date-time', true);
+ajv.addSchema({ $id: 'error-codes.yaml', ...parse(readFileSync(resolve(__dirname, '../../../../contracts/openapi/schemas/error-codes.yaml'), 'utf8')) });
 ajv.addSchema({ $id: 'common', components: doc.components });
 const validate = ajv.compile({ $ref: 'common#/components/schemas/ApiResponse' });
 const ctx = { requestId: 'req-1', traceId: 'trace-1' };

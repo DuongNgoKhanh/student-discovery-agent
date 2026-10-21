@@ -48,21 +48,22 @@ describe('failure', () => {
       status: 409,
       success: false,
       data: null,
-      error: { code: 'REVISION_CONFLICT', message: 'conflict', retryable: true, details: { kind: 'revision_conflict' } },
+      error: { code: 'CONFLICT_REVISION', legacy_code: 'REVISION_CONFLICT', message: 'conflict', retryable: true, details: { kind: 'revision_conflict' } },
       meta: { request_id: 'req-test', trace_id: 'trace-test' },
     });
   });
 
   it('defaults retryable=false and details=null', async () => {
     const body = await failure(new ProductError(404, 'RESOURCE_NOT_FOUND', 'nope'), ctx).json();
-    expect(body.error).toEqual({ code: 'RESOURCE_NOT_FOUND', message: 'nope', retryable: false, details: null });
+    expect(body.error).toEqual({ code: 'RES_NOT_FOUND', legacy_code: 'RESOURCE_NOT_FOUND', message: 'nope', retryable: false, details: null });
   });
 
   it('hides unknown errors behind INTERNAL_ERROR 500', async () => {
     const response = failure(new Error('secret db password'), ctx);
     expect(response.status).toBe(500);
     const body = await response.json();
-    expect(body.error.code).toBe('INTERNAL_ERROR');
+    expect(body.error.code).toBe('SYS_INTERNAL_ERROR');
+    expect(body.error.legacy_code).toBe('INTERNAL_ERROR');
     expect(JSON.stringify(body)).not.toContain('secret db password');
   });
 });
@@ -75,10 +76,13 @@ describe('withHandler', () => {
       const { id } = r.params;
       return success({ id, requestId: c.requestId }, c);
     });
-    const res = await handler(new Request('http://x/api/v1/a/7', { headers: { 'x-request-id': 'rid-1', 'x-trace-id': 'tid-1' } }), route);
+    const res = await handler(new Request('http://x/api/v1/a/7', { headers: {
+      'x-request-id': '11111111-1111-4111-8111-111111111111',
+      'x-trace-id': '22222222-2222-4222-8222-222222222222',
+    } }), route);
     const body = await res.json();
-    expect(body.data).toEqual({ id: '7', requestId: 'rid-1' });
-    expect(body.meta.trace_id).toBe('tid-1');
+    expect(body.data).toEqual({ id: '7', requestId: '11111111-1111-4111-8111-111111111111' });
+    expect(body.meta.trace_id).toBe('22222222-2222-4222-8222-222222222222');
   });
 
   it('generates ids when headers are absent', async () => {
@@ -99,4 +103,13 @@ describe('withHandler', () => {
     const res = await h2(new Request('http://x/'), route);
     expect(res.status).toBe(500);
   });
+});
+
+it('merges pagination metadata while preserving authoritative correlation IDs', async () => {
+  const response = success({ items: [] }, { requestId: 'request', traceId: 'trace' }, 200, {
+    meta: { pagination: { limit: 20, next_cursor: null, has_more: false }, request_id: 'forged', trace_id: 'forged', timestamp: 'forged' },
+  });
+  const body = await response.json();
+  expect(body.meta).toMatchObject({ request_id: 'request', trace_id: 'trace', pagination: { limit: 20, next_cursor: null, has_more: false } });
+  expect(body.meta.timestamp).toMatch(/^\d{4}-/);
 });
