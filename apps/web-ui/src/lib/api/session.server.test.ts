@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { getSession, SessionApiUnavailable } from './session.server';
+import { getSession, SessionApiUnavailable, SessionExpired } from './session.server';
 
 let incoming: Headers;
 vi.mock('next/headers', () => ({ headers: async () => incoming }));
@@ -15,7 +15,7 @@ const envelope = (data: unknown) => ({
   meta: { request_id: 'r', trace_id: 't', timestamp: '2026-10-16T00:00:00Z' },
 });
 
-it.each([{ userId: '7', isAdmin: false }, { userId: 'admin', isAdmin: true }])(
+it.each([{ principal: { type: 'user', id: '7' }, is_admin: false }, { principal: { type: 'admin', id: 'admin' }, is_admin: true }])(
   'obtains verified session metadata over HTTP without Product secrets', async (session) => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(envelope(session)));
     expect(await getSession()).toEqual(session);
@@ -43,4 +43,9 @@ it('surfaces network failures and invalid successful responses', async () => {
   await expect(getSession()).rejects.toBeInstanceOf(SessionApiUnavailable);
   fetch.mockResolvedValueOnce(Response.json(envelope({ userId: 7, isAdmin: true })));
   await expect(getSession()).rejects.toBeInstanceOf(SessionApiUnavailable);
+});
+
+it('distinguishes expired access so SSR can render browser refresh recovery', async () => {
+ vi.spyOn(globalThis,'fetch').mockResolvedValue(Response.json({error:{code:'AUTH_TOKEN_EXPIRED'}},{status:401}));
+ await expect(getSession()).rejects.toBeInstanceOf(SessionExpired);
 });
