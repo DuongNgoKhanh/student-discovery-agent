@@ -18,7 +18,7 @@ _MESSAGES = {
     "RES_CONVERSATION_ENDED": "This conversation has ended.",
     "RES_CONVERSATION_EXPIRED": "This conversation has expired.",
     "SYS_UNAVAILABLE": "The service is temporarily unavailable.",
-    "SYS_INTERNAL_ERROR": "Internal server error.",
+    "SYS_INTERNAL_ERROR": "Internal server error",
     "VAL_INVALID_INPUT": "The request input is invalid.",
     "VAL_INVALID_REQUEST": "The request is invalid.",
 }
