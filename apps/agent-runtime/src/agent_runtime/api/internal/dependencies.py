@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy.exc import DisconnectionError, InterfaceError, OperationalError, TimeoutError
 from starlette.requests import Request
@@ -45,7 +45,7 @@ class SystemClock:
 
 @dataclass(repr=False)
 class RuntimeContainer:
-    policy: RuntimePolicy
+    policy: RuntimePolicy | None
     verifier: CallerVerifier | None = None
     conversations: ConversationService | None = None
     history: HistoryService | None = None
@@ -71,18 +71,25 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
     Keyring: JSON object mapping kid to canonical padded standard base64 bytes.
     Cursor: separate canonical padded standard base64 key, both >=32 decoded bytes.
     """
+    # Authentication is independent of service configuration and DB readiness.
+    try:
+        if not settings.RUNTIME_INTERNAL_KEYRING:
+            return None
+        raw_keys = read_strict_json(settings.RUNTIME_INTERNAL_KEYRING.get_secret_value().encode("utf-8"))
+        keys = {kid: _decode_key(value) for kid, value in raw_keys.items()}
+        verifier = CallerVerifier(keys, SystemClock())
+    except Exception:
+        return None
+    unavailable = RuntimeContainer(policy=None, verifier=verifier)
     engine = None
     try:
-        if not settings.RUNTIME_DATABASE_URL or not settings.RUNTIME_INTERNAL_KEYRING:
-            return None
+        if not settings.RUNTIME_DATABASE_URL:
+            return unavailable
         policy = RuntimePolicy(environment=settings.RUNTIME_ENVIRONMENT,
             session_ttl_seconds=settings.RUNTIME_SESSION_TTL_SECONDS,
             content_retention_seconds=settings.RUNTIME_CONTENT_RETENTION_SECONDS,
             trace_retention_seconds=settings.RUNTIME_TRACE_RETENTION_SECONDS,
             internal_token_max_age_seconds=settings.RUNTIME_INTERNAL_TOKEN_MAX_AGE_SECONDS)
-        raw_keys = read_strict_json(settings.RUNTIME_INTERNAL_KEYRING.get_secret_value().encode("utf-8"))
-        keys = {kid: _decode_key(value) for kid, value in raw_keys.items()}
-        verifier = CallerVerifier(keys, SystemClock())
         codec = None
         if settings.RUNTIME_CURSOR_SIGNING_KEY:
             cursor_key = _decode_key(settings.RUNTIME_CURSOR_SIGNING_KEY.get_secret_value())
@@ -105,7 +112,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
     except Exception:
         if engine is not None:
             engine.dispose()
-        return None
+        return unavailable
 
 
 def _raw_target(scope):
@@ -134,10 +141,11 @@ class InternalBoundary:
         ):
             await self.app(scope, receive, send)
             return
-        meta = (uuid4().hex, uuid4().hex, datetime.now(UTC))
+        meta = (str(uuid4()), str(uuid4()), datetime.now(UTC))
         try:
             raw = bytearray()
-            limit = self.runtime.policy.max_json_bytes if self.runtime else 65536
+            policy = self.runtime.policy if self.runtime else None
+            limit = policy.max_json_bytes if policy else 65536
             while True:
                 message = await receive()
                 if message["type"] == "http.disconnect":
@@ -150,17 +158,35 @@ class InternalBoundary:
                     break
             target = _raw_target(scope)
             runtime = self.runtime
-            if runtime is None or runtime.verifier is None:
-                raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE")
             request = Request(scope)
+            def correlation(name: str) -> str:
+                value = request.headers.get(name)
+                try:
+                    return str(UUID(value)) if value else str(uuid4())
+                except (ValueError, AttributeError):
+                    return str(uuid4())
+
+            meta = (correlation("x-request-id"), correlation("x-trace-id"), datetime.now(UTC))
             for name in ("x-caller-context", "x-internal-caller"):
                 if len(request.headers.getlist(name)) > 1:
-                    raise RuntimeSessionError(401, "AUTH_REQUIRED")
-            token = request.headers.get("x-caller-context", "")
-            if len(token.encode("utf-8")) > runtime.policy.max_jwt_bytes:
-                raise RuntimeSessionError(401, "AUTH_REQUIRED")
-            caller = runtime.verifier.verify(token, request.headers.get("x-internal-caller"),
-                RawRequestContext(scope["method"], target, bytes(raw)))
+                    raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID")
+            token = request.headers.get("x-caller-context")
+            issuer = request.headers.get("x-internal-caller")
+            if token is None or issuer is None:
+                raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_MISSING")
+            if (issuer != "sda-product-bff" or not token
+                    or len(token.encode("utf-8")) > (policy.max_jwt_bytes if policy else 8192)):
+                raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID")
+            if runtime is None or runtime.verifier is None:
+                # No configured trust root: never reveal service readiness to an unverified caller.
+                raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID")
+            try:
+                caller = runtime.verifier.verify(token, issuer,
+                    RawRequestContext(scope["method"], target, bytes(raw)))
+            except RuntimeSessionError as error:
+                if error.status == 401:
+                    raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID") from None
+                raise
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)
 
             async def replay_body():
@@ -177,6 +203,6 @@ class InternalBoundary:
         except RuntimeSessionError as error:
             await failure(error, *meta)(scope, receive, send)
         except (DisconnectionError, InterfaceError, OperationalError, TimeoutError):
-            await failure(RuntimeSessionError(503, "SERVICE_UNAVAILABLE"), *meta)(scope, receive, send)
+            await failure(RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}), *meta)(scope, receive, send)
         except Exception:
             await failure(RuntimeSessionError(500, "INTERNAL_ERROR"), *meta)(scope, receive, send)

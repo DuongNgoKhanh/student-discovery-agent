@@ -5,9 +5,9 @@ from agent_runtime.sessions.schemas.release import ReleaseDescriptor
 
 class ProductUnavailable:
     def resolve_active_agent(self, environment: str) -> ReleaseDescriptor:
-        raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE")
+        raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "not_configured"})
 
     def resolve_active_experience(
         self, environment: str, experience_id: str, algorithm_profile: str | None
     ) -> ReleaseDescriptor:
-        raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE")
+        raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "not_configured"})

@@ -16,7 +16,7 @@ def trace_type():
 
 
 def fields():
-    return dict(event_id=uuid4().hex, request_id=uuid4().hex, action="conversation.create",
+    return dict(event_id=uuid4().hex, request_id=str(uuid4()), action="conversation.create",
                 step="complete", outcome="success", timestamp=datetime.now(UTC))
 
 

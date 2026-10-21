@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
-from agent_runtime.api.internal.dependencies import build_runtime
+from agent_runtime.api.internal.dependencies import RuntimeContainer, build_runtime
 from agent_runtime.config.settings import Settings
 from agent_runtime.infrastructure.auth.verifier import CallerVerifier
 from agent_runtime.infrastructure.db.tables import (
@@ -133,7 +133,7 @@ def test_restart_uses_db_pin_without_product_and_with_new_pool(http, rig, test_d
             assert replay.status_code == 201 and replay.json()["meta"]["replayed"] is True
             assert replay.json()["data"] == initial
             assert_error(call(restarted, rig, "POST", "/conversations", request | {
-                "idempotency_key": "new-requires-product"}), 503, "SERVICE_UNAVAILABLE")
+                "idempotency_key": "new-requires-product"}), 503, "SYS_UNAVAILABLE")
         assert counts(fresh.conversations.uow) == expected_counts
         with fresh.conversations.uow.begin() as session:
             restored = ConversationRepository().get(session, cid, "owner")
@@ -145,10 +145,18 @@ def test_restart_uses_db_pin_without_product_and_with_new_pool(http, rig, test_d
 
 
 def test_health_and_session_dependency_failures_are_distinct(http, rig, test_database):
-    with TestClient(create_app(None)) as unconfigured:
-        assert unconfigured.get("/health").json() == {"status": "healthy"}
+    with TestClient(create_app(RuntimeContainer(policy=None))) as unconfigured:
+        assert unconfigured.get("/health").json() == {"status": "ok"}
         assert_error(call((unconfigured, None), rig, "GET", "/conversations/missing"),
-                     503, "SERVICE_UNAVAILABLE")
+                     401, "AUTH_CALLER_CONTEXT_INVALID")
+    missing_services = RuntimeContainer(policy=None, verifier=CallerVerifier({"http": KEY}, rig[2]))
+    with TestClient(create_app(missing_services)) as unavailable:
+        assert_error(unavailable.get("/api/v1/internal/conversations/missing"),
+                     401, "AUTH_CALLER_CONTEXT_MISSING")
+        authenticated = call((unavailable, missing_services), rig, "GET", "/conversations/missing")
+        assert_error(authenticated, 503, "SYS_UNAVAILABLE")
+        assert authenticated.json()["error"]["details"] == {"kind": "not_configured"}
+        assert unavailable.get("/health").json() == {"status": "ok"}
     runtime = configured_runtime(test_database)
     assert runtime is not None and runtime.product_ready is False
     runtime.verifier = CallerVerifier({"http": KEY}, rig[2])
@@ -158,7 +166,7 @@ def test_health_and_session_dependency_failures_are_distinct(http, rig, test_dat
             assert client.get("/health").status_code == 200
             # Valid auth + live DB, but no Product delivery capability: safe 503.
             assert_error(call((client, runtime), rig, "POST", "/conversations", {"idempotency_key": "needs-product"}),
-                         503, "SERVICE_UNAVAILABLE")
+                         503, "SYS_UNAVAILABLE")
     finally:
         runtime.engine.dispose()
 

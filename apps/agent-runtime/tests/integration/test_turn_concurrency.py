@@ -40,7 +40,7 @@ def test_two_keys_same_revisions_one_commit_one_conflict(turn_rig):
             responses = list(pool.map(lambda request: post_turn(client, rig, request), (left, right)))
     assert sorted(response.status_code for response in responses) == [200, 409]
     failed = next(response for response in responses if response.status_code == 409).json()
-    assert failed["error"]["code"] == "REVISION_CONFLICT"
+    assert failed["error"]["code"] == "CONFLICT_REVISION"
     details = failed["error"]["details"]
     assert (details["resource_kind"], details["expected_revision"], details["actual_revision"]) == (
         "conversation", 1, 2)
@@ -64,7 +64,7 @@ def test_end_while_engine_runs_blocks_stale_candidate(turn_rig):
                 EndConversationInput(expected_revision=1, idempotency_key="end"))
             release.set()
             response = future.result(timeout=15)
-    assert (response.status_code, response.json()["error"]["code"]) == (410, "CONVERSATION_ENDED")
+    assert (response.status_code, response.json()["error"]["code"]) == (410, "RES_CONVERSATION_ENDED")
     after = turn_counts(rig)
     assert after["messages"] == before["messages"] and after["outcomes"] == before["outcomes"] + 1  # end only
     assert after["answers"] == 0

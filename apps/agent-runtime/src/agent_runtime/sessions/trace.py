@@ -14,16 +14,17 @@ from agent_runtime.sessions.schemas.common import ContractModel, JsonSafeInt, Ut
 
 Reference = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=128,
                                             pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")]
-ContextId = Annotated[str, StringConstraints(strict=True, pattern=r"^[a-f0-9]{32}$")]
+EventId = Annotated[str, StringConstraints(strict=True, pattern=r"^[a-f0-9]{32}$")]
+CorrelationId = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")]
 Action = Literal["conversation.create", "conversation.read", "conversation.end", "conversation.turn",
                  "history.read", "activity.start", "activity.commit", "result.read", "share.read"]
 
 
 class TraceEvent(ContractModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-    event_id: ContextId
-    request_id: ContextId
-    trace_id: ContextId | None = None
+    event_id: EventId
+    request_id: CorrelationId
+    trace_id: CorrelationId | None = None
     conversation_id: Reference | None = None
     activity_id: Reference | None = None
     result_id: Reference | None = None
@@ -57,7 +58,7 @@ def trace_context(request_id: str, trace_id: str):
     # HTTP supplies generated UUIDs; other adapters get the same validation.
     from pydantic import TypeAdapter
 
-    value = (TypeAdapter(ContextId).validate_python(request_id), TypeAdapter(ContextId).validate_python(trace_id))
+    value = (TypeAdapter(CorrelationId).validate_python(request_id), TypeAdapter(CorrelationId).validate_python(trace_id))
     token = _context.set(value)
     try:
         yield
@@ -82,7 +83,7 @@ def observed(action: Action):
             finally:
                 # All service-owned UoWs have already exited, even on early return.
                 try:
-                    request_id, trace_id = _context.get() or (uuid4().hex, uuid4().hex)
+                    request_id, trace_id = _context.get() or (str(uuid4()), str(uuid4()))
                     sink.emit(TraceEvent(event_id=uuid4().hex, request_id=request_id, trace_id=trace_id,
                         action=action, step="complete", outcome=outcome,
                         error_code="SERVICE_FAILURE" if outcome == "failure" else None,
