@@ -10,6 +10,6 @@ import { bulkUpdateUsers } from '@/modules/users/users.service';
 export const handlePut = withHandler(async (req, ctx) => {
   await requireAdmin(req);
   const { users } = bulkUpdateSchema.parse(await readJsonBody(req));
-  const { data, ...rest } = await bulkUpdateUsers(getProductDatabase(), users, ctx);
-  return success(data, ctx, 200, rest);
+  const { data, summary, ...rest } = await bulkUpdateUsers(getProductDatabase(), users, ctx);
+  return success(data, ctx, 200, { ...rest, meta: { summary } });
 });

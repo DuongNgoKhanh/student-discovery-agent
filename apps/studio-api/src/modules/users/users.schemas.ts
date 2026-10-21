@@ -46,20 +46,20 @@ export const bulkDeleteSchema = z.object({ user_ids: z.array(z.number().int()) }
 
 export const userIdSchema = z.coerce.number().int().min(1).max(2_147_483_647);
 
-export const SORT_FIELDS = ['id', 'email', 'name', 'position', 'created_at', 'updated_at'] as const;
-
-/** Lenient: unknown sort field / direction fall back to `created_at` / `desc` like legacy. `project_id` is an accepted no-op (no project domain). */
+/** Stable ID keyset order only; unsupported sort values are rejected. */
 export const userQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  cursor: z.string().min(1).max(4096).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  order_by: z.string().optional(),
-  dir: z.string().optional(),
+  order_by: z.literal('id').default('id'),
+  dir: z.enum(['asc', 'desc']).default('desc'),
   name: z.string().optional(),
   email: z.string().optional(),
   position: z.string().optional(),
   is_deleted: z.enum(['true', 'false']).transform((v) => v === 'true').optional(),
   project_id: z.string().optional(),
 });
+
+export const publicUserQuerySchema = userQuerySchema.omit({ email: true, is_deleted: true, project_id: true }).strict();
 
 export type UserQuery = z.infer<typeof userQuerySchema>;
 export type SelfUpdateInput = z.infer<typeof selfUpdateSchema>;

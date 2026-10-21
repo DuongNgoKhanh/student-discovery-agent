@@ -7,6 +7,7 @@ import { expect } from 'vitest';
 const common = parse(readFileSync(resolve(__dirname, '../../../../contracts/openapi/schemas/common.yaml'), 'utf8'));
 const ajv = new Ajv({ strict: false, allErrors: true });
 ajv.addFormat('date-time', true);
+ajv.addSchema({ $id: 'error-codes.yaml', ...parse(readFileSync(resolve(__dirname, '../../../../contracts/openapi/schemas/error-codes.yaml'), 'utf8')) });
 ajv.addSchema({ $id: 'common', components: common.components });
 export const validateEnvelope = ajv.compile({ $ref: 'common#/components/schemas/ApiResponse' });
 

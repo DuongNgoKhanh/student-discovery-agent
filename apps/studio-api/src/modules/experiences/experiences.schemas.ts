@@ -30,7 +30,7 @@ export type CreateExperienceInput = z.infer<typeof createExperienceSchema>;
 
 export const patchExperienceSchema = z
   .object({
-    expected_revision: revisionSchema,
+    expected_metadata_revision: revisionSchema,
     idempotency_key: idempotencyKeySchema,
     name: z.string().min(1).optional(),
     description: z.string().optional(),
@@ -43,14 +43,14 @@ export const patchExperienceSchema = z
 export type PatchExperienceInput = z.infer<typeof patchExperienceSchema>;
 
 export const saveDraftSchema = z.object({
-  expected_revision: revisionSchema,
+  expected_draft_revision: revisionSchema,
   idempotency_key: idempotencyKeySchema,
   content: z.record(z.unknown()),
 }).strict();
 export type SaveDraftInput = z.infer<typeof saveDraftSchema>;
 
 export const publishReleaseSchema = z.object({
-  expected_revision: revisionSchema,
+  expected_draft_revision: revisionSchema,
   content_hash: contentHashSchema,
   validation_id: resourceIdSchema,
   evaluation_id: resourceIdSchema,
@@ -60,7 +60,7 @@ export const publishReleaseSchema = z.object({
 export type PublishReleaseInput = z.infer<typeof publishReleaseSchema>;
 
 export const paginationQuerySchema = z.object({
-  cursor: z.string().min(1).optional(),
+  cursor: z.string().min(1).max(4096).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 export type PaginationQuery = z.infer<typeof paginationQuerySchema>;
@@ -88,13 +88,13 @@ export type ExperienceDefinitionStructural = z.infer<typeof experienceDefinition
 
 export interface DraftRefDTO {
   draft_id: string;
-  revision: number;
+  draft_revision: number;
   content_hash: string;
 }
 
 export interface ExperienceMetadataDTO {
   id: string;
-  revision: number;
+  metadata_revision: number;
   name: string;
   description: string;
   activity_type: 'personality_assessment';
@@ -106,7 +106,7 @@ export interface ExperienceMetadataDTO {
 export interface ExperienceDraftDTO {
   experience_id: string;
   draft_id: string;
-  revision: number;
+  draft_revision: number;
   content_hash: string;
   content: Record<string, unknown>;
   updated_by: string;
@@ -145,7 +145,7 @@ export function toExperienceMetadataDTO(
 ): ExperienceMetadataDTO {
   return {
     id: exp.id,
-    revision: exp.revision,
+    metadata_revision: exp.revision,
     name: exp.name,
     description: exp.description,
     activity_type: exp.activity_type as 'personality_assessment',
@@ -169,7 +169,7 @@ export function toExperienceDraftDTO(
   return {
     experience_id: draft.experience_id,
     draft_id: draft.draft_id,
-    revision: draft.revision,
+    draft_revision: draft.revision,
     content_hash: draft.content_hash,
     content: draft.content,
     updated_by: draft.updated_by,

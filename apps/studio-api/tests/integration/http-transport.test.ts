@@ -51,7 +51,7 @@ afterAll(async () => {
   }
 });
 
-it('preserves two auth cookies and binary avatar bytes over the Node adapter', async () => {
+it('preserves auth cookies, legacy-cookie deletion and binary avatar bytes over the Node adapter', async () => {
   const credentials = { email: 'http@example.test', password: 'Transport1!' };
   const post = (path: string) => fetch(`${origin}/api/v1/auth/${path}`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(credentials),
@@ -61,12 +61,15 @@ it('preserves two auth cookies and binary avatar bytes over the Node adapter', a
   await registered.json();
   const login = await post('login');
   expect(login.status).toBe(200);
-  expect(login.headers.getSetCookie()).toHaveLength(2);
-  const cookie = login.headers.getSetCookie().map((line) => line.split(';')[0]).join('; ');
+  const cookies = login.headers.getSetCookie();
+  expect(cookies).toHaveLength(3);
+  expect(cookies).toContainEqual(expect.stringMatching(/^sda_refresh=; Path=\/; Max-Age=0;/));
+  expect(cookies).toContainEqual(expect.stringMatching(/^sda_refresh=.+; Path=\/api\/v1\/auth; Max-Age=\d+; HttpOnly; SameSite=Lax/));
+  const cookie = cookies.filter((line) => !line.includes('Max-Age=0;')).map((line) => line.split(';')[0]).join('; ');
   const { data } = await login.json();
   const session = await fetch(`${origin}/api/v1/auth/session`, { headers: { cookie } });
   expect(session.status).toBe(200);
-  expect((await session.json()).data).toEqual({ userId: String(data.user.id), isAdmin: false });
+  expect((await session.json()).data).toEqual({ principal: { type: 'user', id: String(data.user.id) }, is_admin: false });
   const form = new FormData();
   form.set('file', new File([png], 'avatar.png', { type: 'image/png' }));
   const uploaded = await fetch(`${origin}/api/v1/users/avatar/upload`, { method: 'POST', headers: { cookie }, body: form });

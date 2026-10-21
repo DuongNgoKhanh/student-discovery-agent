@@ -8,6 +8,7 @@ import {
   idempotencyRecords,
 } from '@/infrastructure/db/schema';
 import { computeContentHash } from '@/modules/experiences/canonical';
+import { encodeCursor, decodeCursor } from '@/modules/experiences/cursor';
 import { resourceIdSchema } from '@/modules/experiences/experiences.schemas';
 
 type ProductTransaction = Parameters<Parameters<ProductDatabase['transaction']>[0]>[0];
@@ -48,13 +49,12 @@ function cursorTimestamp(column: typeof experiences.created_at | typeof experien
 
 export function encodeExperienceCursor(cursor: { created_at: Date | string; id: string }): string {
   const d = typeof cursor.created_at === 'string' ? cursor.created_at : cursor.created_at.toISOString();
-  return Buffer.from(JSON.stringify({ created_at: d, id: cursor.id }), 'utf8').toString('base64url');
+  return encodeCursor('experiences:created_at:desc', { created_at: d, id: cursor.id });
 }
 
 export function decodeExperienceCursor(cursorStr: string): ExperienceCursor {
   try {
-    const raw = Buffer.from(cursorStr, 'base64url').toString('utf8');
-    const parsed = JSON.parse(raw);
+    const parsed = decodeCursor(cursorStr, 'experiences:created_at:desc') as ExperienceCursor;
     if (!parsed || !isCursorTimestamp(parsed.created_at) || !isCursorId(parsed.id)) {
       throw new Error('Malformed cursor');
     }
@@ -64,15 +64,14 @@ export function decodeExperienceCursor(cursorStr: string): ExperienceCursor {
   }
 }
 
-export function encodeReleaseCursor(cursor: { published_at: Date | string; id: string }): string {
+export function encodeReleaseCursor(cursor: { published_at: Date | string; id: string }, experienceId = ''): string {
   const d = typeof cursor.published_at === 'string' ? cursor.published_at : cursor.published_at.toISOString();
-  return Buffer.from(JSON.stringify({ published_at: d, id: cursor.id }), 'utf8').toString('base64url');
+  return encodeCursor(`releases:${experienceId}:published_at:desc`, { published_at: d, id: cursor.id });
 }
 
-export function decodeReleaseCursor(cursorStr: string): ReleaseCursor {
+export function decodeReleaseCursor(cursorStr: string, experienceId = ''): ReleaseCursor {
   try {
-    const raw = Buffer.from(cursorStr, 'base64url').toString('utf8');
-    const parsed = JSON.parse(raw);
+    const parsed = decodeCursor(cursorStr, `releases:${experienceId}:published_at:desc`) as ReleaseCursor;
     if (!parsed || !isCursorTimestamp(parsed.published_at) || !isCursorId(parsed.id)) {
       throw new Error('Malformed cursor');
     }
@@ -223,8 +222,8 @@ export async function patchExperienceMetadata(
   patch: { name?: string; description?: string },
 ): Promise<PatchExperienceResult> {
   const values: Record<string, unknown> = {
-    revision: sql`${experiences.revision} + 1`,
-    updated_at: sql`now()`,
+    revision: sql`${experiences.revision} + CASE WHEN ${experiences.name} IS DISTINCT FROM COALESCE(${patch.name ?? null}, ${experiences.name}) OR ${experiences.description} IS DISTINCT FROM COALESCE(${patch.description ?? null}, ${experiences.description}) THEN 1 ELSE 0 END`,
+    updated_at: sql`CASE WHEN ${experiences.name} IS DISTINCT FROM COALESCE(${patch.name ?? null}, ${experiences.name}) OR ${experiences.description} IS DISTINCT FROM COALESCE(${patch.description ?? null}, ${experiences.description}) THEN now() ELSE ${experiences.updated_at} END`,
   };
   if (patch.name !== undefined) values.name = patch.name;
   if (patch.description !== undefined) values.description = patch.description;
@@ -288,11 +287,11 @@ export async function updateDraftContent(
   const [updated] = await db
     .update(experienceDrafts)
     .set({
-      revision: sql`${experienceDrafts.revision} + 1`,
+      revision: sql`${experienceDrafts.revision} + CASE WHEN ${experienceDrafts.content_hash} IS DISTINCT FROM ${newHash} THEN 1 ELSE 0 END`,
       content: newContent,
       content_hash: newHash,
-      updated_by: updatedBy,
-      updated_at: sql`now()`,
+      updated_by: sql`CASE WHEN ${experienceDrafts.content_hash} IS DISTINCT FROM ${newHash} THEN ${updatedBy} ELSE ${experienceDrafts.updated_by} END`,
+      updated_at: sql`CASE WHEN ${experienceDrafts.content_hash} IS DISTINCT FROM ${newHash} THEN now() ELSE ${experienceDrafts.updated_at} END`,
     })
     .where(
       and(
@@ -378,7 +377,7 @@ export async function listExperienceReleases(
 ): Promise<{ items: ExperienceReleaseRow[]; next_cursor: string | null }> {
   let whereClause = eq(experienceReleases.experience_id, experienceId);
   if (opts.cursor) {
-    const c = decodeReleaseCursor(opts.cursor);
+    const c = decodeReleaseCursor(opts.cursor, experienceId);
     whereClause = and(
       eq(experienceReleases.experience_id, experienceId),
       sql`(${experienceReleases.published_at} < ${c.published_at}::timestamptz OR (${experienceReleases.published_at} = ${c.published_at}::timestamptz AND ${experienceReleases.id} < ${c.id}))`,
@@ -397,7 +396,7 @@ export async function listExperienceReleases(
     rows.pop();
     const last = rows[rows.length - 1];
     if (last) {
-      nextCursor = encodeReleaseCursor({ published_at: last.cursor_at, id: last.release.id });
+      nextCursor = encodeReleaseCursor({ published_at: last.cursor_at, id: last.release.id }, experienceId);
     }
   }
 

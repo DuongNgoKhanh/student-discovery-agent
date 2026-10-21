@@ -79,7 +79,12 @@ describe('avatar + download', () => {
 
     const got = await getAvatar(call('GET', `/users/${row.id}/avatar`));
     expect(got.status).toBe(200);
+    const other = await seed('av-public-reader@example.test');
+    const crossUser = await getAvatar(call('GET', `/users/${row.id}/avatar`, other.token));
+    expect(crossUser.status).toBe(200);
+    expect(new Uint8Array(await crossUser.arrayBuffer())).toEqual(PNG);
     expect(got.headers.get('content-type')).toBe('image/png');
+    expect(got.headers.get('x-content-type-options')).toBe('nosniff');
     expect(new Uint8Array(await got.arrayBuffer())).toEqual(PNG);
   });
 
@@ -108,8 +113,9 @@ describe('avatar + download', () => {
     await upload(uploadReq(PNG, token));
     const ok = await download(call('GET', `/download?object_name=${BUCKET}/user_${row.id}`));
     expect(ok.status).toBe(200);
+    expect(ok.headers.get('x-content-type-options')).toBe('nosniff');
     expect(ok.headers.get('content-type')).toBe('application/octet-stream');
-    expect(ok.headers.get('content-disposition')).toBe(`attachment; filename=user_${row.id}`);
+    expect(ok.headers.get('content-disposition')).toBe(`attachment; filename="user_${row.id}"`);
     expect(new Uint8Array(await ok.arrayBuffer())).toEqual(PNG);
     expect((await download(call('GET', `/download?object_name=sda-private/user_${row.id}`))).status).toBe(404);
     expect((await download(call('GET', `/download?object_name=${BUCKET}/../x`))).status).toBe(404);

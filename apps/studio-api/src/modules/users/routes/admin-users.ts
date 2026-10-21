@@ -11,7 +11,7 @@ import { bulkDeleteUsers, createUser, listUsers, toNewUser } from '@/modules/use
 export const handleGet = withHandler(async (req, ctx) => {
   await requireAdmin(req);
   const { data, pagination } = await listUsers(getProductDatabase(), userQuerySchema.parse(queryOf(req)), true);
-  return success(data, ctx, 200, { pagination });
+  return success({ items: data }, ctx, 200, { meta: { pagination } });
 });
 
 export const handlePost = withHandler(async (req, ctx) => {
@@ -23,6 +23,6 @@ export const handlePost = withHandler(async (req, ctx) => {
 export const handleDelete = withHandler(async (req, ctx) => {
   await requireAdmin(req);
   const { user_ids } = bulkDeleteSchema.parse(await readJsonBody(req));
-  const { data, ...rest } = await bulkDeleteUsers(getProductDatabase(), user_ids, ctx);
-  return success(data, ctx, 200, rest);
+  const { data, summary, ...rest } = await bulkDeleteUsers(getProductDatabase(), user_ids, ctx);
+  return success(data, ctx, 200, { ...rest, meta: { summary } });
 });

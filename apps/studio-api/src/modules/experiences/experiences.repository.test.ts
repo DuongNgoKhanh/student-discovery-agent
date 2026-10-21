@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   decodeExperienceCursor,
   decodeReleaseCursor,
@@ -58,3 +58,5 @@ describe('experiences.repository cursor helpers', () => {
     );
   });
 });
+
+beforeEach(() => { vi.stubEnv('SECRET_KEY', 'cursor-test-secret'); });

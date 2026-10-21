@@ -1,4 +1,5 @@
 import { dispatch } from '../helpers/api';
+import { declaredResponseValidator } from '../helpers/openapi-response';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startPostgres, type PostgresHandle } from '../helpers/postgres';
 import { call, json, validateEnvelope } from '../helpers/users-api';
@@ -51,7 +52,7 @@ async function createWithValidDraft(suffix: string): Promise<{ expId: string; ha
   const expId = created.data.id as string;
   const saved = await dispatch(
     call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-      expected_revision: 0,
+      expected_draft_revision: 0,
       idempotency_key: `draft_${suffix}`,
       content: validDefinition,
     }),
@@ -106,11 +107,11 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     const body = await json(res);
     expect(validateEnvelope(body), JSON.stringify(validateEnvelope.errors)).toBe(true);
     expect(body.data.id).toMatch(/^exp_[a-f0-9]+$/);
-    expect(body.data.revision).toBe(0);
+    expect(body.data.metadata_revision).toBe(0);
     expect(body.data.created_at.endsWith('Z')).toBe(true);
     expect(body.data.updated_at.endsWith('Z')).toBe(true);
     expect(body.data.draft_ref).toMatchObject({
-      revision: 0,
+      draft_revision: 0,
       content_hash: computeContentHash({}),
     });
   });
@@ -133,7 +134,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     expect(validateEnvelope(body), JSON.stringify(validateEnvelope.errors)).toBe(true);
     expect(body.data).toMatchObject({
       experience_id: expId,
-      revision: 0,
+      draft_revision: 0,
       content_hash: computeContentHash({}),
       content: {},
       updated_by: 'admin',
@@ -155,14 +156,14 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     // Incomplete draft is allowed
     const saveRes = await dispatch(
       call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-        expected_revision: 0,
+        expected_draft_revision: 0,
         idempotency_key: 'save_draft_003',
         content: { questions: [] },
       }),
     );
     expect(saveRes.status).toBe(200);
     const saveBody = await json(saveRes);
-    expect(saveBody.data.revision).toBe(1);
+    expect(saveBody.data.draft_revision).toBe(1);
     expect(saveBody.data.content).toEqual({ questions: [] });
     expect(saveBody.data.content_hash).toBe(computeContentHash({ questions: [] }));
 
@@ -171,7 +172,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
       new Request(`http://localhost/api/v1/admin/experiences/${expId}/draft`, {
         method: 'PUT',
         headers: { authorization: `Bearer ${admin}`, 'content-type': 'application/json' },
-        body: '{ "expected_revision": 1, "content": ',
+        body: '{ "expected_draft_revision": 1, "content": ',
       }),
     );
     expect(malformed.status).toBe(400);
@@ -181,7 +182,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
       new Request(`http://localhost/api/v1/admin/experiences/${expId}/draft`, {
         method: 'PUT',
         headers: { authorization: `Bearer ${admin}`, 'content-type': 'application/json' },
-        body: '{"expected_revision": 1, "idempotency_key": "k_dup", "idempotency_key": "k_dup2", "content": {}}',
+        body: '{"expected_draft_revision": 1, "idempotency_key": "k_dup", "idempotency_key": "k_dup2", "content": {}}',
       }),
     );
     expect(dupKey.status).toBe(400);
@@ -197,7 +198,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     expect(nonJson.status).toBe(415);
   });
 
-  it('4. Concurrent saves with same expected_revision: exactly one 200 and one 409 REVISION_CONFLICT (AT-02.3)', async () => {
+  it('4. Concurrent saves with same expected_draft_revision: exactly one 200 and one 409 CONFLICT_REVISION (AT-02.3)', async () => {
     const createRes = await json(
       await dispatch(
         call('POST', '/admin/experiences', admin, {
@@ -212,14 +213,14 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     const [res1, res2] = await Promise.all([
       dispatch(
         call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-          expected_revision: 0,
+          expected_draft_revision: 0,
           idempotency_key: 'conc_save_1',
           content: { client: 1 },
         }),
       ),
       dispatch(
         call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-          expected_revision: 0,
+          expected_draft_revision: 0,
           idempotency_key: 'conc_save_2',
           content: { client: 2 },
         }),
@@ -231,10 +232,10 @@ describe('Experiences and Releases API (A-01 integration)', () => {
 
     const conflictRes = res1.status === 409 ? res1 : res2;
     const conflictBody = await json(conflictRes);
-    expect(conflictBody.error.code).toBe('REVISION_CONFLICT');
+    expect(conflictBody.error.code).toBe('CONFLICT_REVISION');
     expect(conflictBody.error.details).toMatchObject({
-      expected_revision: 0,
-      actual_revision: 1,
+      expected_draft_revision: 0,
+      actual_draft_revision: 1,
     });
   });
 
@@ -254,50 +255,50 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     const save1 = await json(
       await dispatch(
         call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-          expected_revision: 0,
+          expected_draft_revision: 0,
           idempotency_key: 'idem_key_005',
           content: { step: 1 },
         }),
       ),
     );
-    expect(save1.data.revision).toBe(1);
+    expect(save1.data.draft_revision).toBe(1);
 
     // Save again to advance revision to 2
     const save2 = await json(
       await dispatch(
         call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-          expected_revision: 1,
+          expected_draft_revision: 1,
           idempotency_key: 'other_save_key',
           content: { step: 2 },
         }),
       ),
     );
-    expect(save2.data.revision).toBe(2);
+    expect(save2.data.draft_revision).toBe(2);
 
-    // Replay of first save with expected_revision: 0 and original payload
+    // Replay of first save with expected_draft_revision: 0 and original payload
     // Even though current revision is now 2, idempotency replay MUST succeed before revision check!
     const replayRes = await dispatch(
       call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-        expected_revision: 0,
+        expected_draft_revision: 0,
         idempotency_key: 'idem_key_005',
         content: { step: 1 },
       }),
     );
     expect(replayRes.status).toBe(200);
     const replayBody = await json(replayRes);
-    expect(replayBody.data.revision).toBe(1);
+    expect(replayBody.data.draft_revision).toBe(1);
 
-    // Reuse same key with different payload -> 409 IDEMPOTENCY_KEY_COLLISION
+    // Reuse same key with different payload -> 409 CONFLICT_IDEMPOTENCY_KEY
     const collisionRes = await dispatch(
       call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-        expected_revision: 2,
+        expected_draft_revision: 2,
         idempotency_key: 'idem_key_005',
         content: { different: true },
       }),
     );
     expect(collisionRes.status).toBe(409);
     const collisionBody = await json(collisionRes);
-    expect(collisionBody.error.code).toBe('IDEMPOTENCY_KEY_COLLISION');
+    expect(collisionBody.error.code).toBe('CONFLICT_IDEMPOTENCY_KEY');
   });
 
   it('6. Publish release: validation gate, hash match, duplicate version rejection, and immutable release creation', async () => {
@@ -315,7 +316,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     // Incomplete draft saved
     await dispatch(
       call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-        expected_revision: 0,
+        expected_draft_revision: 0,
         idempotency_key: 'save_inc_006',
         content: { questions: [] },
       }),
@@ -326,7 +327,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     // Attempt publish on incomplete draft -> 422 PUBLISH_GATE_FAILED
     const gateFailRes = await dispatch(
       call('POST', `/admin/experiences/${expId}/releases`, admin, {
-        expected_revision: 1,
+        expected_draft_revision: 1,
         content_hash: incHash,
         validation_id: 'val_test_1',
         evaluation_id: 'eval_test_1',
@@ -341,17 +342,17 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     // Save structurally valid definition document
     await dispatch(
       call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-        expected_revision: 1,
+        expected_draft_revision: 1,
         idempotency_key: 'save_valid_006',
         content: validDefinition,
       }),
     );
     const validHash = computeContentHash(validDefinition);
 
-    // Stale content hash -> 409 STALE_REPORT
+    // Stale content hash -> 409 CONFLICT_STALE_REPORT
     const staleHashRes = await dispatch(
       call('POST', `/admin/experiences/${expId}/releases`, admin, {
-        expected_revision: 2,
+        expected_draft_revision: 2,
         content_hash: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
         validation_id: 'val_test_1',
         evaluation_id: 'eval_test_1',
@@ -361,12 +362,12 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     );
     expect(staleHashRes.status).toBe(409);
     const staleHashBody = await json(staleHashRes);
-    expect(staleHashBody.error.code).toBe('STALE_REPORT');
+    expect(staleHashBody.error.code).toBe('CONFLICT_STALE_REPORT');
 
-    // Stale revision -> 409 REVISION_CONFLICT
+    // Stale revision -> 409 CONFLICT_REVISION
     const staleRevRes = await dispatch(
       call('POST', `/admin/experiences/${expId}/releases`, admin, {
-        expected_revision: 1,
+        expected_draft_revision: 1,
         content_hash: validHash,
         validation_id: 'val_test_1',
         evaluation_id: 'eval_test_1',
@@ -376,12 +377,12 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     );
     expect(staleRevRes.status).toBe(409);
     const staleRevBody = await json(staleRevRes);
-    expect(staleRevBody.error.code).toBe('REVISION_CONFLICT');
+    expect(staleRevBody.error.code).toBe('CONFLICT_REVISION');
 
     // Valid publish succeeds -> 201
     const pubRes = await dispatch(
       call('POST', `/admin/experiences/${expId}/releases`, admin, {
-        expected_revision: 2,
+        expected_draft_revision: 2,
         content_hash: validHash,
         validation_id: 'val_test_1',
         evaluation_id: 'eval_test_1',
@@ -399,7 +400,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     // Replay returns cached release
     const replayPub = await dispatch(
       call('POST', `/admin/experiences/${expId}/releases`, admin, {
-        expected_revision: 2,
+        expected_draft_revision: 2,
         content_hash: validHash,
         validation_id: 'val_test_1',
         evaluation_id: 'eval_test_1',
@@ -411,10 +412,10 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     const replayBody = await json(replayPub);
     expect(replayBody.data.id).toBe(pubBody.data.id);
 
-    // Duplicate definition_version on same experience -> 409 REVISION_CONFLICT
+    // Duplicate definition_version on same experience -> 409 CONFLICT_REVISION
     await dispatch(
       call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-        expected_revision: 2,
+        expected_draft_revision: 2,
         idempotency_key: 'save_draft_dup_ver',
         content: { ...validDefinition, templates: { result: 'Modified template' } },
       }),
@@ -422,7 +423,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     const dupVerHash = computeContentHash({ ...validDefinition, templates: { result: 'Modified template' } });
     const dupVerPub = await dispatch(
       call('POST', `/admin/experiences/${expId}/releases`, admin, {
-        expected_revision: 3,
+        expected_draft_revision: 3,
         content_hash: dupVerHash,
         validation_id: 'val_test_2',
         evaluation_id: 'eval_test_2',
@@ -432,7 +433,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     );
     expect(dupVerPub.status).toBe(409);
     const dupVerBody = await json(dupVerPub);
-    expect(dupVerBody.error.code).toBe('REVISION_CONFLICT');
+    expect(dupVerBody.error.code).toBe('CONFLICT_REVISION');
     expect(dupVerBody.error.message).toMatch(/already been published/i);
   });
 
@@ -450,7 +451,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
 
     await dispatch(
       call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-        expected_revision: 0,
+        expected_draft_revision: 0,
         idempotency_key: 'save_draft_007',
         content: validDefinition,
       }),
@@ -460,7 +461,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     const pubRes = await json(
       await dispatch(
         call('POST', `/admin/experiences/${expId}/releases`, admin, {
-          expected_revision: 1,
+          expected_draft_revision: 1,
           content_hash: hash,
           validation_id: 'val_1',
           evaluation_id: 'eval_1',
@@ -474,7 +475,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     // Mutate draft afterwards
     await dispatch(
       call('PUT', `/admin/experiences/${expId}/draft`, admin, {
-        expected_revision: 1,
+        expected_draft_revision: 1,
         idempotency_key: 'save_draft_after',
         content: { ...validDefinition, definition_version: '2.0.0' },
       }),
@@ -518,7 +519,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     expect(deleteErrorMsg).toMatch(/experience_releases is immutable/i);
   });
 
-  it('8. PATCH metadata: updates name/description with expected_revision; stale revision -> 409', async () => {
+  it('8. PATCH metadata: updates name/description with expected_metadata_revision; stale revision -> 409', async () => {
     const createRes = await json(
       await dispatch(
         call('POST', '/admin/experiences', admin, {
@@ -530,12 +531,12 @@ describe('Experiences and Releases API (A-01 integration)', () => {
       ),
     );
     const expId = createRes.data.id as string;
-    expect(createRes.data.revision).toBe(0);
+    expect(createRes.data.metadata_revision).toBe(0);
 
     // Successful PATCH
     const patchRes = await dispatch(
       call('PATCH', `/admin/experiences/${expId}`, admin, {
-        expected_revision: 0,
+        expected_metadata_revision: 0,
         idempotency_key: 'patch_key_008',
         name: 'Patched Name',
       }),
@@ -544,19 +545,19 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     const patchBody = await json(patchRes);
     expect(patchBody.data.name).toBe('Patched Name');
     expect(patchBody.data.description).toBe('Original Desc');
-    expect(patchBody.data.revision).toBe(1);
+    expect(patchBody.data.metadata_revision).toBe(1);
 
-    // Stale PATCH -> 409 REVISION_CONFLICT
+    // Stale PATCH -> 409 CONFLICT_REVISION
     const stalePatch = await dispatch(
       call('PATCH', `/admin/experiences/${expId}`, admin, {
-        expected_revision: 0,
+        expected_metadata_revision: 0,
         idempotency_key: 'patch_key_stale',
         name: 'Another Name',
       }),
     );
     expect(stalePatch.status).toBe(409);
     const staleBody = await json(stalePatch);
-    expect(staleBody.error.code).toBe('REVISION_CONFLICT');
+    expect(staleBody.error.code).toBe('CONFLICT_REVISION');
   });
 
   it('9. Auth guards: unauthenticated 401, non-admin 403 on all experience endpoints', async () => {
@@ -572,7 +573,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     const { expId, hash } = await createWithValidDraft('closed_010');
     const res = await dispatch(
       call('POST', `/admin/experiences/${expId}/releases`, admin, {
-        expected_revision: 1,
+        expected_draft_revision: 1,
         content_hash: hash,
         validation_id: 'val_unverified',
         evaluation_id: 'eval_unverified',
@@ -606,7 +607,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
   it('12. Concurrent publishes with one idempotency key replay the same release', async () => {
     const { expId, hash } = await createWithValidDraft('publish_012');
     const body = {
-      expected_revision: 1,
+      expected_draft_revision: 1,
       content_hash: hash,
       validation_id: 'val_012',
       evaluation_id: 'eval_012',
@@ -653,7 +654,7 @@ describe('Experiences and Releases API (A-01 integration)', () => {
       const query: string = cursor ? `?limit=1&cursor=${cursor}` : '?limit=1';
       const res = await json(await dispatch(call('GET', `/admin/experiences${query}`, admin)));
       seen.push(...(res.data.items as Array<{ id: string }>).map((item) => item.id));
-      cursor = res.data.next_cursor as string | null;
+      cursor = res.meta.pagination.next_cursor as string | null;
     }
     expect(seen).toEqual([...ids].reverse());
     const stored = await db.select({ id: experiences.id }).from(experiences).where(inArray(experiences.id, ids));
@@ -664,4 +665,149 @@ describe('Experiences and Releases API (A-01 integration)', () => {
     expect(bad.status).toBe(400);
     expect((await json(bad)).error.code).toBe('VAL_INVALID_REQUEST');
   });
+});
+
+it('no-op metadata/draft writes preserve independent revisions, timestamps and replay', async () => {
+  const created = await json(await dispatch(call('POST', '/admin/experiences', admin, {
+    name: 'No-op', activity_type: 'personality_assessment', idempotency_key: 'noop_create',
+  })));
+  const id = created.data.id;
+  const patch = { expected_metadata_revision: 0, name: 'No-op', idempotency_key: 'noop_patch' };
+  const unchanged = await json(await dispatch(call('PATCH', `/admin/experiences/${id}`, admin, patch)));
+  expect(unchanged.data.metadata_revision).toBe(0);
+  expect(unchanged.data.updated_at).toBe(created.data.updated_at);
+  const initialDraft = await json(await dispatch(call('GET', `/admin/experiences/${id}/draft`, admin)));
+  const draft = { expected_draft_revision: 0, content: {}, idempotency_key: 'noop_draft' };
+  const unchangedDraft = await json(await dispatch(call('PUT', `/admin/experiences/${id}/draft`, admin, draft)));
+  expect(unchangedDraft.data.draft_revision).toBe(0);
+  expect(unchangedDraft.data.updated_at).toBe(initialDraft.data.updated_at);
+  const changed = await json(await dispatch(call('PATCH', `/admin/experiences/${id}`, admin, { ...patch, name: 'Changed', idempotency_key: 'noop_changed' })));
+  expect(changed.data.metadata_revision).toBe(1);
+  expect(changed.data.draft_ref.draft_revision).toBe(0);
+  const replay = await json(await dispatch(call('PATCH', `/admin/experiences/${id}`, admin, patch)));
+  expect(replay.data).toEqual(unchanged.data);
+  const stale = await dispatch(call('PATCH', `/admin/experiences/${id}`, admin, { ...patch, idempotency_key: 'noop_stale' }));
+  expect(stale.status).toBe(409);
+});
+
+it('release cursors cannot be reused across experiences', async () => {
+  const { expId, hash } = await createWithValidDraft('cursorbound');
+  await dispatch(call('POST', `/admin/experiences/${expId}/releases`, admin, {
+    expected_draft_revision: 1, content_hash: hash, validation_id: 'v', evaluation_id: 'e', approval_refs: [], idempotency_key: 'cursorbound_rel',
+  }));
+  const { encodeReleaseCursor } = await import('@/modules/experiences/experiences.repository');
+  const cursor = encodeReleaseCursor({ published_at: new Date(), id: 'rel_1' }, 'exp_different');
+  expect((await dispatch(call('GET', `/admin/experiences/${expId}/releases?cursor=${encodeURIComponent(cursor)}`, admin))).status).toBe(400);
+});
+
+it.each([
+  ['create', 'baseline'], ['patch', 'baseline'], ['draft', 'baseline'], ['publish', 'baseline'],
+  ['patch', 'explicit'], ['draft', 'explicit'], ['publish', 'explicit'],
+] as const)('replays persisted %s outcomes with %s revision fingerprints after wire upgrade', async (operation, fingerprint) => {
+  const { insertExperienceWithDraft, insertExperienceRelease, saveIdempotencyRecord } = await import('@/modules/experiences/experiences.repository');
+  const { experienceDrafts, experienceReleases, idempotencyRecords } = await import('@/infrastructure/db/schema');
+  const db = getProductDatabase();
+  const id = `exp_upgrade_${operation}_${fingerprint}`;
+  const key = `upgrade_${operation}_${fingerprint}`;
+  await insertExperienceWithDraft(db, { id, name: 'Current metadata', initialDraftContent: { current: true } });
+  await db.update(experiences).set({ revision: 8 }).where(eq(experiences.id, id));
+  await db.update(experienceDrafts).set({ revision: 9 }).where(eq(experienceDrafts.experience_id, id));
+  const timestamp = '2026-10-19T10:00:00.000Z';
+  const hash = computeContentHash({ legacy: true, revision: 17 });
+  let scope: string;
+  let path: string;
+  let method: string;
+  let payload: Record<string, unknown>;
+  let response: Record<string, unknown>;
+  let status: number;
+  let expected: Record<string, unknown>;
+  if (operation === 'create' || operation === 'patch') {
+    scope = operation === 'create' ? 'create_experience' : `patch:${id}`;
+    path = operation === 'create' ? '/admin/experiences' : `/admin/experiences/${id}`;
+    method = operation === 'create' ? 'POST' : 'PATCH';
+    payload = operation === 'create'
+      ? { name: 'Historical metadata', description: '', activity_type: 'personality_assessment' }
+      : { expected_revision: 1, name: 'Historical metadata', description: '' };
+    response = { id, revision: operation === 'create' ? 0 : 2, name: 'Historical metadata', description: '', activity_type: 'personality_assessment', created_at: timestamp, updated_at: timestamp,
+      draft_ref: { draft_id: `draft_${id}`, revision: 1, content_hash: hash } };
+    status = operation === 'create' ? 201 : 200;
+    const { revision, draft_ref, ...rest } = response;
+    expected = { ...rest, metadata_revision: revision, draft_ref: { ...(draft_ref as object), draft_revision: 1 } };
+    delete (expected.draft_ref as Record<string, unknown>).revision;
+  } else if (operation === 'draft') {
+    scope = `draft:${id}`; path = `/admin/experiences/${id}/draft`; method = 'PUT'; status = 200;
+    payload = { expected_revision: 3, content: { legacy: true, revision: 17 } };
+    response = { experience_id: id, draft_id: `draft_${id}`, revision: 4, content_hash: hash, content: { legacy: true, revision: 17 }, updated_by: 'admin', updated_at: timestamp };
+    const { revision, ...rest } = response;
+    expected = { ...rest, draft_revision: revision };
+  } else {
+    scope = `publish:${id}`; path = `/admin/experiences/${id}/releases`; method = 'POST'; status = 201;
+    payload = { expected_revision: 4, content_hash: hash, validation_id: 'val_old', evaluation_id: 'eval_old', approval_refs: [] };
+    const release = await insertExperienceRelease(db, { id: `rel_${key}`, experience_id: id, definition_version: '1', definition_hash: hash, definition_schema_version: '1.0', engine_version: '1', is_demo: true, approval_refs: [], validation_id: 'val_old', evaluation_id: 'eval_old', content: { legacy: true, revision: 17 }, published_by: 'admin' });
+    expect(release.status).toBe('ok');
+    response = { id: `rel_${key}`, experience_id: id, definition_version: '1', definition_hash: hash, definition_schema_version: '1.0', engine_version: '1', is_demo: true, approval_refs: [], published_at: release.status === 'ok' ? release.release.published_at.toISOString() : timestamp, published_by: 'admin' };
+    expected = response;
+  }
+  const wirePayload = { ...payload };
+  if (operation !== 'create') {
+    wirePayload[operation === 'patch' ? 'expected_metadata_revision' : 'expected_draft_revision'] = wirePayload.expected_revision;
+    delete wirePayload.expected_revision;
+  }
+  await saveIdempotencyRecord(db, { scope, key, request_hash: computeContentHash(fingerprint === 'baseline' ? payload : wirePayload), response_status: status, response_body: response });
+  const snapshot = async () => ({
+    metadata: await db.select().from(experiences).orderBy(experiences.id),
+    draft: await db.select().from(experienceDrafts).orderBy(experienceDrafts.draft_id),
+    releases: await db.select().from(experienceReleases).orderBy(experienceReleases.id),
+    records: await db.select().from(idempotencyRecords).where(eq(idempotencyRecords.key, key)),
+  });
+  const before = await snapshot();
+  const replay = await dispatch(call(method, path, admin, { ...wirePayload, idempotency_key: key }));
+  expect(replay.status).toBe(status);
+  expect((await json(replay)).data).toEqual(expected);
+  expect(await snapshot()).toEqual(before);
+  const changed = operation === 'create' || operation === 'patch' ? { name: 'Changed payload' }
+    : operation === 'draft' ? { content: { changed: true } } : { validation_id: 'val_changed' };
+  const collision = await dispatch(call(method, path, admin, { ...wirePayload, ...changed, idempotency_key: key }));
+  expect(collision.status).toBe(409);
+  expect(await snapshot()).toEqual(before);
+  if (operation !== 'create') {
+    const oldWire = await dispatch(call(method, path, admin, { ...payload, idempotency_key: key }));
+    expect(oldWire.status).toBe(422);
+  }
+});
+
+// Check the actual wire body against each operation's declared 409, not the broad ApiResponse.
+it.each([
+  { method: 'PATCH', file: 'public/experience-api.yaml', path: '/admin/experiences/{id}', revision: 'metadata' },
+  { method: 'PUT', file: 'public/experience-api.yaml', path: '/admin/experiences/{id}/draft', revision: 'draft' },
+  { method: 'POST', file: 'public/experience-release-api.yaml', path: '/admin/experiences/{id}/releases', revision: 'draft' },
+])('$method stale $revision response satisfies its declared operation 409 schema', async ({ method, file, path, revision }) => {
+  const { expId, hash } = await createWithValidDraft(`contract_${method.toLowerCase()}`);
+  if (method === 'PATCH') {
+    expect((await dispatch(call('PATCH', `/admin/experiences/${expId}`, admin, {
+      expected_metadata_revision: 0, name: 'Contract updated name', idempotency_key: 'contract_patch_current',
+    }))).status).toBe(200);
+  }
+  const body = method === 'PATCH'
+    ? { expected_metadata_revision: 0, name: 'Stale metadata', idempotency_key: 'contract_patch_stale' }
+    : method === 'PUT'
+      ? { expected_draft_revision: 0, content: { title: 'Stale draft' }, idempotency_key: 'contract_put_stale' }
+      : { expected_draft_revision: 0, content_hash: hash, validation_id: 'val_contract', evaluation_id: 'eval_contract', approval_refs: ['appr_contract'], idempotency_key: 'contract_post_stale' };
+  const response = await dispatch(call(method, path.replace('{id}', expId), admin, body));
+  expect(response.status).toBe(409);
+  const envelope = await json(response);
+  expect(envelope.error.code).toBe('CONFLICT_REVISION');
+  expect(envelope.error.details).toMatchObject({ kind: 'revision_conflict', [`expected_${revision}_revision`]: 0, [`actual_${revision}_revision`]: 1 });
+  const validate = declaredResponseValidator(file, path, method, 409);
+  expect(validate(envelope), JSON.stringify(validate.errors)).toBe(true);
+  const details = envelope.error.details;
+  for (const field of [`expected_${revision}_revision`, `actual_${revision}_revision`]) {
+    const missing = { ...details };
+    delete missing[field];
+    expect(validate({ ...envelope, error: { ...envelope.error, details: missing } })).toBe(false);
+    expect(validate({ ...envelope, error: { ...envelope.error, details: { ...details, [field]: -1 } } })).toBe(false);
+  }
+  const other = revision === 'metadata' ? 'draft' : 'metadata';
+  expect(validate({ ...envelope, error: { ...envelope.error, details: { ...details, [`actual_${other}_revision`]: 1 } } })).toBe(false);
+  expect(validate({ ...envelope, error: { ...envelope.error, details: { kind: 'revision_conflict', expected_revision: 0, actual_revision: 1 } } })).toBe(false);
 });

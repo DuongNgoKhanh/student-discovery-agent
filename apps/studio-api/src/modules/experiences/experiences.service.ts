@@ -39,6 +39,36 @@ export interface ServiceResult<T> {
   replayed?: boolean;
 }
 
+/** Keep the persisted semantic fingerprint independent of public revision field names. */
+function revisionPayloadHashes(
+  payload: Record<string, unknown>,
+  wireField: 'expected_metadata_revision' | 'expected_draft_revision',
+): readonly string[] {
+  const { expected_revision, ...rest } = payload;
+  return [
+    computeContentHash(payload),
+    // Accept records written during the explicit-field rollout, with identical semantic values only.
+    computeContentHash({ ...rest, [wireField]: expected_revision }),
+  ];
+}
+
+/** Adapt only DTO revision fields; historical payloads and counters remain the committed result. */
+function replayResponse(scope: string, stored: Record<string, unknown>): Record<string, unknown> {
+  const rename = (value: Record<string, unknown>, field: string) => {
+    if (!Object.hasOwn(value, 'revision')) return value;
+    const { revision, ...rest } = value;
+    return { ...rest, [field]: Object.hasOwn(rest, field) ? rest[field] : revision };
+  };
+  if (scope === 'create_experience' || scope.startsWith('patch:')) {
+    const metadata = rename(stored, 'metadata_revision');
+    const ref = metadata.draft_ref;
+    return ref && typeof ref === 'object' && !Array.isArray(ref)
+      ? { ...metadata, draft_ref: rename(ref as Record<string, unknown>, 'draft_revision') }
+      : metadata;
+  }
+  return scope.startsWith('draft:') ? rename(stored, 'draft_revision') : stored;
+}
+
 /**
  * Handles idempotency check before write operations.
  * If record exists with matching request hash, returns the cached response.
@@ -48,12 +78,12 @@ async function checkIdempotency<T>(
   db: ProductExecutor,
   scope: string,
   key: string,
-  payloadHash: string,
+  payloadHashes: readonly string[],
 ): Promise<ServiceResult<T> | undefined> {
   const existing = await findIdempotencyRecord(db, scope, key);
   if (!existing) return undefined;
 
-  if (existing.request_hash !== payloadHash) {
+  if (!payloadHashes.includes(existing.request_hash)) {
     throw new ProductError(
       409,
       'IDEMPOTENCY_KEY_COLLISION',
@@ -63,7 +93,7 @@ async function checkIdempotency<T>(
 
   return {
     status: existing.response_status,
-    data: existing.response_body as T,
+    data: replayResponse(scope, existing.response_body) as T,
     replayed: true,
   };
 }
@@ -77,18 +107,19 @@ async function idempotent<T>(
   db: ProductDatabase,
   scope: string,
   key: string,
-  payloadHash: string,
+  payloadHash: string | readonly string[],
   status: number,
   work: (tx: ProductExecutor) => Promise<T>,
 ): Promise<ServiceResult<T>> {
+  const payloadHashes = typeof payloadHash === 'string' ? [payloadHash] : payloadHash;
   return withIdempotencyLock(db, scope, key, async (tx) => {
-    const replayed = await checkIdempotency<T>(tx, scope, key, payloadHash);
+    const replayed = await checkIdempotency<T>(tx, scope, key, payloadHashes);
     if (replayed) return replayed;
     const data = await work(tx);
     await saveIdempotencyRecord(tx, {
       scope,
       key,
-      request_hash: payloadHash,
+      request_hash: payloadHashes[0]!,
       response_status: status,
       response_body: data as unknown as Record<string, unknown>,
     });
@@ -121,7 +152,7 @@ export async function createExperience(
 
     return toExperienceMetadataDTO(experience, {
       draft_id: draft.draft_id,
-      revision: draft.revision,
+      draft_revision: draft.revision,
       content_hash: draft.content_hash,
     });
   });
@@ -139,7 +170,7 @@ export async function getExperience(
   const draftRef = result.draft
     ? {
         draft_id: result.draft.draft_id,
-        revision: result.draft.revision,
+        draft_revision: result.draft.revision,
         content_hash: result.draft.content_hash,
       }
     : null;
@@ -157,7 +188,7 @@ export async function listExperiences(
   });
 
   return {
-    items: items.map((item) => toExperienceMetadataDTO(item.experience, item.draftRef)),
+    items: items.map((item) => toExperienceMetadataDTO(item.experience, item.draftRef ? { draft_id: item.draftRef.draft_id, draft_revision: item.draftRef.revision, content_hash: item.draftRef.content_hash } : null)),
     next_cursor,
   };
 }
@@ -168,14 +199,14 @@ export async function patchExperience(
   input: PatchExperienceInput,
 ): Promise<ServiceResult<ExperienceMetadataDTO>> {
   const scope = `patch:${id}`;
-  const payloadHash = computeContentHash({
-    expected_revision: input.expected_revision,
+  const payloadHash = revisionPayloadHashes({
+    expected_revision: input.expected_metadata_revision,
     name: input.name,
     description: input.description,
-  });
+  }, 'expected_metadata_revision');
 
   return idempotent(db, scope, input.idempotency_key, payloadHash, 200, async (tx) => {
-    const result = await patchExperienceMetadata(tx, id, input.expected_revision, {
+    const result = await patchExperienceMetadata(tx, id, input.expected_metadata_revision, {
       name: input.name,
       description: input.description,
     });
@@ -187,12 +218,12 @@ export async function patchExperience(
     if (result.status === 'conflict') {
       throw new ProductError(409, 'REVISION_CONFLICT', 'Experience revision conflict', false, {
         kind: 'revision_conflict',
-        expected_revision: input.expected_revision,
-        actual_revision: result.current.revision,
+        expected_metadata_revision: input.expected_metadata_revision,
+        actual_metadata_revision: result.current.revision,
       });
     }
 
-    return toExperienceMetadataDTO(result.experience, result.draftRef);
+    return toExperienceMetadataDTO(result.experience, result.draftRef ? { draft_id: result.draftRef.draft_id, draft_revision: result.draftRef.revision, content_hash: result.draftRef.content_hash } : null);
   });
 }
 
@@ -212,7 +243,7 @@ export async function saveExperienceDraft(
   db: ProductDatabase,
   experienceId: string,
   input: {
-    expected_revision: number;
+    expected_draft_revision: number;
     idempotency_key: string;
     content: Record<string, unknown>;
   },
@@ -220,16 +251,16 @@ export async function saveExperienceDraft(
 ): Promise<ServiceResult<ExperienceDraftDTO>> {
   const scope = `draft:${experienceId}`;
   const newHash = computeContentHash(input.content);
-  const payloadHash = computeContentHash({
-    expected_revision: input.expected_revision,
+  const payloadHash = revisionPayloadHashes({
+    expected_revision: input.expected_draft_revision,
     content: input.content,
-  });
+  }, 'expected_draft_revision');
 
   return idempotent(db, scope, input.idempotency_key, payloadHash, 200, async (tx) => {
     const result = await updateDraftContent(
       tx,
       experienceId,
-      input.expected_revision,
+      input.expected_draft_revision,
       input.content,
       newHash,
       user.sub,
@@ -242,8 +273,8 @@ export async function saveExperienceDraft(
     if (result.status === 'conflict') {
       throw new ProductError(409, 'REVISION_CONFLICT', 'Draft revision conflict', false, {
         kind: 'revision_conflict',
-        expected_revision: input.expected_revision,
-        actual_revision: result.current.revision,
+        expected_draft_revision: input.expected_draft_revision,
+        actual_draft_revision: result.current.revision,
         current_content_hash: result.current.content_hash,
       });
     }
@@ -260,13 +291,13 @@ export async function publishExperienceRelease(
   reports: PublishReportVerifier = getPublishReportVerifier(),
 ): Promise<ServiceResult<ExperienceReleaseDTO>> {
   const scope = `publish:${experienceId}`;
-  const payloadHash = computeContentHash({
-    expected_revision: input.expected_revision,
+  const payloadHash = revisionPayloadHashes({
+    expected_revision: input.expected_draft_revision,
     content_hash: input.content_hash,
     validation_id: input.validation_id,
     evaluation_id: input.evaluation_id,
     approval_refs: input.approval_refs,
-  });
+  }, 'expected_draft_revision');
 
   return idempotent(db, scope, input.idempotency_key, payloadHash, 201, async (tx) => {
     const draft = await findDraftByExperienceId(tx, experienceId);
@@ -274,7 +305,7 @@ export async function publishExperienceRelease(
       throw new ProductError(404, 'RESOURCE_NOT_FOUND', 'Experience or draft not found');
     }
 
-    if (draft.revision !== input.expected_revision) {
+    if (draft.revision !== input.expected_draft_revision) {
       throw new ProductError(
         409,
         'REVISION_CONFLICT',
@@ -282,8 +313,8 @@ export async function publishExperienceRelease(
         false,
         {
           kind: 'revision_conflict',
-          expected_revision: input.expected_revision,
-          actual_revision: draft.revision,
+          expected_draft_revision: input.expected_draft_revision,
+          actual_draft_revision: draft.revision,
         },
       );
     }

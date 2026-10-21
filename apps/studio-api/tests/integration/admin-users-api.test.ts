@@ -44,8 +44,8 @@ describe('admin users CRUD', () => {
 
     expect((await del(call('DELETE', `/admin/users/${id}`, admin))).status).toBe(200);
     const filtered = await json(await list(call('GET', '/admin/users?is_deleted=true&email=crud@', admin)));
-    expect(filtered.data.map((u: { id: number }) => u.id)).toEqual([id]);
-    expect(filtered.pagination.total).toBe(1);
+    expect(filtered.data.items.map((u: { id: number }) => u.id)).toEqual([id]);
+    expect(filtered.meta.pagination.has_more).toBe(false);
 
     const restored = await json(await restore(call('POST', `/admin/users/${id}/restore`, admin)));
     expect(restored.data.is_deleted).toBe(false);
@@ -68,7 +68,7 @@ describe('bulk', () => {
     const db = getProductDatabase();
     await insertUser(db, { email: 'exists@example.test', hashed_password: null });
     const result = await bulkCreateUsers(db, [{ email: 'exists@example.test' }, { email: 'new@example.test' }]);
-    expect(result).toMatchObject({ success: false, total_processed: 2, total_success: 1, total_failed: 1 });
+    expect(result).toMatchObject({ success: false, summary: { total_processed: 2, total_success: 1, total_failed: 1 } });
     expect(result.data[0]).toMatchObject({ success: false, user_id: null, data: null });
     expect(result.data[1]?.success).toBe(true);
   });
@@ -78,19 +78,19 @@ describe('bulk', () => {
       call('POST', '/admin/users/bulk/create', admin, { users: [{ email: 'b1@example.test' }, { email: 'b1@example.test' }, { email: 'b2@example.test' }] }),
     );
     const body = await json(res);
-    expect(body).toMatchObject({ success: false, total_processed: 3, total_success: 2, total_failed: 1, status: 200 });
+    expect(body).toMatchObject({ success: false, meta: { summary: { total_processed: 3, total_success: 2, total_failed: 1 } }, status: 200 });
     const [ok, dup, ok2] = body.data;
     expect([ok.success, dup.success, ok2.success]).toEqual([true, false, true]);
-    expect(dup).toMatchObject({ user_id: null, data: null, error: { code: 'VAL_EMAIL_ALREADY_EXISTS' } });
+    expect(dup).toMatchObject({ user_id: null, data: null, error: { code: 'CONFLICT_EMAIL_EXISTS' } });
 
     const upd = await json(
       await bulkUpdate(call('PUT', '/admin/users/bulk/update', admin, { users: [{ id: ok.user_id, updates: { name: 'X' } }, { id: 999999, updates: {} }] })),
     );
-    expect(upd).toMatchObject({ success: false, total_success: 1, total_failed: 1 });
+    expect(upd).toMatchObject({ success: false, meta: { summary: { total_success: 1, total_failed: 1 } } });
     expect(upd.data[1]).toMatchObject({ user_id: 999999, data: null });
 
     const delRes = await json(await bulkDelete(call('DELETE', '/admin/users', admin, { user_ids: [ok.user_id, 999999] })));
-    expect(delRes).toMatchObject({ success: false, total_processed: 2, total_success: 1, total_failed: 1 });
+    expect(delRes).toMatchObject({ success: false, meta: { summary: { total_processed: 2, total_success: 1, total_failed: 1 } } });
   });
 });
 
@@ -103,3 +103,11 @@ const del = dispatch;
 const restore = dispatch;
 const bulkCreate = dispatch;
 const bulkUpdate = dispatch;
+
+it('duplicate admin-created email returns a 409 conflict', async () => {
+  const body = { email: 'duplicate409@example.test' };
+  expect((await dispatch(call('POST', '/admin/users', admin, body))).status).toBe(200);
+  const duplicate = await dispatch(call('POST', '/admin/users', admin, body));
+  expect(duplicate.status).toBe(409);
+  expect((await duplicate.json()).error.code).toBe('CONFLICT_EMAIL_EXISTS');
+});

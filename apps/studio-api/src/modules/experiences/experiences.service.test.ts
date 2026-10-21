@@ -153,7 +153,7 @@ describe('experiences.service', () => {
 
       const res = await getExperience(mockDb, 'exp_1');
       expect(res.id).toBe('exp_1');
-      expect(res.draft_ref?.revision).toBe(2);
+      expect(res.draft_ref?.draft_revision).toBe(2);
     });
 
     it('throws 404 RESOURCE_NOT_FOUND when experience does not exist', async () => {
@@ -214,13 +214,13 @@ describe('experiences.service', () => {
       });
 
       const res = await patchExperience(mockDb, 'exp_1', {
-        expected_revision: 0,
+        expected_metadata_revision: 0,
         idempotency_key: 'patch_key_1',
         name: 'New Name',
       });
 
       expect(res.status).toBe(200);
-      expect(res.data.revision).toBe(1);
+      expect(res.data.metadata_revision).toBe(1);
       expect(repo.saveIdempotencyRecord).toHaveBeenCalledTimes(1);
     });
 
@@ -241,7 +241,7 @@ describe('experiences.service', () => {
 
       await expect(
         patchExperience(mockDb, 'exp_1', {
-          expected_revision: 1,
+          expected_metadata_revision: 1,
           idempotency_key: 'patch_key_2',
           name: 'Stale Patch',
         }),
@@ -249,8 +249,8 @@ describe('experiences.service', () => {
         status: 409,
         code: 'REVISION_CONFLICT',
         details: {
-          expected_revision: 1,
-          actual_revision: 2,
+          expected_metadata_revision: 1,
+          actual_metadata_revision: 2,
         },
       });
     });
@@ -261,7 +261,7 @@ describe('experiences.service', () => {
 
       await expect(
         patchExperience(mockDb, 'exp_missing', {
-          expected_revision: 0,
+          expected_metadata_revision: 0,
           idempotency_key: 'patch_key_3',
           name: 'Missing',
         }),
@@ -286,7 +286,7 @@ describe('experiences.service', () => {
 
       const res = await readExperienceDraft(mockDb, 'exp_1');
       expect(res.experience_id).toBe('exp_1');
-      expect(res.revision).toBe(1);
+      expect(res.draft_revision).toBe(1);
     });
 
     it('throws 404 when draft not found', async () => {
@@ -319,7 +319,7 @@ describe('experiences.service', () => {
         mockDb,
         'exp_1',
         {
-          expected_revision: 1,
+          expected_draft_revision: 1,
           idempotency_key: 'save_key_1',
           content: { questions: ['q1'] },
         },
@@ -327,7 +327,7 @@ describe('experiences.service', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(res.data.revision).toBe(2);
+      expect(res.data.draft_revision).toBe(2);
       expect(repo.saveIdempotencyRecord).toHaveBeenCalledTimes(1);
     });
 
@@ -351,7 +351,7 @@ describe('experiences.service', () => {
           mockDb,
           'exp_1',
           {
-            expected_revision: 1,
+            expected_draft_revision: 1,
             idempotency_key: 'save_key_2',
             content: {},
           },
@@ -361,8 +361,8 @@ describe('experiences.service', () => {
         status: 409,
         code: 'REVISION_CONFLICT',
         details: {
-          expected_revision: 1,
-          actual_revision: 3,
+          expected_draft_revision: 1,
+          actual_draft_revision: 3,
           current_content_hash: 'sha256:current_hash',
         },
       });
@@ -413,7 +413,7 @@ describe('experiences.service', () => {
           mockDb,
           'exp_1',
           {
-            expected_revision: 2,
+            expected_draft_revision: 2,
             content_hash: 'sha256:expected_hash',
             validation_id: 'val_unknown',
             evaluation_id: 'eval_unknown',
@@ -465,7 +465,7 @@ describe('experiences.service', () => {
         mockDb,
         'exp_1',
         {
-          expected_revision: 2,
+          expected_draft_revision: 2,
           content_hash: 'sha256:expected_hash',
           validation_id: 'val_1',
           evaluation_id: 'eval_1',
@@ -481,7 +481,7 @@ describe('experiences.service', () => {
       expect(repo.saveIdempotencyRecord).toHaveBeenCalledTimes(1);
     });
 
-    it('rejects with 409 REVISION_CONFLICT if draft revision differs from expected_revision', async () => {
+    it('rejects with 409 REVISION_CONFLICT if draft revision differs from expected_draft_revision', async () => {
       vi.mocked(repo.findIdempotencyRecord).mockResolvedValue(undefined);
       vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
         draft_id: 'draft_1',
@@ -498,7 +498,7 @@ describe('experiences.service', () => {
           mockDb,
           'exp_1',
           {
-            expected_revision: 2,
+            expected_draft_revision: 2,
             content_hash: 'sha256:expected_hash',
             validation_id: 'val_1',
             evaluation_id: 'eval_1',
@@ -530,7 +530,7 @@ describe('experiences.service', () => {
           mockDb,
           'exp_1',
           {
-            expected_revision: 2,
+            expected_draft_revision: 2,
             content_hash: 'sha256:stale_hash',
             validation_id: 'val_1',
             evaluation_id: 'eval_1',
@@ -562,7 +562,7 @@ describe('experiences.service', () => {
           mockDb,
           'exp_1',
           {
-            expected_revision: 2,
+            expected_draft_revision: 2,
             content_hash: 'sha256:incomplete_hash',
             validation_id: 'val_1',
             evaluation_id: 'eval_1',
@@ -597,7 +597,7 @@ describe('experiences.service', () => {
           mockDb,
           'exp_1',
           {
-            expected_revision: 2,
+            expected_draft_revision: 2,
             content_hash: 'sha256:expected_hash',
             validation_id: 'val_1',
             evaluation_id: 'eval_1',

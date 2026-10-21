@@ -21,18 +21,18 @@ describe('experiences.schemas', () => {
     {
       name: 'patch',
       schema: patchExperienceSchema,
-      input: { expected_revision: 0, name: 'Updated', idempotency_key: 'k1' },
+      input: { expected_metadata_revision: 0, name: 'Updated', idempotency_key: 'k1' },
     },
     {
       name: 'save draft',
       schema: saveDraftSchema,
-      input: { expected_revision: 0, content: { custom_field: true }, idempotency_key: 'k1' },
+      input: { expected_draft_revision: 0, content: { custom_field: true }, idempotency_key: 'k1' },
     },
     {
       name: 'publish',
       schema: publishReleaseSchema,
       input: {
-        expected_revision: 0,
+        expected_draft_revision: 0,
         content_hash: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
         validation_id: 'val-1', evaluation_id: 'eval-1', approval_refs: [], idempotency_key: 'k1',
       },
@@ -87,7 +87,7 @@ describe('experiences.schemas', () => {
   describe('patchExperienceSchema', () => {
     it('accepts patch with name only', () => {
       const parsed = patchExperienceSchema.parse({
-        expected_revision: 0,
+        expected_metadata_revision: 0,
         idempotency_key: 'key-1',
         name: 'Updated Name',
       });
@@ -96,7 +96,7 @@ describe('experiences.schemas', () => {
 
     it('accepts patch with description only', () => {
       const parsed = patchExperienceSchema.parse({
-        expected_revision: 1,
+        expected_metadata_revision: 1,
         idempotency_key: 'key-2',
         description: 'New Description',
       });
@@ -106,7 +106,7 @@ describe('experiences.schemas', () => {
     it('rejects patch when neither name nor description is provided', () => {
       expect(() =>
         patchExperienceSchema.parse({
-          expected_revision: 2,
+          expected_metadata_revision: 2,
           idempotency_key: 'key-3',
         }),
       ).toThrow(/At least one of name or description must be provided/);
@@ -116,7 +116,7 @@ describe('experiences.schemas', () => {
   describe('saveDraftSchema', () => {
     it('accepts valid draft content including incomplete JSON object', () => {
       const parsed = saveDraftSchema.parse({
-        expected_revision: 0,
+        expected_draft_revision: 0,
         idempotency_key: 'save-key-1',
         content: { questions: [], custom_field: { enabled: true } },
       });
@@ -127,20 +127,20 @@ describe('experiences.schemas', () => {
   describe('publishReleaseSchema', () => {
     it('accepts valid release publish input', () => {
       const parsed = publishReleaseSchema.parse({
-        expected_revision: 2,
+        expected_draft_revision: 2,
         content_hash: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
         validation_id: 'val-100',
         evaluation_id: 'eval-200',
         approval_refs: ['appr-1', 'appr-2'],
         idempotency_key: 'pub-key-1',
       });
-      expect(parsed.expected_revision).toBe(2);
+      expect(parsed.expected_draft_revision).toBe(2);
     });
 
     it('rejects non-sha256 content_hash', () => {
       expect(() =>
         publishReleaseSchema.parse({
-          expected_revision: 0,
+          expected_draft_revision: 0,
           content_hash: 'md5:badhash',
           validation_id: 'val-1',
           evaluation_id: 'eval-1',
@@ -216,7 +216,7 @@ describe('experiences.schemas', () => {
         },
         {
           draft_id: 'draft-1',
-          revision: 0,
+          draft_revision: 0,
           content_hash: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
         },
       );

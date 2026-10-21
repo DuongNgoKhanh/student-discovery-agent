@@ -26,14 +26,14 @@ describe('experiences.routes', () => {
       { method: 'GET', path: '/api/v1/admin/experiences' },
       { method: 'POST', path: '/api/v1/admin/experiences', body: { name: 'E', idempotency_key: 'k' } },
       { method: 'GET', path: '/api/v1/admin/experiences/exp_1' },
-      { method: 'PATCH', path: '/api/v1/admin/experiences/exp_1', body: { expected_revision: 0, idempotency_key: 'k', name: 'N' } },
+      { method: 'PATCH', path: '/api/v1/admin/experiences/exp_1', body: { expected_metadata_revision: 0, idempotency_key: 'k', name: 'N' } },
       { method: 'GET', path: '/api/v1/admin/experiences/exp_1/draft' },
-      { method: 'PUT', path: '/api/v1/admin/experiences/exp_1/draft', body: { expected_revision: 0, idempotency_key: 'k', content: {} } },
+      { method: 'PUT', path: '/api/v1/admin/experiences/exp_1/draft', body: { expected_draft_revision: 0, idempotency_key: 'k', content: {} } },
       {
         method: 'POST',
         path: '/api/v1/admin/experiences/exp_1/releases',
         body: {
-          expected_revision: 0,
+          expected_draft_revision: 0,
           content_hash: 'sha256:' + 'a'.repeat(64),
           validation_id: 'v1',
           evaluation_id: 'e1',
@@ -101,7 +101,7 @@ describe('experiences.routes', () => {
         status: 201,
         data: {
           id: 'exp_1',
-          revision: 0,
+          metadata_revision: 0,
           name: 'Experience 1',
           description: '',
           activity_type: 'personality_assessment',
@@ -109,7 +109,7 @@ describe('experiences.routes', () => {
           updated_at: '2026-10-19T10:00:00.000Z',
           draft_ref: {
             draft_id: 'draft_1',
-            revision: 0,
+            draft_revision: 0,
             content_hash: 'sha256:abc',
           },
         },
@@ -138,7 +138,7 @@ describe('experiences.routes', () => {
     it('GET /api/v1/admin/experiences/:id calls getExperience', async () => {
       vi.mocked(service.getExperience).mockResolvedValue({
         id: 'exp_1',
-        revision: 0,
+        metadata_revision: 0,
         name: 'Exp',
         description: '',
         activity_type: 'personality_assessment',
@@ -160,7 +160,7 @@ describe('experiences.routes', () => {
         status: 200,
         data: {
           id: 'exp_1',
-          revision: 1,
+          metadata_revision: 1,
           name: 'Updated Name',
           description: 'Updated Desc',
           activity_type: 'personality_assessment',
@@ -177,7 +177,7 @@ describe('experiences.routes', () => {
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          expected_revision: 0,
+          expected_metadata_revision: 0,
           idempotency_key: 'patch_1',
           name: 'Updated Name',
         }),
@@ -187,7 +187,7 @@ describe('experiences.routes', () => {
       expect(service.patchExperience).toHaveBeenCalledWith(
         expect.anything(),
         'exp_1',
-        expect.objectContaining({ expected_revision: 0, name: 'Updated Name' }),
+        expect.objectContaining({ expected_metadata_revision: 0, name: 'Updated Name' }),
       );
     });
 
@@ -195,7 +195,7 @@ describe('experiences.routes', () => {
       vi.mocked(service.readExperienceDraft).mockResolvedValue({
         experience_id: 'exp_1',
         draft_id: 'draft_1',
-        revision: 0,
+        draft_revision: 0,
         content_hash: 'sha256:abc',
         content: {},
         updated_by: 'admin',
@@ -216,7 +216,7 @@ describe('experiences.routes', () => {
         data: {
           experience_id: 'exp_1',
           draft_id: 'draft_1',
-          revision: 1,
+          draft_revision: 1,
           content_hash: 'sha256:abc',
           content: { questions: [] },
           updated_by: 'admin',
@@ -231,7 +231,7 @@ describe('experiences.routes', () => {
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          expected_revision: 0,
+          expected_draft_revision: 0,
           idempotency_key: 'save_1',
           content: { questions: [] },
         }),
@@ -241,7 +241,7 @@ describe('experiences.routes', () => {
       expect(service.saveExperienceDraft).toHaveBeenCalledWith(
         expect.anything(),
         'exp_1',
-        expect.objectContaining({ expected_revision: 0 }),
+        expect.objectContaining({ expected_draft_revision: 0 }),
         expect.objectContaining({ sub: 'admin' }),
       );
     });
@@ -270,7 +270,7 @@ describe('experiences.routes', () => {
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          expected_revision: 1,
+          expected_draft_revision: 1,
           content_hash: 'sha256:' + 'a'.repeat(64),
           validation_id: 'val_1',
           evaluation_id: 'eval_1',
@@ -283,7 +283,7 @@ describe('experiences.routes', () => {
       expect(service.publishExperienceRelease).toHaveBeenCalledWith(
         expect.anything(),
         'exp_1',
-        expect.objectContaining({ expected_revision: 1 }),
+        expect.objectContaining({ expected_draft_revision: 1 }),
         expect.objectContaining({ sub: 'admin' }),
       );
     });
@@ -330,7 +330,7 @@ describe('experiences.routes', () => {
   });
 
   describe('Validation and error handling', () => {
-    it('returns 422 INVALID_INPUT when path parameter fails resourceIdSchema', async () => {
+    it('returns 422 VAL_INVALID_INPUT when path parameter fails resourceIdSchema', async () => {
       const res = await app.request('/api/v1/admin/experiences/invalid@id', {
         headers: { authorization: `Bearer ${adminToken}` },
       });
@@ -338,7 +338,7 @@ describe('experiences.routes', () => {
       expect(res.status).toBe(422);
       const json = await res.json();
       expect(json.success).toBe(false);
-      expect(json.error.code).toBe('INVALID_INPUT');
+      expect(json.error.code).toBe('VAL_INVALID_INPUT');
     });
 
     it('returns 400 VAL_INVALID_REQUEST on duplicate json keys in body', async () => {

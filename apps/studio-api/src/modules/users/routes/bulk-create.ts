@@ -10,6 +10,6 @@ import { bulkCreateUsers } from '@/modules/users/users.service';
 export const handlePost = withHandler(async (req, ctx) => {
   await requireAdmin(req);
   const { users } = bulkCreateSchema.parse(await readJsonBody(req));
-  const { data, ...rest } = await bulkCreateUsers(getProductDatabase(), users, ctx);
-  return success(data, ctx, 200, rest);
+  const { data, summary, ...rest } = await bulkCreateUsers(getProductDatabase(), users, ctx);
+  return success(data, ctx, 200, { ...rest, meta: { summary } });
 });
