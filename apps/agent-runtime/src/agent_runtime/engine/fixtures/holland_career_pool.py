@@ -331,12 +331,19 @@ def sample_experience_definition(
             })
 
     # Sort questions consistently: by item_order 1..5, then by house_id
-    # Construct standard baseline_order (12 items): R1, I1, A1, S1, E1, C1, R2, I2, A2, S2, E2, C2
-    baseline_order: List[str] = []
-    for order in [1, 2]:
+    # This guarantees questions[:12] exactly matches the 12 baseline items (2 per house)
+    ordered_questions: List[Dict[str, Any]] = []
+    for order in range(1, 6):
         for house_id in HOUSE_IDS:
-            code = HOUSE_CODE_MAP[house_id]
-            baseline_order.append(f"q_{code}_{order:02}")
+            q = next(
+                item for item in questions
+                if item["house_id"] == house_id and item["item_order"] == order
+            )
+            ordered_questions.append(q)
+    questions = ordered_questions
+
+    # Construct standard baseline_order (12 items): R1, I1, A1, S1, E1, C1, R2, I2, A2, S2, E2, C2
+    baseline_order: List[str] = [q["question_id"] for q in questions[:12]]
 
     rules = {
         "selection_rules": {

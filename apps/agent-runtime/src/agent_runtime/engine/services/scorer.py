@@ -15,7 +15,6 @@ from pydantic import ValidationError
 
 from agent_runtime.engine.error_codes import EngineErrorCode
 from agent_runtime.engine.exceptions import (
-    EngineError,
     InvalidPrefixError,
     MissingMappingError,
     UnsupportedDefinitionError,
@@ -160,13 +159,13 @@ class ScoringEngine:
             if ans.question_id in seen_question_ids:
                 raise InvalidPrefixError(
                     f"Duplicate answer for question '{ans.question_id}' at index {idx}",
-                    code=EngineErrorCode.DUPLICATE_QUESTION_SELECTION,
+                    code=EngineErrorCode.QUESTION_ALREADY_ANSWERED,
                 )
 
             if ans.question_id not in question_map:
                 raise InvalidPrefixError(
                     f"Question '{ans.question_id}' at index {idx} not found in definition question bank",
-                    code=EngineErrorCode.QUESTION_NOT_IN_BANK,
+                    code=EngineErrorCode.UNKNOWN_QUESTION_ID,
                 )
 
             question = question_map[ans.question_id]
@@ -174,7 +173,7 @@ class ScoringEngine:
             if choice is None:
                 raise InvalidPrefixError(
                     f"Option '{ans.option_id}' is not a valid choice for question '{ans.question_id}'",
-                    code=EngineErrorCode.OPTION_NOT_FOUND,
+                    code=EngineErrorCode.INVALID_OPTION_ID,
                 )
 
             # Cross-check explicit rating if provided
