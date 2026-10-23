@@ -189,3 +189,21 @@ def test_history_interaction_does_not_store_arbitrary_provider_payload():
     activity, _ = models()
     with pytest.raises(ValidationError):
         activity.NewMessage(message_id='msg1', role='user', blocks=[], interaction={'raw_provider_response': 'secret'})
+
+
+@pytest.mark.parametrize('cap', [12, 20, 30])
+def test_adaptive_progress_accepts_a_definition_question_cap(cap):
+    activity, _ = models()
+    progress = activity.AssessmentProgressV2(completed=cap, max_total=cap, total=cap, phase='completed')
+    assert progress.max_total == cap and progress.min_total == 12
+
+
+@pytest.mark.parametrize('progress', [
+    {'completed': 0, 'max_total': 11, 'total': None, 'phase': 'baseline'},
+    {'completed': 0, 'max_total': 31, 'total': None, 'phase': 'baseline'},
+    {'completed': 13, 'max_total': 12, 'total': 13, 'phase': 'completed'},
+])
+def test_adaptive_progress_rejects_caps_outside_the_contract(progress):
+    activity, _ = models()
+    with pytest.raises(ValidationError):
+        activity.AssessmentProgressV2(**progress)

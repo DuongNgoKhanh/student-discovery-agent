@@ -128,12 +128,15 @@ class AssessmentProgressV1(ContractModel):
 class AssessmentProgressV2(ContractModel):
     completed: Annotated[int, Field(strict=True, ge=0, le=30)]
     min_total: Literal[12] = 12
-    max_total: Literal[30] = 30
+    # The question cap is a definition value; Harness never hard-codes it.
+    max_total: Annotated[int, Field(strict=True, ge=12, le=30)] = 30
     total: Annotated[int, Field(strict=True, ge=12, le=30)] | None
     phase: Literal["baseline", "adaptive", "completed"]
 
     @model_validator(mode="after")
     def total_matches_phase(self) -> "AssessmentProgressV2":
+        if self.completed > self.max_total:
+            raise ValueError("completed progress cannot exceed the question cap")
         if self.phase == "completed":
             if self.total != self.completed:
                 raise ValueError("completed progress requires its actual total")
