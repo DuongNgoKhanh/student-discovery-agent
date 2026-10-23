@@ -1,0 +1,7 @@
+# Dependencies and build output (the repo .gitignore only covers apps/*/node_modules).
+node_modules/
+dist/
+
+# PNG artwork masters (~2.5 MB each). Kept out of git: store them on the design drive.
+# The app ships the WebP derivatives in src/assets/archetypes/<id>/ (see README → Artwork).
+art-masters/
