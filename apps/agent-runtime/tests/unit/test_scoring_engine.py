@@ -39,6 +39,21 @@ from agent_runtime.engine.services.scorer import (
 from agent_runtime.engine.services.selector import AdaptiveQuestionSelector
 
 
+def _with_coverage(definition, answers, rating=1):
+    """Append rating-`rating` answers until every house has its 2 baseline answers."""
+    answered = {a.question_id for a in answers}
+    counts = {}
+    for q in definition.questions:
+        if q.question_id in answered:
+            counts[q.house_id] = counts.get(q.house_id, 0) + 1
+    filled = list(answers)
+    for q in definition.questions:
+        if q.question_id not in answered and counts.get(q.house_id, 0) < 2:
+            filled.append(AnswerInput(question_id=q.question_id, option_id=f"{q.question_id}_opt_{rating}"))
+            counts[q.house_id] = counts.get(q.house_id, 0) + 1
+    return filled
+
+
 @pytest.fixture
 def default_v2_def():
     """Default valid Definition 2.0 generated from Holland Career Pool."""
@@ -108,7 +123,7 @@ class TestScoringEngineUnequalCounts:
             AnswerInput(question_id="q_i_04", option_id="q_i_04_opt_4", rating=4),
         ]
 
-        result = engine.calculate_scores(answers)
+        result = engine.calculate_scores(_with_coverage(default_v2_def, answers))
 
         r_score = result.house_scores["house_r"]
         i_score = result.house_scores["house_i"]
@@ -147,7 +162,7 @@ class TestScoringEngineUnequalCounts:
             AnswerInput(question_id="q_i_04", option_id="q_i_04_opt_4", rating=4),
         ]
 
-        result = engine.calculate_scores(answers)
+        result = engine.calculate_scores(_with_coverage(default_v2_def, answers))
 
         assert result.primary_house_id == "house_r"
         assert result.secondary_house_id == "house_i"
@@ -228,19 +243,18 @@ class TestScoringTiePolicyAndClassification:
 
         for h_id in HOUSE_IDS:
             assert result.house_scores[h_id].display_score == 50.0
-            assert pytest.approx(result.house_scores[h_id].share_percentage, abs=0.1) == 16.67
 
     def test_holland_code_3_letters(self, default_v2_def):
-        """House A = 5.0, House S = 4.0, House I = 3.0 -> Holland Code 'ASI'."""
+        """House A = 5.0, House S = 4.0, House I = 3.0, others 1.0 -> Holland Code 'ASI'."""
         engine = ScoringEngine(default_v2_def)
 
         answers = [
-            AnswerInput(question_id="q_a_01", option_id="q_a_01_opt_5", rating=5),
-            AnswerInput(question_id="q_s_01", option_id="q_s_01_opt_4", rating=4),
-            AnswerInput(question_id="q_i_01", option_id="q_i_01_opt_3", rating=3),
+            _answer(qid, rating)
+            for qid, rating in [("q_a_01", 5), ("q_a_02", 5), ("q_s_01", 4), ("q_s_02", 4),
+                                ("q_i_01", 3), ("q_i_02", 3)]
         ]
 
-        result = engine.calculate_scores(answers)
+        result = engine.calculate_scores(_with_coverage(default_v2_def, answers))
 
         assert result.primary_house_id == "house_a"
         assert result.secondary_house_id == "house_s"
@@ -312,27 +326,27 @@ class TestScoringInvalidationAndDeterminism:
         """Modifying an earlier answer completely recalculates scores and contributions."""
         engine = ScoringEngine(default_v2_def)
 
-        # Step 1: Initial answers with R rating 1
-        initial_answers = [
+        # Step 1: R=[1, 1] (mean 1), I=[5, 1] (mean 3), other houses rating 1
+        initial_answers = _with_coverage(default_v2_def, [
             AnswerInput(question_id="q_r_01", option_id="q_r_01_opt_1", rating=1),
             AnswerInput(question_id="q_i_01", option_id="q_i_01_opt_5", rating=5),
-        ]
+        ])
         res1 = engine.calculate_scores(initial_answers)
         assert res1.primary_house_id == "house_i"
         assert res1.house_scores["house_r"].mean.value == 1.0
 
-        # Step 2: Edit q_r_01 from rating 1 to rating 5
+        # Step 2: Edit q_r_01 from rating 1 to rating 5 -> R=[5, 1] (mean 3)
         edited_answers = [
             AnswerInput(question_id="q_r_01", option_id="q_r_01_opt_5", rating=5),
-            AnswerInput(question_id="q_i_01", option_id="q_i_01_opt_5", rating=5),
+            *initial_answers[1:],
         ]
         res2 = engine.calculate_scores(edited_answers)
 
-        # House R now ties House I at mean=5.0, so R ranks first by tie order
+        # House R now ties House I at mean=3.0, so R ranks first by tie order
         assert res2.primary_house_id == "house_r"
-        assert res2.house_scores["house_r"].mean.value == 5.0
+        assert res2.house_scores["house_r"].mean.value == 3.0
         assert res2.tie_applied is False
-        assert res2.house_scores["house_r"].contributions[0].mean_value == 5.0
+        assert res2.house_scores["house_r"].contributions[0].mean_value == 2.5
 
     def test_reproducibility_10_runs(self, default_v2_def):
         """10 repeated runs with identical answers yield identical outputs."""
@@ -522,25 +536,39 @@ class TestScoringErrorPaths:
 
 
 class TestScoringEdgeCases:
-    """Boundary behaviour of ranking, shares, stopping and tie policy."""
+    """Boundary behaviour of ranking, coverage, stopping and tie policy."""
 
     def test_no_answers(self, default_v2_def):
         res = calculate_scores([], default_v2_def)
         assert res.primary_house_id is None
         assert res.holland_code is None
+        assert res.ranked_houses == []
         assert res.is_complete is False
         assert res.all_contributions == []
-        assert all(d.share_percentage is None for d in res.house_scores.values())
 
-    def test_all_ratings_one_gives_zero_shares(self, default_v2_def):
+    def test_classification_withheld_before_baseline_coverage(self, default_v2_def):
+        """ADR-002 §7.5: no result before every house has its baseline answers."""
+        answers = [_answer(q.question_id, 5) for q in default_v2_def.questions[:11]]
+        res = calculate_scores(answers, default_v2_def)
+        assert res.house_scores["house_r"].display_score == 100.0
+        assert res.house_scores["house_c"].count == 1
+        assert (res.primary_house_id, res.holland_code, res.ranked_houses) == (None, None, [])
+        assert all(d.rank is None for d in res.house_scores.values())
+
+    def test_all_ratings_one_still_ranks_by_tie_order(self, default_v2_def):
         answers = [_answer(q.question_id, 1) for q in default_v2_def.questions[:12]]
         res = calculate_scores(answers, default_v2_def)
-        assert all(d.share_percentage == 0.0 for d in res.house_scores.values())
+        assert all(d.display_score == 0.0 for d in res.house_scores.values())
+        assert res.holland_code == "RIA"
+        assert res.is_complete is False
 
-    def test_fewer_than_three_active_houses(self, default_v2_def):
-        res = calculate_scores([_answer("q_a_01", 4)], default_v2_def)
-        assert res.holland_code == "A"
-        assert res.secondary_house_id is None
+    def test_question_limit_without_coverage_rejected(self, v2_dict):
+        v2_dict["coverage_rules"]["payload"]["max_total"] = 12
+        doc = ScoringEngine._coerce_definition(v2_dict)
+        answers = [_answer(q.question_id, 3) for q in doc.questions if q.house_id != "house_c"][:12]
+        with pytest.raises(InvalidPrefixError) as exc:
+            calculate_scores(answers, doc)
+        assert exc.value.code == EngineErrorCode.SEQUENCE_MISMATCH
 
     def test_custom_tie_order_is_used(self, v2_dict):
         v2_dict["tie_policy"]["payload"]["order"] = list(reversed(HOUSE_IDS))

@@ -19,6 +19,7 @@ from pydantic import ValidationError
 from agent_runtime.engine.error_codes import EngineErrorCode
 from agent_runtime.engine.exceptions import (
     EngineError,
+    InvalidPrefixError,
     MissingMappingError,
     UnsupportedDefinitionError,
 )
@@ -172,39 +173,36 @@ class ScoringEngine:
                 )
             )
 
-        # Step 2: Rank answered houses by exact mean, ties broken by tie_order;
-        # unanswered houses follow in tie_order.
-        active_houses = [h_id for h_id in tie_order if stats[h_id].count > 0]
-        active_houses.sort(key=lambda h_id: -stats[h_id].mean.to_fraction())
-        empty_houses = [h_id for h_id in tie_order if stats[h_id].count == 0]
-        ranked_houses = active_houses + empty_houses
+        # Step 2: No ranking or classification before every house reaches baseline
+        # coverage (ADR-002 §7.5). Once covered, rank by exact mean, ties by tie_order.
+        total_answers = len(answers)
+        covered = all(s.count >= min_answers_per_house for s in stats.values())
+        if total_answers >= max_total and not covered:
+            raise InvalidPrefixError(
+                f"{total_answers} answers reach the question limit without baseline coverage",
+                code=EngineErrorCode.SEQUENCE_MISMATCH,
+            )
+        ranked_houses: List[str] = []
+        if covered:
+            ranked_houses = sorted(tie_order, key=lambda h_id: -stats[h_id].mean.to_fraction())
+        rank_of = {h_id: rank for rank, h_id in enumerate(ranked_houses, start=1)}
 
-        # Step 3: Build house details with rank and share of total display score
-        total_display_score = sum(s.display_score or 0.0 for s in stats.values())
-        house_scores: Dict[str, HouseScoreDetail] = {}
-        for rank, h_id in enumerate(ranked_houses, start=1):
-            display_score = stats[h_id].display_score
-            if display_score is None:
-                share = None
-            elif total_display_score > 0.0:
-                share = round(display_score / total_display_score * 100.0, 2)
-            else:
-                share = 0.0
-            house_scores[h_id] = HouseScoreDetail(
+        # Step 3: Build house details; display_score is a per-house rescale, never a share.
+        house_scores: Dict[str, HouseScoreDetail] = {
+            h_id: HouseScoreDetail(
                 **stats[h_id].model_dump(),
                 house_name=house_name_map[h_id],
-                rank=rank,
-                share_percentage=share,
+                rank=rank_of.get(h_id),
                 contributions=contributions_by_house[h_id],
             )
+            for h_id in tie_order
+        }
 
         # Step 4: Classify primary, secondary, tertiary houses and Holland Code
-        top_houses = active_houses[:3]
-        padded_top = top_houses + [None] * (3 - len(top_houses))
-        holland_code = "".join(HOLLAND_CODE_LETTER_MAP[h] for h in top_houses) or None
+        top_houses: List[Optional[str]] = list(ranked_houses[:3]) or [None, None, None]
+        holland_code = "".join(HOLLAND_CODE_LETTER_MAP[h] for h in ranked_houses[:3]) or None
 
         # Step 5: Evaluate Completion and Stopping Reason (ADR-002 §7.6)
-        total_answers = len(answers)
         stopping_reason: Optional[StoppingReason] = None
         tie_applied = False
 
@@ -215,8 +213,8 @@ class ScoringEngine:
                 raise EngineError(
                     f"Scorer winner '{ranked_houses[0]}' disagrees with selector winner '{winner}'",
                 )
-        elif active_houses and all(s.count >= min_answers_per_house for s in stats.values()):
-            leader = active_houses[0]
+        elif covered:
+            leader = ranked_houses[0]
             max_other_upper = max(
                 s.upper.to_fraction() for h_id, s in stats.items() if h_id != leader
             )
@@ -225,9 +223,9 @@ class ScoringEngine:
 
         return AssessmentScoringResult(
             schema_version="2.0",
-            primary_house_id=padded_top[0],
-            secondary_house_id=padded_top[1],
-            tertiary_house_id=padded_top[2],
+            primary_house_id=top_houses[0],
+            secondary_house_id=top_houses[1],
+            tertiary_house_id=top_houses[2],
             holland_code=holland_code,
             tie_applied=tie_applied,
             house_scores=house_scores,

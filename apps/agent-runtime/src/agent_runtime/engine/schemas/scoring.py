@@ -53,13 +53,10 @@ class HouseScoreDetail(HouseStatistics):
 
     house_name: Optional[str] = Field(default=None, description="Display name from the definition's house metadata")
     rank: Optional[StrictInt] = Field(
-        default=None, ge=1, le=6, description="Ordinal rank among 6 houses (1 = primary/highest)"
-    )
-    share_percentage: Optional[float] = Field(
         default=None,
-        ge=0.0,
-        le=100.0,
-        description="Share of total display score, rounded per house (need not sum to exactly 100)",
+        ge=1,
+        le=6,
+        description="Ordinal rank among 6 houses (1 = primary/highest); unset before baseline coverage",
     )
     contributions: List[AnswerContribution] = Field(
         default_factory=list, description="List of contributions from each active answer for this house"
@@ -81,7 +78,8 @@ class HouseScoreDetail(HouseStatistics):
 class AssessmentScoringResult(BaseModel):
     """Authoritative outcome of assessment scoring, RIASEC classification and contributions breakdown.
 
-    While is_complete is False, ranking and classification fields are provisional.
+    Ranking and classification stay unset until every house has baseline coverage
+    (ADR-002 §7.5); after that and before is_complete they are provisional.
     """
 
     schema_version: Literal["1.0", "2.0"] = Field(..., description="Experience definition schema version")
@@ -96,8 +94,8 @@ class AssessmentScoringResult(BaseModel):
     )
     holland_code: Optional[str] = Field(
         default=None,
-        pattern=r"^[RIASEC]{1,3}$",
-        description="Holland code of the top answered houses: 3 letters, or fewer when fewer houses have answers",
+        pattern=r"^[RIASEC]{3}$",
+        description="3-letter Holland code of the top three ranked houses",
     )
     tie_applied: bool = Field(
         default=False,
@@ -107,7 +105,8 @@ class AssessmentScoringResult(BaseModel):
         default_factory=dict, description="Detailed scores and contributions per house (empty for Definition 1.0)"
     )
     ranked_houses: List[str] = Field(
-        default_factory=list, description="House IDs ordered from Rank 1 (Primary) to Rank 6"
+        default_factory=list,
+        description="House IDs ordered from Rank 1 (Primary) to Rank 6; empty before baseline coverage",
     )
     all_contributions: List[AnswerContribution] = Field(
         default_factory=list, description="All answer contributions in the order questions were answered"
@@ -130,12 +129,12 @@ class AssessmentScoringResult(BaseModel):
         if self.tie_applied and self.stopping_reason != StoppingReason.QUESTION_LIMIT:
             raise ValueError("tie policy is only applied at question_limit")
 
-        if sorted(self.ranked_houses) != sorted(self.house_scores):
-            raise ValueError("ranked_houses must list exactly the house_scores keys")
-        for rank, house_id in enumerate(self.ranked_houses, start=1):
-            detail = self.house_scores[house_id]
-            if detail.house_id != house_id or detail.rank != rank:
-                raise ValueError(f"house_scores['{house_id}'] does not match its rank {rank}")
+        if self.ranked_houses and sorted(self.ranked_houses) != sorted(self.house_scores):
+            raise ValueError("ranked_houses must be empty or list exactly the house_scores keys")
+        rank_of = {house_id: rank for rank, house_id in enumerate(self.ranked_houses, start=1)}
+        for house_id, detail in self.house_scores.items():
+            if detail.house_id != house_id or detail.rank != rank_of.get(house_id):
+                raise ValueError(f"house_scores['{house_id}'] does not match its rank")
 
         top = [self.primary_house_id, self.secondary_house_id, self.tertiary_house_id]
         for idx, house_id in enumerate(top):
@@ -146,9 +145,6 @@ class AssessmentScoringResult(BaseModel):
             if idx >= len(self.ranked_houses) or self.ranked_houses[idx] != house_id:
                 raise ValueError(f"top house '{house_id}' does not match ranked_houses[{idx}]")
 
-        filled = sum(house_id is not None for house_id in top)
-        if (self.holland_code is None and filled) or (
-            self.holland_code is not None and len(self.holland_code) != filled
-        ):
-            raise ValueError("holland_code must have one letter per primary/secondary/tertiary house")
+        if (self.holland_code is None) != (self.tertiary_house_id is None):
+            raise ValueError("holland_code is set exactly when the top three houses are ranked")
         return self
