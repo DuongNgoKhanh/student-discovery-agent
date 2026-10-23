@@ -5,7 +5,6 @@ Provides:
   Interest Profiler for Vietnamese high school students (grades 10-12).
 - Deterministic sampler to construct fully compliant Definition 2.0 ExperienceDefinitionDocument
   instances (30 items, baseline 12 items, 6 houses, exact tie policy).
-- Verified against ExperienceValidator (RFC 8785 canonical hash parity).
 """
 
 import copy
@@ -281,16 +280,26 @@ def sample_experience_definition(
     Args:
         pool: Question pool mapping house_id to list of prompts (defaults to HOLLAND_MASTER_CAREER_POOL).
         seed: Seed for reproducible random sampling of 5 items per house.
-        house_item_indices: Explicit indices (5 per house) to select from the pool.
+        house_item_indices: Explicit distinct pool indices (5 per house) to select from the pool.
         definition_id: Unique definition identifier matching pattern ^[A-Za-z0-9][A-Za-z0-9._:-]*$.
         definition_version: Semantic version of the definition.
-        return_dict: If True, returns dict; otherwise returns validated Pydantic model.
+        return_dict: If True, returns the raw (unvalidated) dict; otherwise the validated model.
 
     Returns:
-        ExperienceDefinitionDocument or validated dict.
+        ExperienceDefinitionDocument, or the raw document dict when return_dict is True.
+
+    Raises:
+        ValueError: If the pool or house_item_indices cannot supply 5 distinct items per house.
     """
-    active_pool = pool or HOLLAND_MASTER_CAREER_POOL
+    active_pool = HOLLAND_MASTER_CAREER_POOL if pool is None else pool
     rng = random.Random(seed) if seed is not None else None
+
+    for house_id in HOUSE_IDS:
+        if len(active_pool.get(house_id, [])) < 5:
+            raise ValueError(f"Pool must provide at least 5 prompts for {house_id}")
+    unknown_index_houses = set(house_item_indices or {}) - set(HOUSE_IDS)
+    if unknown_index_houses:
+        raise ValueError(f"house_item_indices has unknown houses: {sorted(unknown_index_houses)}")
 
     questions: List[Dict[str, Any]] = []
 
@@ -302,6 +311,8 @@ def sample_experience_definition(
             indices = house_item_indices[house_id]
             if len(indices) != 5:
                 raise ValueError(f"Expected exactly 5 indices for {house_id}, got {len(indices)}")
+            if len(set(indices)) != 5 or not all(0 <= idx < len(house_prompts) for idx in indices):
+                raise ValueError(f"Indices for {house_id} must be distinct and within the pool: {indices}")
             selected_prompts = [house_prompts[idx] for idx in indices]
         elif rng is not None:
             # Deterministic sample 5 items without replacement

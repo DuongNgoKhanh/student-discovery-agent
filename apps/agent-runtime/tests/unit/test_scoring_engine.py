@@ -2,16 +2,17 @@
 
 Verifies:
 - FR-ENG-02, FR-ENG-03, FR-ENG-04: Deterministic scoring, exact mean ratings, linear display scores
-- AT-13: Full version reproducibility of scores, contributions, and classifications
+- AT-13: Repeated runs yield identical scores, contributions, and classifications
 - 6 Independent Golden Winners (R, I, A, S, E, C)
 - Unequal answer counts: exact mean comparison vs sum comparison (R=[4,4] vs I=[5,4,3,4])
-- Mathematical Invariants: sum of contributions strictly equals house score and mean
-- DEC-04: Holland Hexagonal Tie-Breaking Order (R -> I -> A -> S -> E -> C)
+- Mathematical Invariants: mean contributions sum exactly to the house mean; display
+  contributions sum to the display score within its 2-decimal rounding
+- DEC-04: Holland Hexagonal Tie-Breaking Order (R -> I -> A -> S -> E -> C), applied at question_limit
 - Bounded winner early stopping vs question limit stopping
 - Answer invalidation & recompute idempotency
-- Typed failure handling: QUESTION_NOT_IN_BANK, OPTION_NOT_FOUND, DUPLICATE_QUESTION, RATING_MISMATCH
-- Trial simulations across diverse Holland Career Pool 60 personas
-- Backward compatibility for Definition 1.0
+- Typed failure handling for answers and definitions (shared with the selector)
+- Simulated profiles on definitions sampled from the 60-question Holland Career Pool
+- Definition 1.0 reports completion only (no scoring)
 """
 
 import pytest
@@ -19,6 +20,8 @@ import pytest
 from agent_runtime.engine.error_codes import EngineErrorCode
 from agent_runtime.engine.exceptions import (
     InvalidPrefixError,
+    MissingMappingError,
+    UnsupportedDefinitionError,
 )
 from agent_runtime.engine.fixtures import (
     HOUSE_IDS,
@@ -31,7 +34,9 @@ from agent_runtime.engine.schemas.selector import (
 )
 from agent_runtime.engine.services.scorer import (
     ScoringEngine,
+    calculate_scores,
 )
+from agent_runtime.engine.services.selector import AdaptiveQuestionSelector
 
 
 @pytest.fixture
@@ -119,10 +124,12 @@ class TestScoringEngineUnequalCounts:
         # Equal exact mean ratings
         assert r_score.mean == i_score.mean
 
-        # House R wins due to Holland tie order (R before I)
+        # House R ranks first due to Holland tie order (R before I); the tie policy is
+        # only reported as applied at question_limit.
         assert result.primary_house_id == "house_r"
         assert result.secondary_house_id == "house_i"
-        assert result.tie_applied is True
+        assert result.is_complete is False
+        assert result.tie_applied is False
 
     def test_higher_mean_wins_despite_smaller_sum(self, default_v2_def):
         """House R has ratings [5, 5] (sum=10, n=2, mean=5.0).
@@ -181,9 +188,9 @@ class TestScoringContributionsInvariants:
             )
             assert total_rational_contrib == detail.mean.to_fraction()
 
-            # Invariant 2: Sum of display score contributions equals house display score
+            # Invariant 2: display contributions sum to the 2-decimal display score
             total_display_contrib = sum(c.display_contribution for c in detail.contributions)
-            assert pytest.approx(detail.display_score, abs=1e-4) == total_display_contrib
+            assert pytest.approx(detail.display_score, abs=0.005) == total_display_contrib
 
         # Flat all_contributions must match total answer count and sequence order
         assert len(result.all_contributions) == len(answers)
@@ -321,10 +328,10 @@ class TestScoringInvalidationAndDeterminism:
         ]
         res2 = engine.calculate_scores(edited_answers)
 
-        # House R now ties House I at mean=5.0, so R wins by tie policy
+        # House R now ties House I at mean=5.0, so R ranks first by tie order
         assert res2.primary_house_id == "house_r"
         assert res2.house_scores["house_r"].mean.value == 5.0
-        assert res2.tie_applied is True
+        assert res2.tie_applied is False
         assert res2.house_scores["house_r"].contributions[0].mean_value == 5.0
 
     def test_reproducibility_10_runs(self, default_v2_def):
@@ -376,7 +383,7 @@ class TestScoringErrorHandling:
 
 
 class TestScoringHollandPoolSimulations:
-    """Simulated student profiles across diverse Holland Career Pool 60 samples."""
+    """Simulated student profiles on definitions sampled with different seeds."""
 
     @pytest.mark.parametrize("seed,expected_primary", [
         (10, "house_r"),
@@ -404,9 +411,9 @@ class TestScoringHollandPoolSimulations:
 
 
 class TestScoringBackwardCompatibilityV1:
-    """Verifies Definition 1.0 backward compatibility."""
+    """Definition 1.0 choices are unrated: completion is reported, nothing is classified."""
 
-    def test_definition_v1_legacy_scoring(self, valid_v1_doc):
+    def test_definition_v1_reports_completion_without_classification(self, valid_v1_doc):
         engine = ScoringEngine(valid_v1_doc)
         answers = [
             {"question_id": f"q_demo_{i:02}", "option_id": f"q_demo_{i:02}_opt_1"}
@@ -416,4 +423,171 @@ class TestScoringBackwardCompatibilityV1:
         assert res.schema_version == "1.0"
         assert res.is_complete is True
         assert res.stopping_reason == StoppingReason.FIXED_COVERAGE
-        assert res.primary_house_id == "house_r"
+        assert res.primary_house_id is None
+        assert res.holland_code is None
+        assert res.house_scores == {}
+
+    def test_definition_v1_incomplete(self, valid_v1_doc):
+        answers = [{"question_id": "q_demo_01", "option_id": "q_demo_01_opt_1"}]
+        res = ScoringEngine(valid_v1_doc).calculate_scores(answers)
+        assert res.is_complete is False
+        assert res.stopping_reason is None
+        assert res.total_answers == 1
+
+
+def _answer(question_id: str, rating: int) -> AnswerInput:
+    return AnswerInput(question_id=question_id, option_id=f"{question_id}_opt_{rating}", rating=rating)
+
+
+@pytest.fixture
+def v2_dict():
+    """Raw Definition 2.0 dict, for building malformed variants."""
+    return sample_experience_definition(seed=42, return_dict=True)
+
+
+class TestScoringErrorPaths:
+    """Every failure surfaces as a typed engine error with an existing code."""
+
+    @pytest.mark.parametrize("answer", [{"question_id": "q_r_01"}, 42])
+    def test_malformed_answer_payload(self, default_v2_def, answer):
+        with pytest.raises(InvalidPrefixError) as exc:
+            ScoringEngine(default_v2_def).calculate_scores([answer])
+        assert exc.value.code in (EngineErrorCode.INVALID_FIELD, EngineErrorCode.INVALID_TYPE)
+
+    def test_unsupported_schema_version(self, v2_dict):
+        v2_dict["schema_version"] = "3.0"
+        with pytest.raises(UnsupportedDefinitionError) as exc:
+            ScoringEngine(v2_dict).calculate_scores([])
+        assert exc.value.code in (EngineErrorCode.INVALID_SCHEMA_VERSION, EngineErrorCode.INVALID_FIELD)
+
+    def test_missing_definition(self):
+        with pytest.raises(UnsupportedDefinitionError) as exc:
+            ScoringEngine().calculate_scores([])
+        assert exc.value.code == EngineErrorCode.MISSING_REQUIRED_FIELD
+
+    def test_choice_without_rating_is_rejected_not_trusted_from_client(self, v2_dict):
+        for choice in v2_dict["questions"][0]["choices"]:
+            choice.pop("rating")
+        qid = v2_dict["questions"][0]["question_id"]
+        with pytest.raises(MissingMappingError) as exc:
+            ScoringEngine(v2_dict).calculate_scores([{"question_id": qid, "option_id": f"{qid}_opt_1", "rating": 5}])
+        assert exc.value.code == EngineErrorCode.INVALID_RATING
+
+    def test_rating_resolved_from_definition_when_omitted(self, default_v2_def):
+        res = ScoringEngine(default_v2_def).calculate_scores(
+            [AnswerInput(question_id="q_r_01", option_id="q_r_01_opt_4")]
+        )
+        assert res.house_scores["house_r"].sum == 4
+
+    def test_unknown_house_in_question_rejected(self, v2_dict):
+        v2_dict["questions"][0]["house_id"] = "house_x"
+        with pytest.raises(MissingMappingError) as exc:
+            ScoringEngine(v2_dict).calculate_scores([])
+        assert exc.value.code == EngineErrorCode.INVALID_HOUSE_REF
+
+    def test_non_riasec_houses_rejected(self, v2_dict):
+        old, new = "house_r", "house_z"
+        v2_dict["houses"][0]["house_id"] = new
+        for q in v2_dict["questions"]:
+            if q["house_id"] == old:
+                q["house_id"] = new
+        order = v2_dict["tie_policy"]["payload"]["order"]
+        order[order.index(old)] = new
+        with pytest.raises(MissingMappingError) as exc:
+            ScoringEngine(v2_dict).calculate_scores([])
+        assert exc.value.code == EngineErrorCode.INVALID_HOUSE_REF
+
+    @pytest.mark.parametrize("payload_update", [
+        {"items_per_house": 0},
+        {"items_per_house": 2},
+        {"max_total": "30"},
+    ])
+    def test_invalid_coverage_config(self, v2_dict, payload_update):
+        v2_dict["coverage_rules"]["payload"].update(payload_update)
+        with pytest.raises((UnsupportedDefinitionError, MissingMappingError)):
+            ScoringEngine(v2_dict).calculate_scores([])
+
+    def test_missing_coverage_keys_rejected(self, v2_dict):
+        del v2_dict["coverage_rules"]["payload"]["items_per_house"]
+        with pytest.raises(UnsupportedDefinitionError) as exc:
+            ScoringEngine(v2_dict).calculate_scores([])
+        assert exc.value.code == EngineErrorCode.INVALID_COVERAGE_CONFIG
+
+    @pytest.mark.parametrize("order", ["CSEAIR", {"a": 1}, ["house_c"]])
+    def test_invalid_tie_order_rejected(self, v2_dict, order):
+        v2_dict["tie_policy"]["payload"]["order"] = order
+        with pytest.raises(UnsupportedDefinitionError) as exc:
+            ScoringEngine(v2_dict).calculate_scores([])
+        assert exc.value.code == EngineErrorCode.INVALID_TIE_ORDER
+
+
+class TestScoringEdgeCases:
+    """Boundary behaviour of ranking, shares, stopping and tie policy."""
+
+    def test_no_answers(self, default_v2_def):
+        res = calculate_scores([], default_v2_def)
+        assert res.primary_house_id is None
+        assert res.holland_code is None
+        assert res.is_complete is False
+        assert res.all_contributions == []
+        assert all(d.share_percentage is None for d in res.house_scores.values())
+
+    def test_all_ratings_one_gives_zero_shares(self, default_v2_def):
+        answers = [_answer(q.question_id, 1) for q in default_v2_def.questions[:12]]
+        res = calculate_scores(answers, default_v2_def)
+        assert all(d.share_percentage == 0.0 for d in res.house_scores.values())
+
+    def test_fewer_than_three_active_houses(self, default_v2_def):
+        res = calculate_scores([_answer("q_a_01", 4)], default_v2_def)
+        assert res.holland_code == "A"
+        assert res.secondary_house_id is None
+
+    def test_custom_tie_order_is_used(self, v2_dict):
+        v2_dict["tie_policy"]["payload"]["order"] = list(reversed(HOUSE_IDS))
+        doc = ScoringEngine._coerce_definition(v2_dict)
+        answers = [_answer(q.question_id, 3) for q in doc.questions]
+        res = calculate_scores(answers, doc)
+        assert res.primary_house_id == "house_c"
+        assert res.tie_applied is True
+
+    def test_bounded_lead_without_min_coverage_does_not_stop(self, default_v2_def):
+        answers = [_answer(f"q_r_{i:02}", 5) for i in range(1, 6)]
+        res = calculate_scores(answers, default_v2_def)
+        assert res.is_complete is False
+
+    def test_display_contributions_within_rounding(self, default_v2_def):
+        answers = [_answer("q_r_01", 2), _answer("q_r_02", 3), _answer("q_r_03", 3)]
+        detail = calculate_scores(answers, default_v2_def).house_scores["house_r"]
+        assert detail.display_score == 41.67
+        assert pytest.approx(detail.display_score, abs=0.005) == sum(
+            c.display_contribution for c in detail.contributions
+        )
+
+
+class TestScoringMatchesSelector:
+    """Scorer and selector must agree on statistics and completion for the same prefix."""
+
+    @pytest.mark.parametrize("profile", [
+        {"house_r": 5, "house_i": 4},
+        {"house_s": 4, "house_e": 4},
+        {},
+    ])
+    def test_agrees_along_selector_path(self, default_v2_def, profile):
+        selector = AdaptiveQuestionSelector(default_v2_def)
+        question_house = {q.question_id: q.house_id for q in default_v2_def.questions}
+        answers = []
+        while True:
+            sel = selector.select_next_question(answers)
+            res = calculate_scores(answers, default_v2_def)
+            assert res.is_complete == (sel.next_question_id is None)
+            for h_id, stats in sel.statistics.items():
+                assert res.house_scores[h_id].display_score == stats.display_score
+                assert res.house_scores[h_id].mean == stats.mean
+            if sel.next_question_id is None:
+                assert res.stopping_reason == sel.stopping_reason
+                assert res.primary_house_id == sel.primary_house_id
+                assert res.tie_applied == sel.tie_applied
+                break
+            assert res.tie_applied is False
+            qid = sel.next_question_id
+            answers.append(_answer(qid, profile.get(question_house[qid], 2)))
