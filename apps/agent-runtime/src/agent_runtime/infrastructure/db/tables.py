@@ -57,7 +57,7 @@ result_snapshots = Table(
     Column("result_revision", BigInteger, nullable=False), Column("source_activity_revision", BigInteger, nullable=False),
     Column("validity", Text, nullable=False), Column("result_projection", JSONB, nullable=False),
     Column("card_projection", JSONB, nullable=False), Column("share_projection", JSONB, nullable=False),
-    timestamp("created_at", default=True),
+    Column("evidence", JSONB, nullable=False), timestamp("created_at", default=True),
 )
 
 operation_outcomes = Table(

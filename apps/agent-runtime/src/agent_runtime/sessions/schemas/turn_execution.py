@@ -5,7 +5,7 @@ from .activity import ActivityAnswer, ActivityRecord, ActivityState
 from .common import ContractModel, OpaqueId, PositiveRevision
 from .conversation import ConversationRecord
 from .release import ValidatedRelease
-from .result import PersonalityCardData, ShareCard
+from .result import PersonalityCardData, ResultEvidence, ShareCard
 
 
 class TurnSnapshot(ContractModel):
@@ -30,6 +30,7 @@ class CompletionBundle(ContractModel):
     source_activity_revision: PositiveRevision
     card: PersonalityCardData
     share: ShareCard
+    evidence: ResultEvidence
 
 
 class TurnDraft(ContractModel):

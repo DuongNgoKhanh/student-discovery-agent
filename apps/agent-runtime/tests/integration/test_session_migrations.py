@@ -52,8 +52,8 @@ def seed_result(session, result_id="result-1", activity_id="activity-1"):
     session.execute(text("""
         INSERT INTO execution.result_snapshots
             (result_id, activity_id, result_revision, source_activity_revision, validity,
-             result_projection, card_projection, share_projection)
-        VALUES (:result, :activity, 1, 1, 'valid', '{}', '{}', '{}')
+             result_projection, card_projection, share_projection, evidence)
+        VALUES (:result, :activity, 1, 1, 'valid', '{}', '{}', '{}', '{}')
     """), {"result": result_id, "activity": activity_id})
 
 

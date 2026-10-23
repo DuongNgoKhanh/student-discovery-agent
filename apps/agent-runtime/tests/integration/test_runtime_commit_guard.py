@@ -35,7 +35,7 @@ from agent_runtime.sessions.schemas.result import ResultSnapshotInput
 from agent_runtime.sessions.services.access import AccessPolicy
 from agent_runtime.sessions.services.activity import ActivityPersistence
 from agent_runtime.sessions.services.releases import validate_release
-from tests.helpers.builders import adaptive_capabilities, agent_release, experience_release
+from tests.helpers.builders import adaptive_capabilities, agent_release, experience_release, fixture_evidence
 from tests.helpers.clock import FakeClock
 from tests.helpers.product import FakeProductReleaseSource
 from tests.unit.conftest import valid_v1_doc as legacy_definition_fixture
@@ -117,7 +117,8 @@ def completion(activity_id, *, result_id="result-one", expected=0, generation=1,
         card_projection=card,
         share_projection={"result_id": result_id, "result_revision": generation, "activity_id": activity_id,
                           "display_name": "Student", "house": card["house"], "branding": {"brand_ref": "brand",
-                          "label": "Brand"}, "is_demo": True, "demo_label": "Demo", "template_ref": "template"})
+                          "label": "Brand"}, "is_demo": True, "demo_label": "Demo", "template_ref": "template"},
+        evidence=fixture_evidence("experience-x"))
     return CommitPatch(**(base.model_dump() | {"next_state": state, "new_result": result,
                                               "invalidate_result_ids": invalidations}))
 

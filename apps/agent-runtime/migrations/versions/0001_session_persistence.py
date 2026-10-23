@@ -79,6 +79,7 @@ def upgrade() -> None:
             result_projection jsonb NOT NULL CHECK (jsonb_typeof(result_projection) = 'object'),
             card_projection jsonb NOT NULL CHECK (jsonb_typeof(card_projection) = 'object'),
             share_projection jsonb NOT NULL CHECK (jsonb_typeof(share_projection) = 'object'),
+            evidence jsonb NOT NULL CHECK (jsonb_typeof(evidence) = 'object'),
             created_at timestamptz NOT NULL DEFAULT clock_timestamp(), UNIQUE (activity_id, result_revision),
             FOREIGN KEY (activity_id) REFERENCES execution.activities(id)
                 ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
