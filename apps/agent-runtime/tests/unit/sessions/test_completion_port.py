@@ -138,3 +138,11 @@ def test_harness_guard_rejects_an_engine_that_runs_past_the_cap(valid_v2_doc):
     with pytest.raises(RuntimeSessionError) as caught:
         run(handler, capped(valid_v2_doc), neutral)
     assert (caught.value.status, caught.value.code) == (422, "ENGINE_FAILURE")
+
+
+def test_production_registry_rejects_legacy_definitions_before_any_question(valid_v1_doc):
+    """Definition 1.0 cannot produce a winning House, so it never starts on the default registry."""
+    snapshot = make_turn_snapshot(valid_v1_doc)
+    with pytest.raises(RuntimeSessionError) as caught:
+        production_handler().prepare(snapshot, parse_turn_input(turn_examples()["name_input"]))
+    assert (caught.value.status, caught.value.code) == (422, "INCOMPATIBLE_SCHEMA")
