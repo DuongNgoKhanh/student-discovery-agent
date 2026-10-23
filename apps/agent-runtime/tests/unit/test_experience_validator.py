@@ -24,15 +24,17 @@ from agent_runtime.evaluations.services.validator import (
     calculate_content_hash,
     validate_experience_definition,
 )
+from tests.unit.conftest import with_engine
 
 
 class TestExperienceValidator:
     """Test suite for ExperienceValidator (M-EVL)."""
 
-    def test_default_empty_registry_returns_unsupported(self, valid_v2_doc):
-        """Review #1: Unregistered engine in default empty registry returns UNSUPPORTED."""
-        default_validator = ExperienceValidator()  # Uses DEFAULT_ENGINE_REGISTRY = {}
-        report = default_validator.validate(valid_v2_doc)
+    def test_default_registry_rejects_unregistered_engine(self, valid_v2_doc):
+        """Review #1: an engine outside DEFAULT_ENGINE_REGISTRY returns UNSUPPORTED."""
+        default_validator = ExperienceValidator()
+        assert default_validator.validate(valid_v2_doc).status == ValidationStatus.PASSED
+        report = default_validator.validate(with_engine(valid_v2_doc, "2.0.0"))
         assert report.status == ValidationStatus.UNSUPPORTED
         assert report.mandatory_passed is False
         assert any(i.code == "VAL_UNSUPPORTED_ENGINE_VERSION" and i.path == "engine_version" for i in report.issues)

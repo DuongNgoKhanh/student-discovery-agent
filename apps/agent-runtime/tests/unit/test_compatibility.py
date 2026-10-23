@@ -15,11 +15,11 @@ from agent_runtime.evaluations.services.compatibility import (
 class TestCompatibilityChecker:
     """Test suite for CompatibilityChecker."""
 
-    def test_default_registry_is_empty(self):
-        """Review #1: Default registry must be empty per OpenAPI contract (DEC-04 unresolved)."""
+    def test_default_registry_runs_only_the_adaptive_engine(self):
+        """B-03: production registers career-assessment-v1 for Definition 2.0; pilot versions stay test-only."""
         checker = CompatibilityChecker()
-        assert len(checker.registry) == 0
-        assert not checker.check_engine_exists("career-assessment-v1")
+        assert set(checker.registry) == {"career-assessment-v1"}
+        assert checker.registry["career-assessment-v1"].supported_schema_versions == {"2.0"}
         assert not checker.check_engine_exists("1.0.0")
         assert not checker.check_engine_exists("2.0.0")
 

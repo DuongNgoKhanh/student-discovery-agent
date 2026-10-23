@@ -28,7 +28,7 @@ class PinnedAssessmentEngine:
     """Selects from the persisted pin with an explicitly configured engine registry."""
 
     def __init__(self, registry: dict[str, EngineProfile] | None = None):
-        # Production registry stays empty until DEC-04; tests/pilots inject theirs.
+        # Production registers the C-02/C-03 engine; tests/pilots may inject theirs.
         self.registry = registry if registry is not None else DEFAULT_ENGINE_REGISTRY
 
     def select(self, release: ValidatedRelease, answers: tuple[ActivityAnswer, ...]) -> SelectionResult:
@@ -47,6 +47,29 @@ class PinnedAssessmentEngine:
             raise _engine_failure() from None
         except Exception:
             raise RuntimeSessionError(500, "INTERNAL_ERROR") from None
+
+
+def _question_cap(release: ValidatedRelease) -> int:
+    """Hard cap from the pinned definition, independent of what the engine reports."""
+    payload = (release.content.get("coverage_rules") or {}).get("payload") or {}
+    cap = payload.get("max_total", payload.get("required_question_count"))
+    if not isinstance(cap, int) or isinstance(cap, bool) or cap < 1:
+        raise _engine_failure()
+    return cap
+
+
+def _prepare_completion(port: CompletionPort, context: CompletionContext) -> CompletionBundle:
+    """Same failure mapping as selection: completion never commits a partial or invented card."""
+    try:
+        return port.prepare(context)
+    except RuntimeSessionError:
+        raise
+    except UnsupportedDefinitionError:
+        raise RuntimeSessionError(422, "INCOMPATIBLE_SCHEMA") from None
+    except (EngineError, ValidationError):
+        raise _engine_failure() from None
+    except Exception:
+        raise RuntimeSessionError(500, "INTERNAL_ERROR") from None
 
 
 def _definition_question(release: ValidatedRelease, question_id: str) -> JsonObject | None:
@@ -106,7 +129,8 @@ class TurnHandler:
                  selection: SelectionResult) -> TurnDraft:
         state = snapshot.activity.state
         completed = selection.status == SelectionStatus.COMPLETED
-        if completed and not answers:
+        cap = _question_cap(snapshot.release)
+        if (completed and not answers) or len(answers) > cap or (len(answers) == cap and not completed):
             raise _engine_failure()
         base = state.model_dump(mode="json") | {
             "display_name": name, "clarification": None, "answers": [a.model_dump(mode="json") for a in answers],
@@ -118,7 +142,7 @@ class TurnHandler:
                 raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "not_configured"})
             context = CompletionContext(snapshot=snapshot, answers=answers, selection=selection,
                                         next_activity_revision=snapshot.activity.revision + 1)
-            bundle = self._checked_bundle(snapshot, selection, name, self.completion.prepare(context))
+            bundle = self._checked_bundle(snapshot, selection, name, _prepare_completion(self.completion, context))
             base |= {"status": "completed", "current_question": None, "current_result_id": bundle.result_id}
         else:
             question = _view_question(_definition_question(snapshot.release, selection.next_question_id))
