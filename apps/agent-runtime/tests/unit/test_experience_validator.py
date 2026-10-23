@@ -48,6 +48,15 @@ class TestExperienceValidator:
         assert report.content_hash.startswith("sha256:")
         assert len(report.content_hash) == 7 + 64
 
+    @pytest.mark.parametrize("max_total, passes", [(12, True), (20, True), (30, True), (11, False), (31, False)])
+    def test_question_cap_is_a_profile_choice_within_the_bank(self, validator, valid_v2_doc, max_total, passes):
+        doc = copy.deepcopy(valid_v2_doc)
+        doc["coverage_rules"]["payload"]["max_total"] = max_total
+        report = validator.validate(doc)
+        assert (report.status == ValidationStatus.PASSED) is passes
+        if not passes:
+            assert any(i.path == "coverage_rules.payload.max_total" for i in report.issues)
+
     def test_valid_definition_v2_passes(self, validator, valid_v2_doc):
         report = validator.validate(valid_v2_doc)
         assert report.status == ValidationStatus.PASSED
