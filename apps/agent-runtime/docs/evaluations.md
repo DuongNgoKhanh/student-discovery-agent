@@ -36,14 +36,28 @@ Public contracts are in `contracts/openapi/public` and shared schemas are in
 turns are well-formed but return `422 INVALID_ACTIVITY_TRANSITION`.
 
 - The selector runs against the release pinned on the activity, outside any
-  write transaction. The default engine registry is empty until DEC-04, so a
-  production container fails closed with `422 INCOMPATIBLE_SCHEMA`. Tests
-  inject `PILOT_ENGINE_REGISTRY` explicitly.
-- No completion projector is configured before B-03/C-04. When the engine
-  reports completion, the turn returns `503 SERVICE_UNAVAILABLE` and the final
-  answer is not stored. Tests use a fixture projector only to prove the
-  interface and atomic commit; that is not scoring or golden-path (AT-07)
-  evidence.
+  write transaction. The default engine registry runs `career-assessment-v1`
+  for Definition 2.0; other engine versions fail closed with
+  `422 INCOMPATIBLE_SCHEMA`. `PILOT_ENGINE_REGISTRY` stays test-only.
+
+## Completion, result and card (B-03)
+
+- Completion is decided only by the engine's valid stop (`bounded_winner` or
+  `question_limit`). The cap is `coverage_rules.payload.max_total` of the
+  pinned definition (12..30); the demo profile uses 12. Harness only guards
+  that no turn goes past that cap.
+- `EngineCompletionPort` scores the answers, requires the scorer's House to
+  equal the selector's, projects the `summary.v1` card/share and builds
+  `ResultEvidence` (pin, definition hash, rule refs, exact scores and
+  contributions). Result, card, share and evidence are written in the same
+  commit as the final answer and the `completed` state.
+- Evidence lives in `result_snapshots.evidence` and is never returned by the
+  result or share-card APIs.
+- Scorer/projection failures return `422 ENGINE_FAILURE` (legacy 1.0
+  definitions: `422 INCOMPATIBLE_SCHEMA`) and write nothing; the same request
+  can be retried.
+- Golden paths (AT-07), evidence (AT-13) and pure-engine parity (AT-20, partial)
+  are in `tests/integration/test_turn_completion.py`.
 - There is no public TypeScript route for turns yet.
 
 Integration checks need a disposable PostgreSQL 16 admin URL:

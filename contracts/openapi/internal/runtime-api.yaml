@@ -118,7 +118,9 @@ paths:
         expected_activity_revision only when sent. Replay returns the stored status/data with fresh meta.
         The engine runs outside the write transaction; the commit rechecks lifecycle, replay and captured revisions,
         then atomically writes activity/answers, conversation revision (+1 each), result when completed, user and
-        assistant messages and one outcome. Completed without a configured completion projector returns 503.
+        assistant messages and one outcome. On the engine's valid stop (B-03) the runtime scores the answers,
+        cross-checks the selector's House and stores the summary.v1 result/card/share with internal scoring
+        evidence in that same commit; scoring/projection failures return 422 and write nothing.
         Revision conflicts return 409 CONFLICT_REVISION with resource_kind and readable snapshots.
       requestBody:
         required: true

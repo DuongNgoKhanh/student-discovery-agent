@@ -18,8 +18,15 @@ from agent_runtime.infrastructure.db.tables import result_snapshots
 from agent_runtime.main import create_app
 from agent_runtime.sessions.services.completion import EngineCompletionPort
 from agent_runtime.sessions.services.turn_handlers import PinnedAssessmentEngine, TurnHandler
-from tests.helpers.turns import build_turn_rig, current_state, post_turn, request_for, signed_call, turn_container
-from tests.helpers.turns import turn_counts
+from tests.helpers.turns import (
+    build_turn_rig,
+    current_state,
+    post_turn,
+    request_for,
+    signed_call,
+    turn_container,
+    turn_counts,
+)
 
 pytestmark = pytest.mark.integration
 
