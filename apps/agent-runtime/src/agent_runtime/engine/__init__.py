@@ -2,7 +2,7 @@
 
 Provides:
 - Adaptive Question Selector (Task C-02)
-- Deterministic Scoring & 6 House Contributions (Task C-03)
+- Deterministic Scoring, Contributions & Classification Engine (Task C-03)
 """
 
 from agent_runtime.engine.error_codes import EngineErrorCode
@@ -12,6 +12,11 @@ from agent_runtime.engine.exceptions import (
     InvalidPrefixError,
     MissingMappingError,
     UnsupportedDefinitionError,
+)
+from agent_runtime.engine.schemas.scoring import (
+    AnswerContribution,
+    AssessmentScoringResult,
+    HouseScoreDetail,
 )
 from agent_runtime.engine.schemas.selector import (
     AnswerInput,
@@ -23,6 +28,10 @@ from agent_runtime.engine.schemas.selector import (
     SelectionStatus,
     StoppingReason,
 )
+from agent_runtime.engine.services.scorer import (
+    ScoringEngine,
+    calculate_scores,
+)
 from agent_runtime.engine.services.selector import (
     AdaptiveQuestionSelector,
     select_next_question,
@@ -30,19 +39,24 @@ from agent_runtime.engine.services.selector import (
 
 __all__ = [
     "AdaptiveQuestionSelector",
-    "select_next_question",
+    "AnswerContribution",
     "AnswerInput",
     "AssessmentProgressAdaptive",
+    "AssessmentScoringResult",
+    "BankExhaustedError",
+    "EngineError",
+    "EngineErrorCode",
+    "HouseScoreDetail",
     "HouseStatistics",
+    "InvalidPrefixError",
+    "MissingMappingError",
     "RationalScore",
+    "ScoringEngine",
     "SelectionPhase",
     "SelectionResult",
     "SelectionStatus",
     "StoppingReason",
-    "EngineError",
-    "EngineErrorCode",
-    "InvalidPrefixError",
-    "BankExhaustedError",
     "UnsupportedDefinitionError",
-    "MissingMappingError",
+    "calculate_scores",
+    "select_next_question",
 ]
