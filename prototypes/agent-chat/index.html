@@ -286,6 +286,9 @@ async function readConversation() {
 async function reloadHistory() {
   if (!state.conversation) return;
   const read = await readConversation();
+  if (read.status === 404) {  // gone (DB reset or another owner): forget it instead of showing an error
+    state.conversation = null; state.entries = []; store.set("conversation", null); render(); return;
+  }
   if (!read.ok) { state.entries.push(errorEntry(read)); render(); return; }
   const items = []; let cursor = null;
   do {
