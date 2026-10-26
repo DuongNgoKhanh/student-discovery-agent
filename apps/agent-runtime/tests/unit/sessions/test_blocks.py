@@ -8,6 +8,7 @@ from agent_runtime.sessions.schemas.activity import (
     SuggestionsBlock,
     TypedBlock,
 )
+from agent_runtime.sessions.services.blocks import markdown_to_text, project_blocks
 
 _BLOCK = TypeAdapter(TypedBlock)
 
@@ -58,3 +59,27 @@ def test_clients_may_advertise_new_blocks_but_defaults_do_not():
     assert {block.type for block in CapabilitySnapshot().supported_blocks}.isdisjoint({"markdown", "suggestions"})
     with pytest.raises(ValidationError):
         CapabilitySnapshot(supported_blocks=[{"type": "markdown", "schema_versions": [2]}])
+
+
+FULL = CapabilitySnapshot(supported_blocks=[
+    {"type": "text", "schema_versions": [1]}, {"type": "markdown", "schema_versions": [1]},
+    {"type": "suggestions", "schema_versions": [1]}])
+
+
+def test_supported_blocks_pass_through_unchanged():
+    blocks = (_BLOCK.validate_python(markdown("**A**")), _BLOCK.validate_python(suggestions("Hi")))
+    assert project_blocks(blocks, FULL) == blocks
+
+
+def test_legacy_clients_receive_text_with_stable_ids():
+    md = _BLOCK.validate_python(markdown("**Chào** em\n- một\n- [IHRD](https://ihrd.vn)"))
+    sg = _BLOCK.validate_python(suggestions("Làm bài khám phá", "Ngành CNTT học gì?"))
+    text_md, text_sg = project_blocks((md, sg), CapabilitySnapshot())
+    assert (text_md.type, text_md.block_id) == ("text", "b1")
+    assert text_md.content == "Chào em\n• một\n• IHRD (https://ihrd.vn)"
+    assert (text_sg.type, text_sg.block_id) == ("text", "b2")
+    assert text_sg.content == "Gợi ý: Làm bài khám phá · Ngành CNTT học gì?"
+
+
+def test_markdown_to_text_strips_emphasis():
+    assert markdown_to_text("*nghiêng* và __đậm__") == "nghiêng và đậm"
