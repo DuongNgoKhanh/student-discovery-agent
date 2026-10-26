@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 
 from agent_runtime.agent.catalog import ProposeAnswerArguments, SetNameArguments
-from agent_runtime.agent.loop import offered_tools, run_agent_turn
+from agent_runtime.agent.loop import TextDelta, ToolCallStarted, offered_tools, run_agent_turn
 from agent_runtime.agent.model import FakeModel, ModelReply, ModelUnavailable, ToolCall, ToolResultMessage, UserMessage
 from agent_runtime.agent.prompt import AgentContext
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
@@ -155,3 +155,34 @@ def test_offered_tools_carry_catalog_schemas_and_binding_details():
     assert start.parameters["required"] == ["experience_id"]
     suggest = tools["ui.suggest_replies"].definition.parameters
     assert suggest["properties"]["items"]["items"]["required"] == ["label", "message_text"]
+
+
+def test_events_stream_text_and_announce_tool_calls():
+    events = []
+    model = FakeModel(ModelReply(text="", tool_calls=(call("result.explain", {}),)), ModelReply(text="Xong rồi"))
+    run_agent_turn(SNAPSHOT, model, Executor(), IN_PROGRESS, [], "hi", new_id=ids(), on_event=events.append)
+    assert events[0] == ToolCallStarted("result.explain")
+    assert "".join(e.text for e in events if isinstance(e, TextDelta)) == "Xong rồi"
+
+
+def test_handoff_tools_are_not_announced():
+    events = []
+    model = FakeModel(ModelReply(text="", tool_calls=(call("assessment.current_question", {}),)))
+    run_agent_turn(SNAPSHOT, model, Executor(), IN_PROGRESS, [], "hi", new_id=ids(), on_event=events.append)
+    assert not any(isinstance(e, ToolCallStarted) for e in events)
+
+
+def test_should_stop_cancels_before_the_next_model_call():
+    model = FakeModel(ModelReply(text="", tool_calls=(call("result.explain", {}),)))
+    stops = iter([False, True])
+    result = run_agent_turn(SNAPSHOT, model, Executor(), IN_PROGRESS, [], "hi", new_id=ids(),
+                            should_stop=lambda: next(stops))
+    assert result.cancelled and result.blocks == () and len(model.calls) == 1
+
+
+def test_deadline_falls_back_to_templates():
+    now = iter([0.0, 100.0])
+    model = FakeModel(ModelReply(text="", tool_calls=(call("result.explain", {}),)))
+    result = run_agent_turn(SNAPSHOT, model, Executor(), IN_PROGRESS, [], "hi", new_id=ids(), deadline=10.0,
+                            clock=lambda: next(now))
+    assert result.fallback == "deadline" and len(model.calls) == 1
