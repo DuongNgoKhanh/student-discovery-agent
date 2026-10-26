@@ -1,9 +1,11 @@
-﻿"""Public result/card projections only; scoring evidence belongs to the engine."""
+﻿"""Public result/card projections plus the internal scoring evidence stored beside them."""
 from typing import Literal
 
 from pydantic import model_validator
 
-from .common import ContractModel, NonEmptyText, OpaqueId, PositiveRevision, UtcDatetime
+from agent_runtime.engine.schemas.scoring import AssessmentScoringResult
+
+from .common import ContentHash, ContractModel, NonEmptyText, OpaqueId, PositiveRevision, UtcDatetime
 
 
 class HouseIdentity(ContractModel):
@@ -70,6 +72,26 @@ class ResultView(CurrentResultRef):
     data: PersonalityCardData
 
 
+class ResultEvidence(ContractModel):
+    """Internal FR-ENG-04 evidence: which pin, rules and exact scores produced a result. Never public."""
+    schema_version: Literal[1] = 1
+    projection_version: Literal["summary.v1"] = "summary.v1"
+    experience_release_id: OpaqueId
+    definition_hash: ContentHash
+    definition_id: NonEmptyText
+    definition_version: NonEmptyText
+    engine_version: NonEmptyText
+    algorithm_profile: NonEmptyText | None
+    rule_refs: dict[str, NonEmptyText]
+    scoring: AssessmentScoringResult
+
+    @model_validator(mode="after")
+    def complete_scoring(self) -> "ResultEvidence":
+        if not self.scoring.is_complete:
+            raise ValueError("evidence requires a completed scoring result")
+        return self
+
+
 class ResultSnapshotInput(ContractModel):
     result_id: OpaqueId
     activity_id: OpaqueId
@@ -78,6 +100,7 @@ class ResultSnapshotInput(ContractModel):
     result_projection: ResultView
     card_projection: PersonalityCardData
     share_projection: ShareCard
+    evidence: ResultEvidence
 
     @model_validator(mode="after")
     def consistent_generation(self) -> "ResultSnapshotInput":
@@ -92,6 +115,8 @@ class ResultSnapshotInput(ContractModel):
             self.card_projection.display_name, self.card_projection.house, self.card_projection.is_demo
         ):
             raise ValueError("share and card projections disagree")
+        if self.evidence.experience_release_id != self.result_projection.experience_release_id:
+            raise ValueError("evidence references a different release")
         return self
 
 

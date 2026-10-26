@@ -424,8 +424,9 @@ components:
           - 12
         max_total:
           type: integer
-          enum:
-          - 30
+          minimum: 12
+          maximum: 30
+          description: Question cap from the pinned definition (coverage_rules.max_total).
         total:
           type: integer
           nullable: true

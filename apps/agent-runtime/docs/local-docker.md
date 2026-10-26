@@ -52,7 +52,7 @@ Container đọc `apps/agent-runtime/.env` nếu file tồn tại. Các biến l
 
 Internal request cần `X-Internal-Caller: sda-product-bff` và JWT `X-Caller-Context` được ký, có scope gắn đúng method, internal path và SHA-256 của raw body. Không có runtime config hợp lệ thì route nghiệp vụ trả 503; có verifier nhưng thiếu/sai credential thì trả lỗi auth.
 
-App mặc định vẫn giữ `ProductUnavailable`, engine registry rỗng và không cấu hình completion projector. Vì vậy build image thành công không tự tạo dữ liệu demo hoặc làm toàn bộ luồng tên/đáp án/card sẵn sàng. Các integration tests hiện có inject pilot registry, validated fixture releases và fixture projector để kiểm B-02 trên PostgreSQL 16 riêng; xem `apps/agent-runtime/docs/evaluations.md`. Môi trường demo có dữ liệu và công cụ ký request là một chế độ bổ sung riêng.
+App mặc định vẫn giữ `ProductUnavailable`, nhưng đã đăng ký engine `career-assessment-v1` và completion port thật (B-03). Build image thành công không tự tạo dữ liệu demo: luồng tên/đáp án/card chỉ chạy khi có release đã pin. Integration tests dùng validated fixture releases trên PostgreSQL 16 riêng; xem `apps/agent-runtime/docs/evaluations.md`. Môi trường demo có dữ liệu và công cụ ký request là một chế độ bổ sung riêng.
 
 ## Logs và dừng
 

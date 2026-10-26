@@ -22,6 +22,7 @@ from agent_runtime.infrastructure.product.releases import ProductUnavailable
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import RuntimePolicy
 from agent_runtime.sessions.services.activity import ActivityPersistence
+from agent_runtime.sessions.services.completion import EngineCompletionPort
 from agent_runtime.sessions.services.conversations import ConversationService
 from agent_runtime.sessions.services.history import HistoryCursorCodec, HistoryService
 from agent_runtime.sessions.services.lifecycle import LifecycleService
@@ -101,10 +102,9 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         trace_sink = DatabaseTraceSink(uow)
         product, validator = ProductUnavailable(), ExperienceValidator()
         conversations = ConversationService(uow, product, validator, policy=policy, trace_sink=trace_sink)
-        # Default engine registry is empty until DEC-04 and no completion projector exists before B-03/C-04;
-        # pinned activities therefore fail closed instead of running an unregistered profile.
         store = TurnStore(uow, ActivityPersistence(uow, product, validator), conversations)
-        turns = TurnService(store, TurnHandler(PinnedAssessmentEngine(), completion=None), trace_sink=trace_sink)
+        handler = TurnHandler(PinnedAssessmentEngine(), completion=EngineCompletionPort())
+        turns = TurnService(store, handler, trace_sink=trace_sink)
         return RuntimeContainer(policy=policy, verifier=verifier, conversations=conversations,
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),

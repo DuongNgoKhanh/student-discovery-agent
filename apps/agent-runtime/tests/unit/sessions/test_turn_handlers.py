@@ -14,6 +14,7 @@ from tests.helpers.turns import (
     make_turn_snapshot,
     turn_examples,
 )
+from tests.unit.conftest import with_engine
 
 
 @pytest.fixture
@@ -97,9 +98,11 @@ def test_rejects_wrong_state_question_option(handler, valid_v2_doc, case, status
     _error(lambda: handler.prepare(*request), status, code)
 
 
-def test_unregistered_engine_fails_closed(valid_v2_doc):
-    snapshot = make_turn_snapshot(valid_v2_doc)
+def test_default_registry_runs_production_engine_and_rejects_others(valid_v2_doc):
     request = parse_turn_input(turn_examples()["name_input"])
+    draft = TurnHandler(PinnedAssessmentEngine()).prepare(make_turn_snapshot(valid_v2_doc), request)
+    assert draft.next_state.status == "in_progress"
+    snapshot = make_turn_snapshot(with_engine(valid_v2_doc, "2.0.0"))
     _error(lambda: TurnHandler(PinnedAssessmentEngine()).prepare(snapshot, request), 422, "INCOMPATIBLE_SCHEMA")
 
 

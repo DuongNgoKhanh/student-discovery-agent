@@ -66,8 +66,12 @@ def trace_context(request_id: str, trace_id: str):
         _context.reset(token)
 
 
-def observed(action: Action):
-    """Never inspect caller, input, response payload, paths or exception text."""
+def observed(action: Action, describe=None):
+    """Never inspect caller, input, paths or exception text.
+
+    ``describe(response) -> dict`` may map a committed response to TraceEvent identifiers/revisions; it must
+    return metadata only. Its failures drop the metadata, never the event or the business outcome.
+    """
     def decorate(method):
         @wraps(method)
         def call(self, *args, **kwargs):
@@ -75,16 +79,17 @@ def observed(action: Action):
             if sink is None:
                 return method(self, *args, **kwargs)
             start = monotonic_ns()
-            outcome = "failure"
+            outcome, metadata = "failure", {}
             try:
                 response = method(self, *args, **kwargs)
                 outcome = "replayed" if response.replayed else "success"
+                metadata = _describe(describe, response)
                 return response
             finally:
                 # All service-owned UoWs have already exited, even on early return.
                 try:
                     request_id, trace_id = _context.get() or (str(uuid4()), str(uuid4()))
-                    sink.emit(TraceEvent(event_id=uuid4().hex, request_id=request_id, trace_id=trace_id,
+                    sink.emit(TraceEvent(**metadata, event_id=uuid4().hex, request_id=request_id, trace_id=trace_id,
                         action=action, step="complete", outcome=outcome,
                         error_code="SERVICE_FAILURE" if outcome == "failure" else None,
                         latency_ms=max(0, (monotonic_ns() - start) // 1_000_000), timestamp=datetime.now(UTC)))
@@ -92,3 +97,23 @@ def observed(action: Action):
                     logger.warning("TRACE_SINK_FAILURE")
         return call
     return decorate
+
+
+_DESCRIBED = frozenset({"conversation_id", "activity_id", "result_id", "before_revision", "after_revision",
+                        "experience_release_id", "algorithm_profile"})
+
+
+def _describe(describe, response) -> dict:
+    if describe is None:
+        return {}
+    try:
+        metadata = {key: value for key, value in describe(response).items() if value is not None}
+        if not metadata.keys() <= _DESCRIBED:
+            return {}
+        # Validate in isolation so a bad identifier drops the metadata, not the whole event.
+        TraceEvent.model_validate(metadata | {"event_id": uuid4().hex, "request_id": str(uuid4()),
+                                              "action": "conversation.turn", "step": "complete",
+                                              "outcome": "success", "timestamp": datetime.now(UTC)})
+        return metadata
+    except Exception:
+        return {}

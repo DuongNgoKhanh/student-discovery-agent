@@ -19,7 +19,7 @@ from agent_runtime.sessions.schemas.activity import (
 )
 from agent_runtime.sessions.schemas.conversation import ConversationRecord
 from agent_runtime.sessions.schemas.release import ReleaseDescriptor
-from agent_runtime.sessions.schemas.result import ResultSnapshotInput
+from agent_runtime.sessions.schemas.result import ResultEvidence, ResultSnapshotInput
 from agent_runtime.sessions.services.releases import validate_snapshot_integrity
 
 
@@ -114,6 +114,16 @@ def seed_activity(session, parent, definition, *, completed=False, pending=False
     return record
 
 
+def fixture_evidence(experience_release_id: str, **changes) -> ResultEvidence:
+    """Structurally valid synthetic evidence for persistence tests; not scoring evidence."""
+    data = dict(experience_release_id=experience_release_id, definition_hash="sha256:" + "0" * 64,
+                definition_id="definition_test", definition_version="1.0.0", engine_version="career-assessment-v1",
+                algorithm_profile="riasec.mean.bounds.v2", rule_refs={}, scoring={
+                    "schema_version": "2.0", "is_complete": True, "stopping_reason": "question_limit",
+                    "total_answers": 12})
+    return ResultEvidence.model_validate(data | changes)
+
+
 def seed_result(session, parent, activity, *, display_name="Fixture Student"):
     card = {"display_name": display_name, "house": {"house_id": "house_r", "name": "Synthetic House",
             "theme_ref": "theme-r", "mascot_ref": "mascot-r"}, "strengths": ["Fixture strength"],
@@ -128,6 +138,7 @@ def seed_result(session, parent, activity, *, display_name="Fixture Student"):
         share_projection={"result_id": "result-fixed", "result_revision": 2, "activity_id": activity.id,
             "display_name": card["display_name"], "house": card["house"],
             "branding": {"brand_ref": "brand", "label": "Fixture"}, "is_demo": True,
-            "demo_label": "Demo", "template_ref": "template"})
+            "demo_label": "Demo", "template_ref": "template"},
+        evidence=fixture_evidence(activity.experience_snapshot.release_id))
     ResultRepository().insert(session, result, parent.created_at)
     return result

@@ -10,6 +10,7 @@ from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.activity import CapabilitySnapshot
 from agent_runtime.sessions.services.releases import validate_release
 from tests.helpers.builders import adaptive_capabilities, agent_release, experience_release
+from tests.unit.conftest import with_engine
 
 
 def validate(descriptor, validator=None, capabilities=None, environment="demo"):
@@ -67,8 +68,10 @@ def test_legacy_none_profile_does_not_bypass_unregistered_semantic_validation(va
     assert_error("INCOMPATIBLE_RELEASE", lambda: validate(descriptor, validator))
 
 
-def test_default_registry_does_not_enable_pilot(valid_v2_doc):
-    assert_error("INCOMPATIBLE_RELEASE", lambda: validate(experience_release(valid_v2_doc),
+def test_default_registry_enables_only_the_production_engine(valid_v2_doc):
+    assert validate(experience_release(valid_v2_doc), capabilities=adaptive_capabilities())
+    pilot_only = with_engine(valid_v2_doc, "2.0.0")
+    assert_error("INCOMPATIBLE_RELEASE", lambda: validate(experience_release(pilot_only),
                                                         capabilities=adaptive_capabilities()))
 
 

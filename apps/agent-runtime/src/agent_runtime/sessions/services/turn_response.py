@@ -66,7 +66,7 @@ def _new_result(snapshot: TurnSnapshot, draft: TurnDraft, committed_at: datetime
         result_projection={"result_id": bundle.result_id, "result_revision": bundle.result_revision,
             "conversation_id": snapshot.parent.id, "activity_id": activity.id, "activity_type": draft.next_state.type,
             "experience_release_id": snapshot.release.release_id, "created_at": committed_at, "data": card},
-        card_projection=card, share_projection=bundle.share.model_dump(mode="json"))
+        card_projection=card, share_projection=bundle.share.model_dump(mode="json"), evidence=bundle.evidence)
 
 
 def finalize_turn(snapshot: TurnSnapshot, request: SupportedInteraction, draft: TurnDraft,

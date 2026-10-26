@@ -37,7 +37,7 @@ from agent_runtime.sessions.services.turn_handlers import PinnedAssessmentEngine
 from agent_runtime.sessions.services.turn_input import parse_turn_input
 from agent_runtime.sessions.services.turn_store import TurnStore
 from agent_runtime.sessions.services.turns import TurnService
-from tests.helpers.builders import adaptive_capabilities, agent_release, experience_release
+from tests.helpers.builders import adaptive_capabilities, agent_release, experience_release, fixture_evidence
 from tests.helpers.clock import FakeClock
 from tests.helpers.product import FakeProductReleaseSource
 from tests.helpers.signing import sign_request
@@ -122,7 +122,8 @@ class FakeCompletionPort:
                  "branding": {"brand_ref": "fixture-brand", "label": "Fixture"}, "is_demo": snapshot.release.is_demo,
                  "demo_label": "Demo fixture", "template_ref": "fixture-template"}
         bundle = {"result_id": result_id, "result_revision": snapshot.next_result_revision,
-                  "source_activity_revision": context.next_activity_revision, "card": card, "share": share}
+                  "source_activity_revision": context.next_activity_revision, "card": card, "share": share,
+                  "evidence": fixture_evidence(snapshot.release.release_id).model_dump(mode="json")}
         if self.mutate:
             self.mutate(bundle)
         return CompletionBundle.model_validate(bundle)

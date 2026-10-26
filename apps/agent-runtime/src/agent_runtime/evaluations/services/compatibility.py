@@ -4,7 +4,7 @@ Implements DEC-04 registration check and profile capability validation:
 - Checks engine version support for schema_version (1.0, 2.0).
 - Maps rule schemas strictly by (schema_version, slot) to prevent slot-swapping or version-mismatch.
 - Validates that engine_version in each rule document matches root engine_version.
-- Default registry is EMPTY per OpenAPI contract ("DEC-04 unresolved; no rule schema is registered").
+- Default registry registers the adaptive engine `career-assessment-v1` for Definition 2.0 (B-03).
 - Provides PILOT_ENGINE_REGISTRY for test environments and pilot execution.
 - Ensures unsupported profiles return status='unsupported' and never pass.
 """
@@ -59,8 +59,14 @@ ALLOWED_RULE_SCHEMAS_BY_SLOT: Dict[str, Dict[str, Set[str]]] = {
     },
 }
 
-# Production default: EMPTY per OpenAPI ("DEC-04 unresolved; no rule schema is registered by this contract")
-DEFAULT_ENGINE_REGISTRY: Dict[str, EngineProfile] = {}
+# Production default: the C-02/C-03 adaptive engine (ADR-002, Definition 2.0 only). Legacy 1.0
+# definitions cannot produce a winning House, so they are not runnable by default.
+DEFAULT_ENGINE_REGISTRY: Dict[str, EngineProfile] = {
+    "career-assessment-v1": EngineProfile(
+        engine_version="career-assessment-v1",
+        supported_schema_versions={"2.0"},
+    ),
+}
 
 # Pilot / Test registry: used in unit tests and controlled pilot environments
 PILOT_ENGINE_REGISTRY: Dict[str, EngineProfile] = {
@@ -83,7 +89,7 @@ class CompatibilityChecker:
     """Verifies compatibility between experience definition and engine runtime."""
 
     def __init__(self, registry: Optional[Dict[str, EngineProfile]] = None):
-        # Default to empty registry unless explicitly injected
+        # Default to the production registry unless explicitly injected
         self.registry = registry if registry is not None else DEFAULT_ENGINE_REGISTRY
 
     def check_engine_exists(self, engine_version: str) -> bool:

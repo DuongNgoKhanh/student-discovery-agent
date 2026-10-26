@@ -24,15 +24,17 @@ from agent_runtime.evaluations.services.validator import (
     calculate_content_hash,
     validate_experience_definition,
 )
+from tests.unit.conftest import with_engine
 
 
 class TestExperienceValidator:
     """Test suite for ExperienceValidator (M-EVL)."""
 
-    def test_default_empty_registry_returns_unsupported(self, valid_v2_doc):
-        """Review #1: Unregistered engine in default empty registry returns UNSUPPORTED."""
-        default_validator = ExperienceValidator()  # Uses DEFAULT_ENGINE_REGISTRY = {}
-        report = default_validator.validate(valid_v2_doc)
+    def test_default_registry_rejects_unregistered_engine(self, valid_v2_doc):
+        """Review #1: an engine outside DEFAULT_ENGINE_REGISTRY returns UNSUPPORTED."""
+        default_validator = ExperienceValidator()
+        assert default_validator.validate(valid_v2_doc).status == ValidationStatus.PASSED
+        report = default_validator.validate(with_engine(valid_v2_doc, "2.0.0"))
         assert report.status == ValidationStatus.UNSUPPORTED
         assert report.mandatory_passed is False
         assert any(i.code == "VAL_UNSUPPORTED_ENGINE_VERSION" and i.path == "engine_version" for i in report.issues)
@@ -45,6 +47,15 @@ class TestExperienceValidator:
         assert report.definition_schema_version == "1.0"
         assert report.content_hash.startswith("sha256:")
         assert len(report.content_hash) == 7 + 64
+
+    @pytest.mark.parametrize("max_total, passes", [(12, True), (20, True), (30, True), (11, False), (31, False)])
+    def test_question_cap_is_a_profile_choice_within_the_bank(self, validator, valid_v2_doc, max_total, passes):
+        doc = copy.deepcopy(valid_v2_doc)
+        doc["coverage_rules"]["payload"]["max_total"] = max_total
+        report = validator.validate(doc)
+        assert (report.status == ValidationStatus.PASSED) is passes
+        if not passes:
+            assert any(i.path == "coverage_rules.payload.max_total" for i in report.issues)
 
     def test_valid_definition_v2_passes(self, validator, valid_v2_doc):
         report = validator.validate(valid_v2_doc)

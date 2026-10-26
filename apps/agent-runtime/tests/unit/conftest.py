@@ -65,6 +65,14 @@ def document(version, questions, rules, question_ids, scores):
     }
 
 
+def with_engine(doc, engine_version):
+    """Same definition pinned to another engine version (root and every rule document)."""
+    doc = {**doc, "engine_version": engine_version}
+    for slot in ("selection_rules", "scoring_rules", "coverage_rules", "tie_policy"):
+        doc[slot] = {**doc[slot], "engine_version": engine_version}
+    return doc
+
+
 @pytest.fixture
 def valid_v2_doc():
     questions = [

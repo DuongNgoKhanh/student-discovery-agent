@@ -189,3 +189,54 @@ def test_history_interaction_does_not_store_arbitrary_provider_payload():
     activity, _ = models()
     with pytest.raises(ValidationError):
         activity.NewMessage(message_id='msg1', role='user', blocks=[], interaction={'raw_provider_response': 'secret'})
+
+
+@pytest.mark.parametrize('cap', [12, 20, 30])
+def test_adaptive_progress_accepts_a_definition_question_cap(cap):
+    activity, _ = models()
+    progress = activity.AssessmentProgressV2(completed=cap, max_total=cap, total=cap, phase='completed')
+    assert progress.max_total == cap and progress.min_total == 12
+
+
+@pytest.mark.parametrize('progress', [
+    {'completed': 0, 'max_total': 11, 'total': None, 'phase': 'baseline'},
+    {'completed': 0, 'max_total': 31, 'total': None, 'phase': 'baseline'},
+    {'completed': 13, 'max_total': 12, 'total': 13, 'phase': 'completed'},
+])
+def test_adaptive_progress_rejects_caps_outside_the_contract(progress):
+    activity, _ = models()
+    with pytest.raises(ValidationError):
+        activity.AssessmentProgressV2(**progress)
+
+
+def test_evidence_requires_completed_scoring_and_the_result_release():
+    models()
+    from agent_runtime.sessions.schemas.result import ResultEvidence
+    from tests.helpers.builders import fixture_evidence
+    evidence = fixture_evidence('experience-x')
+    with pytest.raises(ValidationError):
+        ResultEvidence.model_validate(evidence.model_dump(mode='json') | {
+            'scoring': {'schema_version': '2.0', 'is_complete': False, 'total_answers': 11}})
+    with pytest.raises(ValidationError):
+        ResultEvidence.model_validate(evidence.model_dump(mode='json') | {'answers': []})
+
+
+def test_result_snapshot_rejects_evidence_from_another_release():
+    models()
+    from agent_runtime.sessions.schemas.result import ResultSnapshotInput
+    from tests.helpers.builders import fixture_evidence
+    card = {'display_name': 'Ngân', 'house': {'house_id': 'h1', 'name': 'House', 'theme_ref': 't', 'mascot_ref': 'm'},
+            'strengths': ['S'], 'tendencies': ['T'], 'career_groups': ['G'], 'quote': 'Q', 'is_demo': True}
+    data = {'result_id': 'res1', 'activity_id': 'act1', 'result_revision': 1, 'source_activity_revision': 13,
+            'result_projection': {'result_id': 'res1', 'result_revision': 1, 'conversation_id': 'conv',
+                                  'activity_id': 'act1', 'activity_type': 'personality_assessment_adaptive',
+                                  'experience_release_id': 'experience-x', 'created_at': '2026-10-23T00:00:00Z',
+                                  'data': card},
+            'card_projection': card,
+            'share_projection': {'result_id': 'res1', 'result_revision': 1, 'activity_id': 'act1',
+                                 'display_name': 'Ngân', 'house': card['house'],
+                                 'branding': {'brand_ref': 'ihrd', 'label': 'IHRD'}, 'is_demo': True,
+                                 'demo_label': 'Demo', 'template_ref': 'share_summary_v1'}}
+    ResultSnapshotInput.model_validate(data | {'evidence': fixture_evidence('experience-x').model_dump(mode='json')})
+    with pytest.raises(ValidationError):
+        ResultSnapshotInput.model_validate(data | {'evidence': fixture_evidence('experience-y').model_dump(mode='json')})

@@ -1309,12 +1309,13 @@ class ExperienceValidator:
                             rule_id="COVERAGE_RULES_INTEGRITY",
                         )
                     )
-                if not is_strict_int(max_tot) or max_tot != 30:
+                # The cap is a profile choice between the baseline and the full bank (6 houses x 5 items).
+                if not is_strict_int(max_tot) or not 12 <= max_tot <= 30:
                     issues.append(
                         ValidationIssue(
                             path="coverage_rules.payload.max_total",
                             code="VAL_INVALID_COVERAGE_CONFIG",
-                            message=f"max_total must be 30, found '{max_tot}'.",
+                            message=f"max_total must be between 12 and 30, found '{max_tot}'.",
                             rule_id="COVERAGE_RULES_INTEGRITY",
                         )
                     )
