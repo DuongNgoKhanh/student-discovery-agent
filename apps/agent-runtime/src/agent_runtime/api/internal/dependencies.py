@@ -28,6 +28,7 @@ from agent_runtime.sessions.services.completion import EngineCompletionPort
 from agent_runtime.sessions.services.conversations import ConversationService
 from agent_runtime.sessions.services.history import HistoryCursorCodec, HistoryService
 from agent_runtime.sessions.services.lifecycle import LifecycleService
+from agent_runtime.sessions.services.responses import ResponseService
 from agent_runtime.sessions.services.results import ResultReadService
 from agent_runtime.sessions.services.turn_handlers import PinnedAssessmentEngine, TurnHandler
 from agent_runtime.sessions.services.turn_store import TurnStore
@@ -55,6 +56,7 @@ class RuntimeContainer:
     lifecycle: LifecycleService | None = None
     results: ResultReadService | None = None
     turns: TurnService | None = None
+    responses: ResponseService | None = None
     product_ready: bool = False
     engine: object | None = None
 
@@ -110,11 +112,13 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         handler = TurnHandler(PinnedAssessmentEngine(), completion=EngineCompletionPort())
         # Imported lazily: provider SDKs load only when a runtime with a database is built.
         from agent_runtime.infrastructure.llm.model_registry import build_model_port
-        turns = TurnService(store, handler, models=functools.cache(build_model_port), trace_sink=trace_sink)
+        responses = ResponseService(uow, trace_sink=trace_sink)
+        turns = TurnService(store, handler, models=functools.cache(build_model_port), responses=responses,
+                            trace_sink=trace_sink)
         return RuntimeContainer(policy=policy, verifier=verifier, conversations=conversations,
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
-            results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, engine=engine,
+            results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
             product_ready=isinstance(product, LocalReleaseSource))
     except Exception:
         if engine is not None:
@@ -196,7 +200,14 @@ class InternalBoundary:
                 raise
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)
 
+            replayed = False
+
             async def replay_body():
+                # Body once, then the real channel: streaming responses poll it for http.disconnect.
+                nonlocal replayed
+                if replayed:
+                    return await receive()
+                replayed = True
                 return {"type": "http.request", "body": bytes(raw), "more_body": False}
 
             async def no_store(message):
