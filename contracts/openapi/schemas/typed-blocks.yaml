@@ -111,14 +111,15 @@ components:
           type: string
           minLength: 1
           maxLength: 4000
+          pattern: \S
       required:
         - block_id
         - type
         - schema_version
         - content
       additionalProperties: true
-      description: Tập con an toàn (đậm, nghiêng, danh sách, link http/https, kể cả reference-style link definition), không
-        HTML. Server hạ về text v1 nếu client không khai báo markdown trong supported_blocks.
+      description: Server từ chối HTML, ảnh và link (inline hoặc reference-style) không phải http/https; client vẫn phải
+        sanitize khi render. Server hạ về text v1 nếu client không khai báo markdown trong supported_blocks.
     SuggestionItem:
       type: object
       properties:
@@ -126,10 +127,12 @@ components:
           type: string
           minLength: 1
           maxLength: 60
+          pattern: \S
         message_text:
           type: string
           minLength: 1
           maxLength: 500
+          pattern: \S
       required:
         - label
         - message_text
@@ -161,8 +164,8 @@ components:
         - schema_version
         - items
       additionalProperties: true
-      description: Quick replies. Chọn một item thì gửi message turn với content.text = message_text. Server hạ về text v1
-        nếu client không khai báo suggestions.
+      description: Quick replies, label không trùng. Chọn một item thì gửi message turn với content.text = message_text.
+        Server hạ về text v1 nếu client không khai báo suggestions.
     AssessmentQuestionBlock:
       type: object
       properties:
