@@ -71,11 +71,11 @@ def test_fault_after_each_write_rolls_back_whole_turn(turn_http, fragment):
     assert fault.hits == 1
     # Past begin the fault becomes a failed Response; no turn row survives.
     data = response.json()["data"]
-    assert (response.status_code, data["status"], data["error"]) == (200, "failed", {"code": "INTERNAL_ERROR"})
+    assert (response.status_code, data["status"], data["error"]) == (200, "failed", {"code": "SYS_INTERNAL_ERROR"})
     assert persisted(rig) == before
     with rig.uow.begin() as session:
         row = session.execute(select(responses).where(responses.c.id == data["id"])).mappings().one()
-    assert (row["status"], row["error_code"]) == ("failed", "INTERNAL_ERROR")
+    assert (row["status"], row["error_code"]) == ("failed", "SYS_INTERNAL_ERROR")
     replay = post_turn(client, rig, request)  # the failed Response owns its key
     assert replay.json()["meta"]["replayed"] is True and replay.json()["data"] == data
     retry = post_turn(client, rig, request_for(rig, "submit_answer", key="retry",

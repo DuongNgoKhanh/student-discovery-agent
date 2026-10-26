@@ -59,4 +59,4 @@ def test_stale_in_progress_rows_become_abandoned(turn_rig):
         repo.expire_stale(session, turn_rig.conversation_id, now=NOW + timedelta(days=365),
                           older_than=timedelta(seconds=60))
         row = repo.get(session, "r1", owner_id="owner")
-        assert (row.status, row.error.code) == ("failed", "TURN_ABANDONED")
+        assert (row.status, row.error.code) == ("failed", "SYS_TURN_ABANDONED")

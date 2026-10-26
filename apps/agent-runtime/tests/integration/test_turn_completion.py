@@ -169,7 +169,7 @@ def test_scorer_failure_leaves_no_partial_completion_and_retry_succeeds(completi
     with TestClient(create_app(turn_container(rig, handler=broken))) as failing:
         failed = post_turn(failing, rig, request)
     body = failed.json()["data"]  # a post-begin engine failure is a failed Response, not an error envelope
-    assert failed.status_code == 200 and body["status"] == "failed" and body["error"] == {"code": "ENGINE_FAILURE"}
+    assert failed.status_code == 200 and body["status"] == "failed" and body["error"] == {"code": "SYS_ENGINE_FAILURE"}
     after = turn_counts(rig)
     assert after == before | {"outcomes": before["outcomes"] + 1}
     assert current_state(rig)[2]["status"] == "in_progress"

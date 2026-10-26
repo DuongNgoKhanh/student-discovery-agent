@@ -113,3 +113,13 @@ def test_response_is_projected_while_stored_message_stays_canonical(monkeypatch,
     (sent,) = output.result.blocks
     assert (sent.type, sent.block_id, sent.content) == ("text", "md1", "Chào Ngân")
     assert output.patch.response_data["blocks"][0]["type"] == "text"
+
+
+@pytest.mark.parametrize("internal, public", [("ENGINE_FAILURE", "SYS_ENGINE_FAILURE"),
+                                              ("TURN_ABANDONED", "SYS_TURN_ABANDONED"),
+                                              ("SERVICE_UNAVAILABLE", "SYS_UNAVAILABLE"),
+                                              ("SYS_ENGINE_FAILURE", "SYS_ENGINE_FAILURE"),
+                                              ("SOMETHING_UNMAPPED", "SYS_INTERNAL_ERROR")])
+def test_failed_response_error_uses_the_public_code_vocabulary(internal, public):
+    from agent_runtime.sessions.schemas.responses import ResponseError
+    assert ResponseError(code=internal).code == public

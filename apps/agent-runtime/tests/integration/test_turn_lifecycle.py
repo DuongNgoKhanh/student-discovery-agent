@@ -67,7 +67,7 @@ def test_engine_failure_after_begin_is_failed_and_writes_nothing(chat, monkeypat
     monkeypatch.setattr(chat.service, "_run", lambda *a, **k: (_ for _ in ()).throw(
         RuntimeSessionError(422, "ENGINE_FAILURE")))
     done = chat.service.finish(chat.caller, begun)
-    assert (done.status, done.error.code) == ("failed", "ENGINE_FAILURE") and chat.revision() == 0
+    assert (done.status, done.error.code) == ("failed", "SYS_ENGINE_FAILURE") and chat.revision() == 0
 
 
 def test_response_activity_is_a_summary(chat):
@@ -81,7 +81,7 @@ def test_stale_same_key_retry_replays_the_abandoned_response(chat):
     chat.clock.set(NOW + PAST_STALE)
     again = chat.service.submit(chat.caller, chat.conversation_id, text("hi", 0, "k1"))
     assert again.replayed and again.data["id"] == begun.response.id
-    assert (again.data["status"], again.data["error"]) == ("failed", {"code": "TURN_ABANDONED"})
+    assert (again.data["status"], again.data["error"]) == ("failed", {"code": "SYS_TURN_ABANDONED"})
     assert chat.model.calls == [] and chat.revision() == 0
 
 

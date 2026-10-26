@@ -41,11 +41,15 @@ def test_two_keys_same_revisions_one_commit_one_conflict(turn_rig):
             first = pool.submit(post_turn, client, rig, left)
             assert entered.wait(timeout=10)
             overlapping = post_turn(client, rig, right)  # one active turn per conversation
+            same_key = post_turn(client, rig, left)  # replay of a key whose turn is still running
             release.set()
             committed = first.result(timeout=15)
         stale = post_turn(client, rig, right)  # same stale revisions once the first turn committed
     assert (overlapping.status_code, overlapping.json()["error"]["code"]) == (409, "CONFLICT_TURN_IN_PROGRESS")
     assert committed.status_code == 200 and committed.json()["data"]["status"] == "completed"
+    assert (same_key.status_code, same_key.json()["error"]["code"]) == (409, "CONFLICT_TURN_IN_PROGRESS")
+    assert same_key.json()["error"]["details"] == {"response_id": committed.json()["data"]["id"]}
+    assert overlapping.json()["error"]["details"] == {"response_id": committed.json()["data"]["id"]}
     assert stale.status_code == 409
     failed = stale.json()
     assert failed["error"]["code"] == "CONFLICT_REVISION"
@@ -73,7 +77,7 @@ def test_end_while_engine_runs_blocks_stale_candidate(turn_rig):
             release.set()
             response = future.result(timeout=15)
     data = response.json()["data"]  # past begin the guard failure is a failed Response, not an error envelope
-    assert (response.status_code, data["status"], data["error"]) == (200, "failed", {"code": "CONVERSATION_ENDED"})
+    assert (response.status_code, data["status"], data["error"]) == (200, "failed", {"code": "RES_CONVERSATION_ENDED"})
     after = turn_counts(rig)
     # end's acknowledgement stays in operation_outcomes; the failed Response is the only new responses row
     assert after["messages"] == before["messages"] and after["outcomes"] == before["outcomes"] + 1

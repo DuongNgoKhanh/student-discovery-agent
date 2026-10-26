@@ -95,7 +95,7 @@ def test_terminal_fixture_projector_commits_atomically(turn_http):
             missing = post_turn(bare, rig, request)
             outcome = missing.json()["data"]
             if outcome["status"] == "failed":  # post-begin failure: a failed Response, nothing else stored
-                assert missing.status_code == 200 and outcome["error"] == {"code": "SERVICE_UNAVAILABLE"}
+                assert missing.status_code == 200 and outcome["error"] == {"code": "SYS_UNAVAILABLE"}
                 assert turn_counts(rig) == before | {"outcomes": before["outcomes"] + 1}
                 replay = post_turn(bare, rig, request)  # the failed Response owns its key
                 assert replay.json()["data"] == outcome

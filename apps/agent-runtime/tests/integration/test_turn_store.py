@@ -139,5 +139,5 @@ def test_failed_name_consumes_key_and_a_new_key_succeeds(turn_rig):
     assert after == before | {"outcomes": before["outcomes"] + 2}  # two failed Responses, nothing else written
     replay = _submit(turn_rig, parse_turn_input(data | {"payload": {"display_name": "😀"}}))
     assert replay.replayed is True and replay.data["status"] == "failed"
-    assert replay.data["error"] == {"code": "INVALID_INPUT"}
+    assert replay.data["error"] == {"code": "VAL_INVALID_INPUT"}
     assert _submit(turn_rig, parse_turn_input(data | {"idempotency_key": "name-2"})).data["status"] == "completed"

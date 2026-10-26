@@ -3,6 +3,8 @@ from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 
+from agent_runtime.api.error_codes import canonical_error_code
+
 from .activity import (
     ActivityClarification,
     ActivityStatus,
@@ -82,6 +84,12 @@ class ResponseOutput(ContractModel):
 
 class ResponseError(ContractModel):
     code: NonEmptyText
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def canonical(cls, value):
+        """Same vocabulary as HTTP errors; an unmapped internal code is reported as SYS_INTERNAL_ERROR."""
+        return (canonical_error_code(value) or "SYS_INTERNAL_ERROR") if isinstance(value, str) else value
 
 
 class TurnResponse(ContractModel):

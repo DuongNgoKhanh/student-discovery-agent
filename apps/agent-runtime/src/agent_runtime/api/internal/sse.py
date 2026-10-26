@@ -51,7 +51,7 @@ def stream_turn(response: dict, work: Callable[[Callable], dict] | None, *,
             final = work(on_event)
             terminal = frame(TERMINAL_EVENTS[final["status"]], {"response": final})
         except Exception:  # finish() maps business errors itself; this keeps the stream's single terminal event
-            failed = {**response, "status": "failed", "error": {"code": "INTERNAL_ERROR"}}
+            failed = {**response, "status": "failed", "error": {"code": "SYS_INTERNAL_ERROR"}}
             terminal = frame(TERMINAL_EVENTS["failed"], {"response": failed})
         put_until_closed(terminal)
         put_until_closed(_DONE)

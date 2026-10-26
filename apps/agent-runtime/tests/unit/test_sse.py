@@ -39,7 +39,7 @@ def test_worker_exception_still_ends_with_one_failed_event():
     chunks = [c for c in stream_turn(pending, work, ping_seconds=0.01) if c.startswith("event:")]
     assert [c.split("\n")[0] for c in chunks] == ["event: response.created", "event: response.failed"]
     final = json.loads(chunks[-1].split("data: ")[1])["response"]
-    assert final["id"] == "r1" and final["status"] == "failed" and final["error"] == {"code": "INTERNAL_ERROR"}
+    assert final["id"] == "r1" and final["status"] == "failed" and final["error"] == {"code": "SYS_INTERNAL_ERROR"}
 
 
 def test_unknown_terminal_status_still_ends_with_failed_event():
