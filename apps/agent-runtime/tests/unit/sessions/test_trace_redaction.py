@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -84,16 +85,85 @@ def _observed_service(data, describe):
     return service.trace_sink.events[0]
 
 
-def test_turn_trace_carries_completion_identifiers_only():
+def test_replayed_turn_trace_carries_identifiers_only():
     from agent_runtime.sessions.services.turns import describe_turn
-    data = {"conversation_id": "conv1", "revision": 15, "activity": {
-        "id": "act1", "experience_release_id": "exp-rel", "algorithm_profile": "riasec.mean.bounds.v2",
+    data = {"conversation_id": "conv1", "status": "completed", "revision": 15, "activity": {
+        "id": "act1", "algorithm_profile": "riasec.mean.bounds.v2",
         "display_name": "Ngân", "result": {"result_id": "res1", "result_revision": 1}}}
     event = _observed_service(data, describe_turn)
     assert (event.conversation_id, event.activity_id, event.result_id, event.before_revision,
-            event.after_revision, event.experience_release_id, event.algorithm_profile) == (
-        "conv1", "act1", "res1", 14, 15, "exp-rel", "riasec.mean.bounds.v2")
+            event.after_revision, event.algorithm_profile) == (
+        "conv1", "act1", "res1", 15, 15, "riasec.mean.bounds.v2")
     assert "Ngân" not in str(event.model_dump())
+
+
+class _TurnStore:
+    """Begins one turn; ``fail`` records the terminal failed Response."""
+    uow = None
+    access = SimpleNamespace(clock=None)
+
+    def __init__(self, replay=None):
+        from agent_runtime.sessions.schemas.responses import TurnResponse
+        from agent_runtime.sessions.services.turns import Begun
+        self.replay = replay
+        pending = TurnResponse(id="resp1", conversation_id="conv1", status="in_progress", revision=4,
+                               input_message_id="msg1", created_at=datetime(2026, 10, 26, tzinfo=UTC))
+        self.begun = Begun(pending, request=None, fingerprint="f", owner_id="owner",
+                           snapshot=SimpleNamespace(release=SimpleNamespace(release_id="exp-rel")))
+
+    def begin(self, caller, conversation_id, request):
+        return self.replay or self.begun
+
+    def fail(self, begun, code):
+        from agent_runtime.sessions.schemas.responses import ResponseError
+        return begun.response.model_copy(update={"status": "failed", "error": ResponseError(code=code)})
+
+
+def _turn_service(store, run):
+    from agent_runtime.sessions.services.turns import TurnService
+    service = TurnService(store, handler=None, responses=object(), trace_sink=_Sink())
+    service._run = run
+    return service
+
+
+def _raise(*args):
+    from agent_runtime.sessions.errors import RuntimeSessionError
+    raise RuntimeSessionError(422, "ENGINE_FAILURE")
+
+
+def test_failed_response_is_traced_once_as_failure():
+    store = _TurnStore()
+    service = _turn_service(store, _raise)
+    data = service.submit(None, "conv1", None).data
+    (event,) = service.trace_sink.events
+    assert data["status"] == "failed" and (event.outcome, event.error_code) == ("failure", "SERVICE_FAILURE")
+    assert (event.conversation_id, event.before_revision, event.after_revision, event.experience_release_id) == (
+        "conv1", 4, 4, "exp-rel")
+
+
+def test_completed_response_is_traced_once_with_the_pinned_release():
+    store = _TurnStore()
+    service = _turn_service(store, lambda caller, begun, on_event: begun.response.model_copy(
+        update={"status": "completed", "revision": 5}))
+    service.finish(None, service.begin(None, "conv1", None))
+    (event,) = service.trace_sink.events
+    assert (event.outcome, event.error_code, event.before_revision, event.after_revision,
+            event.experience_release_id) == ("success", None, 4, 5, "exp-rel")
+
+
+def test_replay_and_rejection_are_traced_by_begin_only():
+    from agent_runtime.sessions.errors import RuntimeSessionError
+    from agent_runtime.sessions.schemas.common import ServiceResponse
+    replay = ServiceResponse(status=200, data={"conversation_id": "conv1", "status": "completed", "revision": 5,
+                                               "activity": None}, replayed=True)
+    service = _turn_service(_TurnStore(replay=replay), _raise)
+    assert service.submit(None, "conv1", None) is replay
+    rejecting = _TurnStore()
+    rejecting.begin = _raise
+    service.store = rejecting
+    with pytest.raises(RuntimeSessionError):
+        service.submit(None, "conv1", None)
+    assert [(e.outcome, e.after_revision) for e in service.trace_sink.events] == [("replayed", 5), ("failure", None)]
 
 
 @pytest.mark.parametrize("describe", [

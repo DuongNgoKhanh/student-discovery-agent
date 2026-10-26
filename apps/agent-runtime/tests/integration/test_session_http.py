@@ -173,9 +173,10 @@ def test_exact_expiry_with_fresh_token(http, rig):
 def test_no_public_product_routes_or_seed_routes(http, rig):
     paths = http[0].app.openapi()["paths"]
     assert set(paths) == {"/health", PREFIX + "/conversations", PREFIX + "/conversations/{conversation_id}",
-        PREFIX + "/conversations/{conversation_id}/messages", PREFIX + "/conversations/{conversation_id}/turns",
+        PREFIX + "/conversations/{conversation_id}/messages",
         PREFIX + "/conversations/{conversation_id}:end",
-        PREFIX + "/activities/{activity_id}/result", PREFIX + "/results/{result_id}/share-card"}
+        PREFIX + "/activities/{activity_id}/result", PREFIX + "/results/{result_id}/share-card",
+        PREFIX + "/responses/{response_id}", PREFIX + "/responses/{response_id}/cancel"}
     for path in ("/api/v1/conversations", "/auth", "/users", PREFIX + "/seed", PREFIX + "/turns"):
         assert http[0].get(path, headers=headers(rig, "GET", path)).status_code == 404
 

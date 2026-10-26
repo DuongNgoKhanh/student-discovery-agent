@@ -103,48 +103,101 @@ paths:
                 $ref: ../public/conversation-api.yaml#/components/schemas/MessagePageEnvelope
         default:
           $ref: '#/components/responses/RuntimeError'
-  /conversations/{conversation_id}/turns:
-    parameters:
-      - $ref: '#/components/parameters/ConversationId'
     post:
-      operationId: internalSubmitConversationTurn
-      summary: Commit one structured interaction turn
-      description: |
-        Subset of the public ConversationTurnInput union: message, interaction set_name and submit_answer with an
-        option payload execute. Well-formed text/confirm/edit interactions return 422 VAL_INVALID_ACTIVITY_TRANSITION
-        after owner/lifecycle, replay and revision guards; malformed input returns 422 VAL_INVALID_INPUT.
-        A message runs the pinned agent loop outside any transaction. Tools are checked against the state captured at
-        preflight; the handoffs start, set_name, current_question and propose_answer make the server render the next
-        block (name prompt, question, or proposal text plus the question). A proposal never records an answer: the
-        student confirms by choosing the option. Model failures fall back to the snapshot templates. The commit
-        rechecks the conversation revision and writes both messages, any activity change and the outcome atomically.
-        Replay identity is (owner, conversation.turn, conversation_id, idempotency_key); the fingerprint covers the
-        normalized request (NFC/whitespace-normalized name, key order ignored) including expected_revision and
-        expected_activity_revision only when sent. Replay returns the stored status/data with fresh meta.
-        The engine runs outside the write transaction; the commit rechecks lifecycle, replay and captured revisions,
-        then atomically writes activity/answers, conversation revision (+1 each), result when completed, user and
-        assistant messages and one outcome. On the engine's valid stop (B-03) the runtime scores the answers,
-        cross-checks the selector's House and stores the summary.v1 result/card/share with internal scoring
-        evidence in that same commit; scoring/projection failures return 422 and write nothing.
-        Revision conflicts return 409 CONFLICT_REVISION with resource_kind and readable snapshots.
+      operationId: internalSubmitConversationMessage
+      tags:
+        - Conversations
+      summary: Gửi một message (text hoặc structured interaction), trả JSON hoặc SSE
+      description: |-
+        Một content part: text → Agent loop; interaction → Activity Engine (option click không cần LLM).
+        Accept: application/json trả TurnResponseEnvelope khi turn kết thúc; Accept: text/event-stream trả ResponseStreamEvent
+        (response.created → delta/tool_call → completed|cancelled|failed, `: ping` mỗi 15 giây, header X-Accel-Buffering: no,
+        X-Request-ID, X-Trace-ID). Lỗi trước khi stream mở trả JSON envelope.
+        Idempotency theo (owner, conversation, idempotency_key) trong responses: cùng key + cùng payload replay Response đã lưu;
+        khác payload 409 CONFLICT_IDEMPOTENCY_KEY. Mỗi conversation chỉ một turn in_progress: turn thứ hai trả
+        409 CONFLICT_TURN_IN_PROGRESS với details.response_id. expected_revision cũ trả 409 CONFLICT_REVISION.
+        Turn bị bỏ dở quá hạn chuyển failed với SYS_TURN_ABANDONED. Model lỗi không làm failed: Response completed với
+        block template. Text dài hơn limits.max_input_chars trả 422 VAL_INVALID_INPUT.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ../schemas/chat.yaml#/components/schemas/ConversationTurnInput
+              $ref: ../schemas/chat.yaml#/components/schemas/MessageInput
       responses:
         '200':
-          description: Committed turn; replay preserves status/data, IDs and committed_at with fresh request meta.
+          description: Response đã kết thúc (JSON) hoặc luồng sự kiện (SSE).
           headers:
             Cache-Control:
               schema:
                 type: string
-                enum: [no-store]
+                enum:
+                  - no-store
           content:
             application/json:
               schema:
-                $ref: ../schemas/chat.yaml#/components/schemas/ConversationTurnEnvelope
+                $ref: ../schemas/chat.yaml#/components/schemas/TurnResponseEnvelope
+            text/event-stream:
+              schema:
+                $ref: ../schemas/chat.yaml#/components/schemas/ResponseStreamEvent
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /responses/{response_id}:
+    parameters:
+      - name: response_id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^resp_[a-f0-9]{32}$
+    get:
+      operationId: internalGetResponse
+      tags:
+        - Conversations
+      summary: Đọc Response theo id
+      description: Owner-scoped; Response không tồn tại hoặc của owner khác trả 404 RES_NOT_FOUND. Dùng để lấy lại kết quả sau khi mất kết nối stream.
+      responses:
+        '200':
+          description: Response hiện tại.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/chat.yaml#/components/schemas/TurnResponseEnvelope
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /responses/{response_id}/cancel:
+    parameters:
+      - name: response_id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^resp_[a-f0-9]{32}$
+    post:
+      operationId: internalCancelResponse
+      tags:
+        - Conversations
+      summary: Hủy Response đang in_progress
+      description: Chỉ Response in_progress hủy được (status cancelled, không commit gì); trạng thái khác trả 409 CONFLICT_RESPONSE_NOT_CANCELLABLE. Hủy lặp lại trên Response đã cancelled trả lại chính nó.
+      responses:
+        '200':
+          description: Response sau khi hủy.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/chat.yaml#/components/schemas/TurnResponseEnvelope
         default:
           $ref: '#/components/responses/RuntimeError'
   /conversations/{conversation_id}:end:

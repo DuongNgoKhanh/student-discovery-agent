@@ -87,16 +87,32 @@ def observed(action: Action, describe=None):
                 return response
             finally:
                 # All service-owned UoWs have already exited, even on early return.
-                try:
-                    request_id, trace_id = _context.get() or (str(uuid4()), str(uuid4()))
-                    sink.emit(TraceEvent(**metadata, event_id=uuid4().hex, request_id=request_id, trace_id=trace_id,
-                        action=action, step="complete", outcome=outcome,
-                        error_code="SERVICE_FAILURE" if outcome == "failure" else None,
-                        latency_ms=max(0, (monotonic_ns() - start) // 1_000_000), timestamp=datetime.now(UTC)))
-                except Exception:
-                    logger.warning("TRACE_SINK_FAILURE")
+                emit_trace(sink, action, outcome, metadata, start)
         return call
     return decorate
+
+
+def emit_trace(sink: TraceSink | None, action: Action, outcome: Literal["success", "replayed", "failure"],
+               metadata: dict, start_ns: int) -> None:
+    """One completed-step event after the service's UoWs exited; ``metadata`` comes from ``describe_metadata``.
+
+    Sink failures are logged by code only and never reach the business outcome.
+    """
+    if sink is None:
+        return
+    try:
+        request_id, trace_id = _context.get() or (str(uuid4()), str(uuid4()))
+        sink.emit(TraceEvent(**metadata, event_id=uuid4().hex, request_id=request_id, trace_id=trace_id,
+            action=action, step="complete", outcome=outcome,
+            error_code="SERVICE_FAILURE" if outcome == "failure" else None,
+            latency_ms=max(0, (monotonic_ns() - start_ns) // 1_000_000), timestamp=datetime.now(UTC)))
+    except Exception:
+        logger.warning("TRACE_SINK_FAILURE")
+
+
+def describe_metadata(describe, subject) -> dict:
+    """Validated identifiers/revisions only; any problem drops the metadata, never the event."""
+    return _describe(describe, subject)
 
 
 _DESCRIBED = frozenset({"conversation_id", "activity_id", "result_id", "before_revision", "after_revision",

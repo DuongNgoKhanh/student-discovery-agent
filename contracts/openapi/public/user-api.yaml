@@ -78,7 +78,7 @@ info:
     Public output có thể thêm optional fields; requests/share allowlist strict. Unknown block/type/version có controlled
     incompatibility.
 
-    Các block có stable block_id/type/schema_version; messages/turns có IDs ổn định để replay/history không duplicate.
+    Các block có stable block_id/type/schema_version; messages và responses có IDs ổn định để replay/history không duplicate.
 
     Timestamp UTC Z, safe integer revisions, SHA-256 canonical JSON RFC8785 cho snapshot hash.
 
@@ -111,7 +111,7 @@ tags:
   - name: Download
     description: Public object download
   - name: Conversations
-    description: Unified chat lifecycle/history/turns.
+    description: Unified chat lifecycle, history, messages (POST /conversations/{conversation_id}/messages) and responses (GET /responses/{response_id}, cancel).
   - name: Activity Results
     description: Latest valid activity result and revisioned share projection.
 paths:
@@ -143,10 +143,12 @@ paths:
     $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}
   /conversations/{conversation_id}/messages:
     $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}~1messages
-  /conversations/{conversation_id}/turns:
-    $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}~1turns
   /conversations/{conversation_id}:end:
     $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}:end
+  /responses/{response_id}:
+    $ref: conversation-api.yaml#/paths/~1responses~1{response_id}
+  /responses/{response_id}/cancel:
+    $ref: conversation-api.yaml#/paths/~1responses~1{response_id}~1cancel
   /activities/{activity_id}/result:
     $ref: activity-api.yaml#/paths/~1activities~1{activity_id}~1result
   /results/{result_id}/share-card:
@@ -369,16 +371,6 @@ components:
       $ref: conversation-api.yaml#/components/examples/CreateConversation
     ConversationCreated:
       $ref: conversation-api.yaml#/components/examples/ConversationCreated
-    NaturalMessage:
-      $ref: conversation-api.yaml#/components/examples/NaturalMessage
-    SubmitOption:
-      $ref: conversation-api.yaml#/components/examples/SubmitOption
-    SubmitText:
-      $ref: conversation-api.yaml#/components/examples/SubmitText
-    QuestionTurn:
-      $ref: conversation-api.yaml#/components/examples/QuestionTurn
-    CompletedTurn:
-      $ref: conversation-api.yaml#/components/examples/CompletedTurn
     ShareSummary:
       $ref: result-api.yaml#/components/examples/ShareSummary
     RevisionConflict:

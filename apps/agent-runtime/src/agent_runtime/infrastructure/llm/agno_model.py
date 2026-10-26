@@ -7,6 +7,7 @@ Providers subclass AgnoChatModel and supply the agno model and wire dialect.
 import json
 import time
 from collections.abc import Callable, Sequence
+from types import SimpleNamespace
 
 import httpx
 from agno.models.base import Model
@@ -21,6 +22,7 @@ from agent_runtime.agent.model import (
     ModelUnavailable,
     ModelUsage,
     SystemMessage,
+    TextDeltaSink,
     ToolCall,
     ToolDefinition,
     ToolResultMessage,
@@ -153,8 +155,32 @@ class AgnoChatModel:
                           usage=ModelUsage(input_tokens=getattr(usage, "input_tokens", 0) or 0,
                                            output_tokens=getattr(usage, "output_tokens", 0) or 0))
 
-    def invoke(self, messages: Sequence[ChatMessage], tools: Sequence[ToolDefinition],
-               settings: ModelSettings) -> ModelReply | ModelUnavailable:
+    def _merge_tool_calls(self, chunks: list) -> list[dict]:
+        """Gemini sends whole function calls per chunk."""
+        return [call for chunk in chunks for call in chunk]
+
+    def _stream(self, model, payload, definitions, on_text_delta):
+        """Drain invoke_stream into one agno-like response; None when the sink asked to stop."""
+        text, tool_chunks, usage = [], [], None
+        stream = model.invoke_stream(messages=payload, assistant_message=Message(role="assistant"), tools=definitions)
+        try:
+            for delta in stream:
+                if isinstance(delta.content, str) and delta.content:
+                    text.append(delta.content)
+                    if on_text_delta(delta.content) is False:
+                        return None
+                if delta.tool_calls:
+                    tool_chunks.append(delta.tool_calls)
+                usage = delta.response_usage or usage
+        finally:
+            close = getattr(stream, "close", None)
+            if close:
+                close()
+        return SimpleNamespace(content="".join(text), tool_calls=self._merge_tool_calls(tool_chunks),
+                               response_usage=usage)
+
+    def invoke(self, messages: Sequence[ChatMessage], tools: Sequence[ToolDefinition], settings: ModelSettings,
+               on_text_delta: TextDeltaSink | None = None) -> ModelReply | ModelUnavailable:
         # Conversion is our own code: a bug here must surface, not masquerade as a provider outage.
         payload = self.to_agno_messages(messages)
         definitions = [_definition(tool) for tool in tools] or None
@@ -165,12 +191,19 @@ class AgnoChatModel:
             logger.warning("model setup error ({}): {}", settings.model_id, _detail(error))
             return ModelUnavailable("provider_error", _detail(error))
         failure = ModelUnavailable("provider_error")
-        for attempt in range(settings.max_retries + 1):
+        # A retry after a partial stream would duplicate text on the client: streaming gets one attempt.
+        attempts = 1 if on_text_delta else settings.max_retries + 1
+        for attempt in range(attempts):
             if attempt:
                 self._sleep(RETRY_BACKOFF_MS * 2 ** (attempt - 1) / 1000)
             try:
-                response = model.invoke(messages=payload, assistant_message=Message(role="assistant"),
-                                        tools=definitions)
+                if on_text_delta is None:
+                    response = model.invoke(messages=payload, assistant_message=Message(role="assistant"),
+                                            tools=definitions)
+                else:
+                    response = self._stream(model, payload, definitions, on_text_delta)
+                    if response is None:
+                        return ModelUnavailable("cancelled")
             except Exception as error:  # provider boundary: every failure becomes ModelUnavailable
                 if _is_timeout(error):
                     logger.warning("model timeout ({}): {}", settings.model_id, _detail(error))

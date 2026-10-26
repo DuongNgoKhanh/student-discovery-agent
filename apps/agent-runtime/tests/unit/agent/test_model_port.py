@@ -56,3 +56,9 @@ def test_registry_builds_each_provider_only_when_its_key_is_configured():
 
 def test_every_supported_provider_has_an_adapter():
     assert set(MODEL_PROVIDERS) == SUPPORTED_MODEL_PROVIDERS
+
+
+def test_fake_model_streams_text_in_two_halves():
+    seen = []
+    FakeModel(ModelReply(text="Chào bạn")).invoke([UserMessage("hi")], [], SETTINGS, on_text_delta=seen.append)
+    assert "".join(seen) == "Chào bạn" and len(seen) == 2

@@ -20,7 +20,7 @@ from agent_runtime.infrastructure.db.tables import (
     activities,
     conversations,
     messages,
-    operation_outcomes,
+    responses,
     result_snapshots,
 )
 from agent_runtime.sessions.schemas.activity import ActivityRecord, ActivityStateV1, ActivityStateV2
@@ -32,9 +32,10 @@ from agent_runtime.sessions.services.activity import ActivityPersistence
 from agent_runtime.sessions.services.conversations import ConversationService
 from agent_runtime.sessions.services.history import HistoryCursorCodec, HistoryService
 from agent_runtime.sessions.services.releases import validate_snapshot_integrity
+from agent_runtime.sessions.services.responses import ResponseService
 from agent_runtime.sessions.services.results import ResultReadService
 from agent_runtime.sessions.services.turn_handlers import PinnedAssessmentEngine, TurnHandler
-from agent_runtime.sessions.services.turn_input import parse_turn_input
+from agent_runtime.sessions.services.turn_input import parse_turn_input, to_message_body
 from agent_runtime.sessions.services.turn_store import TurnStore
 from agent_runtime.sessions.services.turns import TurnService
 from tests.helpers.builders import adaptive_capabilities, agent_release, experience_release, fixture_evidence
@@ -179,7 +180,7 @@ def turn_counts(rig: TurnRig) -> dict[str, int]:
         activity = session.execute(select(activities.c.revision, activities.c.state).where(
             activities.c.id == rig.activity_id)).one()
         return {"answers": len(activity.state["answers"]), "messages": count(messages),
-                "outcomes": count(operation_outcomes), "results": count(result_snapshots),
+                "outcomes": count(responses), "results": count(result_snapshots),
                 "conversation_revision": session.scalar(select(conversations.c.revision).where(
                     conversations.c.id == rig.conversation_id)),
                 "activity_revision": activity.revision}
@@ -215,22 +216,30 @@ INTERNAL_PREFIX = "/api/v1/internal"
 
 def turn_container(rig: TurnRig, *, handler: TurnHandler | None = None, trace_sink=None) -> RuntimeContainer:
     """Explicitly injected container: pilot registry + fixture completion port, never the production builder."""
-    rig.service = TurnService(rig.store, handler or rig.handler, trace_sink=trace_sink)
+    responses = ResponseService(rig.uow, clock=rig.clock, trace_sink=trace_sink)
+    rig.service = TurnService(rig.store, handler or rig.handler, responses=responses, trace_sink=trace_sink)
     return RuntimeContainer(verifier=CallerVerifier({"http": HTTP_KEY}, rig.clock),
         policy=RuntimePolicy(environment="demo"), conversations=rig.conversations,
         history=HistoryService(rig.uow, HistoryCursorCodec(b"cursor-test-key" * 3), clock=rig.clock),
-        results=ResultReadService(rig.uow, clock=rig.clock), turns=rig.service)
+        results=ResultReadService(rig.uow, clock=rig.clock), turns=rig.service, responses=responses)
 
 
-def signed_call(client, rig: TurnRig, method: str, path: str, raw: bytes = b"", *, owner: str = "owner"):
+def signed_call(client, rig: TurnRig, method: str, path: str, raw: bytes = b"", *, owner: str = "owner",
+                extra_headers: dict | None = None):
     target = INTERNAL_PREFIX + path
     token = sign_request(RawRequestContext(method, target, raw), owner_id=owner, now=rig.clock.now(),
                          key=HTTP_KEY, kid="http")
     return client.request(method, target, content=raw,
-                          headers={"X-Caller-Context": token, "X-Internal-Caller": "sda-product-bff"})
+                          headers={"X-Caller-Context": token, "X-Internal-Caller": "sda-product-bff", **(extra_headers or {})})
 
 
 def post_turn(client, rig: TurnRig, request, *, owner: str = "owner", path: str | None = None):
-    body = request if isinstance(request, (bytes, dict)) else request.model_dump(mode="json", exclude_unset=True)
+    """POST /messages. Models are converted to the wire body; raw bytes/dict bodies stay untouched."""
+    body = request if isinstance(request, (bytes, dict)) else to_message_body(request)
     raw = body if isinstance(body, bytes) else json.dumps(body).encode()
-    return signed_call(client, rig, "POST", path or f"/conversations/{rig.conversation_id}/turns", raw, owner=owner)
+    return signed_call(client, rig, "POST", path or f"/conversations/{rig.conversation_id}/messages", raw, owner=owner)
+
+
+def post_message(client, rig: TurnRig, request, *, owner: str = "owner"):
+    raw = json.dumps(to_message_body(request)).encode()
+    return signed_call(client, rig, "POST", f"/conversations/{rig.conversation_id}/messages", raw, owner=owner)

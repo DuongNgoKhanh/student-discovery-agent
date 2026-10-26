@@ -159,3 +159,17 @@ describe('agent snapshot contract parity', () => {
       blocked_topics: Array.from({ length: 21 }, (_, i) => `topic ${i}`) } })).toBe(false);
   });
 });
+
+describe('message and response contract', () => {
+  it('accepts one content part and the compact response', () => {
+    const input = validator('schemas/chat.yaml', 'MessageInput');
+    expect(input({ expected_revision: 0, idempotency_key: 'k', content: [{ type: 'text', text: 'chào' }] })).toBe(true);
+    expect(input({ expected_revision: 0, idempotency_key: 'k', content: [] })).toBe(false);
+    expect(input({ expected_revision: 0, idempotency_key: 'k',
+      content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }] })).toBe(false);
+    const response = validator('schemas/chat.yaml', 'TurnResponse');
+    expect(response({ id: `resp_${'a'.repeat(32)}`, conversation_id: 'c1', status: 'in_progress', revision: 0,
+      input_message_id: 'm1', created_at: '2026-10-26T00:00:00Z', output: null, activity: null, error: null,
+      completed_at: null })).toBe(true);
+  });
+});

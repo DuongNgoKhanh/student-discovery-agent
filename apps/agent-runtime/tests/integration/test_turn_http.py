@@ -5,8 +5,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from agent_runtime.main import create_app
-from agent_runtime.sessions.schemas.turn import ConversationTurnResult
+from agent_runtime.sessions.schemas.responses import TurnResponse
 from agent_runtime.sessions.services.turn_handlers import TurnHandler
+from agent_runtime.sessions.services.turn_input import to_message_body
 from tests.helpers.turns import (
     biased_option,
     current_state,
@@ -42,30 +43,34 @@ def test_http_name_then_option_uses_real_selector(turn_http):
     first = response.json()["data"]["activity"]["current_question"]["question_id"]
 
     answer = post_turn(client, rig, request_for(rig, "submit_answer", key="answer"))
-    data = ConversationTurnResult.model_validate(answer.json()["data"]).model_dump(mode="json")
+    data = TurnResponse.model_validate(answer.json()["data"]).model_dump(mode="json")
     assert answer.status_code == 200 and (data["revision"], data["activity"]["revision"]) == (3, 2)
     assert data["activity"]["progress"]["completed"] == 1
-    assert data["activity"]["answers"][0]["question_id"] == first
-    assert data["blocks"][0]["question_id"] == data["activity"]["current_question"]["question_id"] != first
+    assert "answers" not in data["activity"] and data["status"] == "completed"
+    assert current_state(rig)[2]["answers"][0]["question_id"] == first
+    assert data["output"]["blocks"][0]["question_id"] == data["activity"]["current_question"]["question_id"] != first
     assert rig.product.resolve_calls == calls
 
     read = signed_call(client, rig, "GET", f"/conversations/{rig.conversation_id}").json()["data"]
-    assert read["revision"] == 3 and read["active_activity"] == data["activity"]
+    assert read["revision"] == 3
+    assert {key: read["active_activity"][key] for key in data["activity"]} == data["activity"]
     history = signed_call(client, rig, "GET", f"/conversations/{rig.conversation_id}/messages").json()["data"]
-    turn = [item for item in history["items"] if item["turn_id"] == data["turn_id"]]
+    ids = {data["input_message_id"], data["output"]["message_id"]}
+    turn = [item for item in history["items"] if item["message_id"] in ids]
     assert [item["role"] for item in turn] == ["user", "assistant"]
-    assert turn[1]["message_id"] == data["message_id"] and turn[1]["blocks"] == data["blocks"]
+    assert turn[0]["message_id"] == data["input_message_id"]
+    assert turn[1]["message_id"] == data["output"]["message_id"] and turn[1]["blocks"] == data["output"]["blocks"]
     assert turn[0]["text"] is None and turn[0]["interaction"]["option_id"] == f"{first}_opt_3"
 
 
 def test_http_boundary_rejections_preserve_envelope(turn_http):
     client, rig = turn_http
     before = turn_counts(rig)
-    body = request_for(rig, "set_name", key="name").model_dump(mode="json", exclude_unset=True)
-    path = f"/conversations/{rig.conversation_id}/turns"
+    body = to_message_body(request_for(rig, "set_name", key="name"))
+    path = f"/conversations/{rig.conversation_id}/messages"
     assert_error(post_turn(client, rig, body | {"owner_id": "spoof"}), 422, "VAL_INVALID_INPUT")
     assert_error(post_turn(client, rig, body | {"schema_version": 2}), 422, "VAL_INVALID_INPUT")
-    assert_error(post_turn(client, rig, b'{"type":"interaction","type":"message"}'), 400, "VAL_INVALID_REQUEST")
+    assert_error(post_turn(client, rig, b'{"content":[],"content":[]}'), 400, "VAL_INVALID_REQUEST")
     assert_error(post_turn(client, rig, body, path=path + "?debug=1"), 422, "VAL_INVALID_INPUT")
     assert_error(post_turn(client, rig, body, owner="stranger"), 404, "RES_NOT_FOUND")
     assert_error(post_turn(client, rig, json.dumps(body | {"pad": "x" * 70000}).encode()), 413, "VAL_PAYLOAD_TOO_LARGE")
@@ -88,20 +93,24 @@ def test_terminal_fixture_projector_commits_atomically(turn_http):
             request = request_for(rig, "submit_answer", key=f"answer-{step}", option_id=option)
             before = turn_counts(rig)
             missing = post_turn(bare, rig, request)
-            if missing.status_code == 503:
-                assert_error(missing, 503, "SYS_UNAVAILABLE")
-                assert missing.json()["error"]["retryable"] is True
-                assert turn_counts(rig) == before
+            outcome = missing.json()["data"]
+            if outcome["status"] == "failed":  # post-begin failure: a failed Response, nothing else stored
+                assert missing.status_code == 200 and outcome["error"] == {"code": "SYS_UNAVAILABLE"}
+                assert turn_counts(rig) == before | {"outcomes": before["outcomes"] + 1}
+                replay = post_turn(bare, rig, request)  # the failed Response owns its key
+                assert replay.json()["data"] == outcome
                 break
             assert missing.status_code == 200 and step < 30
-    done = post_turn(client, rig, request)  # retry the same key/payload once the projector is configured
+    request = request_for(rig, "submit_answer", key="answer-final", option_id=option)
+    before = turn_counts(rig)
+    done = post_turn(client, rig, request)  # a fresh key once the projector is configured
     assert done.status_code == 200 and rig.completion.calls == 1
     data = done.json()["data"]
     after = turn_counts(rig)
-    assert data["activity"]["status"] == "completed" and data["blocks"][0]["type"] == "personality_card"
+    assert data["activity"]["status"] == "completed" and data["output"]["blocks"][0]["type"] == "personality_card"
     assert data["activity"]["progress"]["total"] == data["activity"]["progress"]["completed"] == after["answers"]
     assert after["results"] == 1 and after["answers"] == before["answers"] + 1
     result = signed_call(client, rig, "GET", f"/activities/{rig.activity_id}/result").json()["data"]
-    assert result["result_id"] == data["blocks"][0]["result_id"] and result["data"]["display_name"] == "Ngân"
+    assert result["result_id"] == data["output"]["blocks"][0]["result_id"] and result["data"]["display_name"] == "Ngân"
     late = request_for(rig, "set_name", key="late")
     assert_error(post_turn(client, rig, late), 422, "VAL_INVALID_ACTIVITY_TRANSITION")

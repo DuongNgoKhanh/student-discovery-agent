@@ -21,3 +21,16 @@ class OpenAIChatModel(AgnoChatModel):
         return self._factory(id=settings.model_id, api_key=self._api_key, temperature=settings.temperature,
                              max_completion_tokens=settings.max_output_tokens, timeout=settings.timeout_ms / 1000,
                              max_retries=0, http_client=self._http_client)
+
+    def _merge_tool_calls(self, chunks: list) -> list[dict]:
+        """OpenAI streams fragments keyed by index; agno's own merger aliases one dict across indices."""
+        merged: dict[int, dict] = {}
+        for chunk in chunks:
+            for part in chunk:
+                entry = merged.setdefault(part.index or 0, {"id": None, "type": "function",
+                                                           "function": {"name": "", "arguments": ""}})
+                entry["id"] = part.id or entry["id"]
+                if part.function is not None:
+                    entry["function"]["name"] += part.function.name or ""
+                    entry["function"]["arguments"] += part.function.arguments or ""
+        return [merged[index] for index in sorted(merged)]

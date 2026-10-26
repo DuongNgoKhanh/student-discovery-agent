@@ -22,11 +22,12 @@ def test_health_without_product_dependencies(monkeypatch):
     allowed = {
         "/api/v1/internal/conversations": {"post"},
         "/api/v1/internal/conversations/{conversation_id}": {"get"},
-        "/api/v1/internal/conversations/{conversation_id}/messages": {"get"},
-        "/api/v1/internal/conversations/{conversation_id}/turns": {"post"},
+        "/api/v1/internal/conversations/{conversation_id}/messages": {"get", "post"},
         "/api/v1/internal/conversations/{conversation_id}:end": {"post"},
         "/api/v1/internal/activities/{activity_id}/result": {"get"},
         "/api/v1/internal/results/{result_id}/share-card": {"get"},
+        "/api/v1/internal/responses/{response_id}": {"get"},
+        "/api/v1/internal/responses/{response_id}/cancel": {"post"},
     }
     schema = main.create_app().openapi()["paths"]
     assert {path: set(operations) for path, operations in schema.items() if path != "/health"} == allowed

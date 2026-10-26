@@ -58,3 +58,17 @@ def test_parallel_tool_results_are_separate_tool_messages_and_signatures_stay_wi
     assert all("thought_signature" not in call for call in assistant["tool_calls"])
     assert [(m["tool_call_id"], m["content"]) for m in formatted[3:]] == [
         ("c1", json.dumps({"r": 1})), ("c2", json.dumps({"r": 2}))]
+
+
+def test_openai_stream_merges_tool_call_fragments_by_index():
+    from types import SimpleNamespace
+
+    def fragment(index, call_id=None, name=None, arguments=None):
+        return SimpleNamespace(index=index, id=call_id, type="function" if call_id else None,
+                               function=SimpleNamespace(name=name, arguments=arguments))
+
+    merged = OpenAIChatModel("key")._merge_tool_calls([
+        [fragment(0, "c1", "a__one", '{"x"')], [fragment(1, "c2", "a__two", "{}")], [fragment(0, arguments=": 1}")]])
+    assert merged == [
+        {"id": "c1", "type": "function", "function": {"name": "a__one", "arguments": '{"x": 1}'}},
+        {"id": "c2", "type": "function", "function": {"name": "a__two", "arguments": "{}"}}]

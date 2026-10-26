@@ -3,11 +3,13 @@
 Adapters normalise every provider failure into ModelUnavailable; callers never see provider exceptions.
 Bugs in the caller's own messages (e.g. a non-JSON tool result) still raise.
 """
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
-UnavailableReason = Literal["not_configured", "rate_limited", "timeout", "provider_error", "invalid_response"]
+UnavailableReason = Literal["not_configured", "rate_limited", "timeout", "provider_error", "invalid_response",
+                            "cancelled"]
+TextDeltaSink = Callable[[str], bool | None]  # return False to stop the stream
 
 
 RETRY_BACKOFF_MS = 500  # before retry n (1-based): RETRY_BACKOFF_MS * 2 ** (n - 1)
@@ -90,11 +92,11 @@ class ModelUnavailable:
 
 class ModelPort(Protocol):
     def invoke(self, messages: Sequence[ChatMessage], tools: Sequence[ToolDefinition],
-               settings: ModelSettings) -> ModelReply | ModelUnavailable: ...
+               settings: ModelSettings, on_text_delta: TextDeltaSink | None = None) -> ModelReply | ModelUnavailable: ...
 
 
 class UnconfiguredModel:
     """Provider referenced by a snapshot but not configured here; callers are expected to fall back to templates."""
 
-    def invoke(self, messages, tools, settings) -> ModelUnavailable:
+    def invoke(self, messages, tools, settings, on_text_delta=None) -> ModelUnavailable:
         return ModelUnavailable("not_configured")

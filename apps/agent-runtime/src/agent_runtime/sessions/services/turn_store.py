@@ -1,17 +1,21 @@
-"""Turn preflight and guarded commit. Engine/projector work happens between the two transactions."""
+"""Turn begin (in-progress Response) and guarded commit. Engine/agent work happens between the two transactions."""
+from dataclasses import dataclass, field
+from datetime import timedelta
+from time import monotonic_ns
 from uuid import uuid4
 
 from agent_runtime.infrastructure.auth.caller import VerifiedCaller
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.repositories.activities import ActivityRepository
 from agent_runtime.sessions.repositories.messages import MessageRepository
-from agent_runtime.sessions.repositories.outcomes import OutcomeRepository
+from agent_runtime.sessions.repositories.responses import ResponseRepository
 from agent_runtime.sessions.repositories.results import ResultRepository
 from agent_runtime.sessions.repositories.snapshots import SnapshotRepository
 from agent_runtime.sessions.schemas.activity import CommitPatch, NewMessage
 from agent_runtime.sessions.schemas.common import ServiceResponse
 from agent_runtime.sessions.schemas.conversation import ConversationRecord
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+from agent_runtime.sessions.schemas.responses import ActivitySummary, ResponseError, ResponseOutput, TurnResponse
 from agent_runtime.sessions.schemas.turn import (
     ConversationTurnInput,
     ConversationTurnResult,
@@ -28,8 +32,33 @@ from agent_runtime.sessions.services.results import is_current_result
 from agent_runtime.sessions.services.turn_input import is_supported, turn_fingerprint
 from agent_runtime.sessions.services.turn_response import finalize_turn
 
-TURN_OPERATION = "conversation.turn"
 OPEN_STATES = {"collecting_name", "in_progress"}
+
+
+class TurnCancelled(Exception):
+    """The response left in_progress (cancelled or abandoned) before this commit."""
+
+
+@dataclass(frozen=True)
+class Begun:
+    response: TurnResponse
+    request: ConversationTurnInput
+    snapshot: TurnSnapshot | MessageSnapshot
+    fingerprint: str
+    owner_id: str
+    started_ns: int = field(default_factory=monotonic_ns)  # trace latency spans begin..terminal state
+
+
+def _stale_after(agent: AgentSnapshotV1) -> timedelta:
+    """An in-progress row older than the agent's turn budget + 30s belongs to a dead process."""
+    return timedelta(milliseconds=agent.limits.turn_timeout_ms) + timedelta(seconds=30)
+
+
+def completed(pending: TurnResponse, result: ConversationTurnResult, now) -> TurnResponse:
+    return pending.model_copy(update={
+        "status": "completed", "revision": result.revision, "completed_at": now,
+        "output": ResponseOutput(message_id=result.message_id, blocks=result.blocks),
+        "activity": ActivitySummary.from_view(result.activity) if result.activity else None})
 
 
 class TurnStore:
@@ -42,15 +71,23 @@ class TurnStore:
         self.activities = ActivityRepository()
         self.snapshots = SnapshotRepository()
         self.results = ResultRepository()
-        self.outcomes = OutcomeRepository()
+        self.responses = ResponseRepository()
         self.messages = MessageRepository()
 
     def _lock_and_replay(self, session, caller, conversation_id, request, fingerprint):
         # Owner + lifecycle win before any stored content can be replayed.
         parent = self.access.lock_open(session, caller, conversation_id, write=True)
-        replay = self.outcomes.find(session, caller.owner_id, TURN_OPERATION, parent.id, request.idempotency_key,
-                                    request_hash=fingerprint)
-        return parent, replay
+        # A dead process's row becomes failed TURN_ABANDONED first, so a same-key retry replays that outcome.
+        if self.responses.active(session, parent.id) is not None:
+            agent = AgentSnapshotV1.model_validate(self.snapshots.get(session, parent.agent_snapshot).content)
+            self.responses.expire_stale(session, parent.id, now=self.access.clock.now(session),
+                                        older_than=_stale_after(agent))
+        replay = self.responses.find_by_key(session, caller.owner_id, parent.id, request.idempotency_key,
+                                            request_hash=fingerprint)
+        if replay is not None and replay.status == "in_progress":
+            raise RuntimeSessionError(409, "TURN_IN_PROGRESS", {"response_id": replay.id})
+        return parent, (ServiceResponse(status=200, data=replay.model_dump(mode="json"), replayed=True)
+                        if replay is not None else None)
 
     def _conflict(self, session, parent: ConversationRecord, resource_kind: str, expected: int, actual: int):
         """Readable snapshots built under the same parent lock that observed the conflict."""
@@ -60,8 +97,9 @@ class TurnStore:
             "actual_revision": actual, "conversation": view.model_dump(mode="json"),
             "activity": view.active_activity.model_dump(mode="json") if view.active_activity else None})
 
-    def preflight(self, caller: VerifiedCaller, conversation_id: str,
-                  request: ConversationTurnInput) -> ServiceResponse | TurnSnapshot | MessageSnapshot:
+    def begin(self, caller: VerifiedCaller, conversation_id: str,
+              request: ConversationTurnInput) -> ServiceResponse | Begun:
+        """Tx#1: guards, then an in_progress Response row; a finished same-key Response replays."""
         fingerprint = turn_fingerprint(request)
         with self.uow.begin() as session:
             parent, replay = self._lock_and_replay(session, caller, conversation_id, request, fingerprint)
@@ -69,31 +107,54 @@ class TurnStore:
                 return replay
             if parent.revision != request.expected_revision:
                 raise self._conflict(session, parent, "conversation", request.expected_revision, parent.revision)
-            if isinstance(request, MessageTurnInput):
-                return self._message_snapshot(session, parent)
-            activity = self.activities.get(session, parent.id, request.activity_id)
-            if activity is None:
-                raise RuntimeSessionError(404, "RESOURCE_NOT_FOUND")
-            if parent.active_activity_id != activity.id:
-                raise RuntimeSessionError(422, "INVALID_ACTIVITY_TRANSITION")
-            # Absent optional guard stays absent: the server still captures and rechecks the revision at commit.
-            if request.expected_activity_revision is not None and request.expected_activity_revision != activity.revision:
-                raise self._conflict(session, parent, "activity", request.expected_activity_revision,
-                                     activity.revision)
-            if activity.state.status not in OPEN_STATES or not is_supported(request):
-                raise RuntimeSessionError(422, "INVALID_ACTIVITY_TRANSITION")
-            release = self.snapshots.get(session, activity.experience_snapshot)
-            return TurnSnapshot(parent=parent, activity=activity, release=release,
-                                next_result_revision=self.results.latest_revision(session, activity.id) + 1)
+            snapshot = self._snapshot(session, parent, request)
+            now = self.access.clock.now(session)
+            running = self.responses.active(session, parent.id)
+            if running is not None:
+                raise RuntimeSessionError(409, "TURN_IN_PROGRESS", {"response_id": running.id})
+            if (isinstance(request, MessageTurnInput)
+                    and len(request.content.text) > snapshot.agent.limits.max_input_chars):
+                raise RuntimeSessionError(422, "INVALID_INPUT")
+            view = self.conversations.view_in_session(session, parent)
+            response = TurnResponse(id=f"resp_{uuid4().hex}", conversation_id=parent.id, status="in_progress",
+                revision=parent.revision, input_message_id=uuid4().hex, created_at=now,
+                activity=ActivitySummary.from_view(view.active_activity) if view.active_activity else None)
+            self.responses.insert(session, response=response, owner_id=caller.owner_id,
+                idempotency_key=request.idempotency_key, request_hash=fingerprint, base_revision=parent.revision)
+            return Begun(response, request, snapshot, fingerprint, caller.owner_id)
 
-    def commit(self, caller: VerifiedCaller, conversation_id: str, request: SupportedInteraction,
-               snapshot: TurnSnapshot, draft: TurnDraft) -> ServiceResponse:
-        fingerprint = turn_fingerprint(request)
+    def _snapshot(self, session, parent: ConversationRecord,
+                  request: ConversationTurnInput) -> TurnSnapshot | MessageSnapshot:
+        if isinstance(request, MessageTurnInput):
+            return self._message_snapshot(session, parent)
+        activity = self.activities.get(session, parent.id, request.activity_id)
+        if activity is None:
+            raise RuntimeSessionError(404, "RESOURCE_NOT_FOUND")
+        if parent.active_activity_id != activity.id:
+            raise RuntimeSessionError(422, "INVALID_ACTIVITY_TRANSITION")
+        # Absent optional guard stays absent: the server still captures and rechecks the revision at commit.
+        if request.expected_activity_revision is not None and request.expected_activity_revision != activity.revision:
+            raise self._conflict(session, parent, "activity", request.expected_activity_revision,
+                                 activity.revision)
+        if activity.state.status not in OPEN_STATES or not is_supported(request):
+            raise RuntimeSessionError(422, "INVALID_ACTIVITY_TRANSITION")
+        release = self.snapshots.get(session, activity.experience_snapshot)
+        return TurnSnapshot(parent=parent, activity=activity, release=release,
+                            next_result_revision=self.results.latest_revision(session, activity.id) + 1)
+
+    def _lock_running(self, session, caller: VerifiedCaller, begun: Begun) -> ConversationRecord:
+        """Tx#2 guard: under the parent lock (shared with cancel) the Response must still be in_progress."""
+        parent = self.access.lock_open(session, caller, begun.response.conversation_id, write=True)
+        row = self.responses.get(session, begun.response.id, owner_id=caller.owner_id, for_update=True)
+        if row is None or row.status != "in_progress":
+            raise TurnCancelled()
+        return parent
+
+    def commit(self, caller: VerifiedCaller, begun: Begun, draft: TurnDraft) -> TurnResponse:
+        request: SupportedInteraction = begun.request
+        snapshot: TurnSnapshot = begun.snapshot
         with self.uow.begin() as session:
-            parent, replay = self._lock_and_replay(session, caller, conversation_id, request, fingerprint)
-            if replay is not None:
-                # Another request with this key won while the engine ran; never re-run or re-validate.
-                return replay
+            parent = self._lock_running(session, caller, begun)
             if parent.revision != snapshot.parent.revision:
                 raise self._conflict(session, parent, "conversation", snapshot.parent.revision, parent.revision)
             current = self.activities.get(session, parent.id, snapshot.activity.id)
@@ -106,7 +167,8 @@ class TurnStore:
                     or self.results.latest_revision(session, current.id) + 1 != snapshot.next_result_revision):
                 raise RuntimeSessionError(500, "INTERNAL_ERROR")
             now = self.access.check_open(session, caller, parent)
-            finalized = finalize_turn(snapshot, request, draft, now)
+            finalized = finalize_turn(snapshot, request, draft, now,
+                                      input_message_id=begun.response.input_message_id)
             try:
                 self.persistence.apply_patch(session, caller, parent, current, finalized.patch, now=now)
             except RuntimeSessionError as error:
@@ -114,11 +176,9 @@ class TurnStore:
                 if error.status == 400:
                     raise RuntimeSessionError(500, "INTERNAL_ERROR") from None
                 raise
-            response = ServiceResponse(status=200, data=finalized.patch.response_data)
-            self.outcomes.save(session, owner_id=caller.owner_id, operation=TURN_OPERATION,
-                resource_scope=parent.id, key=request.idempotency_key, request_hash=fingerprint,
-                conversation_id=parent.id, response=response)
-        return response
+            done = completed(begun.response, finalized.result, now)
+            self.responses.finish(session, done)
+        return done
 
     def _message_snapshot(self, session, parent: ConversationRecord) -> MessageSnapshot:
         agent = AgentSnapshotV1.model_validate(self.snapshots.get(session, parent.agent_snapshot).content)
@@ -141,19 +201,17 @@ class TurnStore:
                                history=history, next_result_revision=next_result_revision,
                                today=self.access.clock.now(session).date())
 
-    def commit_message(self, caller: VerifiedCaller, conversation_id: str, request: MessageTurnInput,
-                       snapshot: MessageSnapshot, plan: MessagePlan) -> ServiceResponse:
-        """One atomic write: user + assistant messages, the planned activity change and the replay outcome."""
-        fingerprint = turn_fingerprint(request)
+    def commit_message(self, caller: VerifiedCaller, begun: Begun, plan: MessagePlan) -> TurnResponse:
+        """One atomic write: user + assistant messages, the planned activity change and the completed Response."""
+        request: MessageTurnInput = begun.request
+        snapshot: MessageSnapshot = begun.snapshot
         with self.uow.begin() as session:
-            parent, replay = self._lock_and_replay(session, caller, conversation_id, request, fingerprint)
-            if replay is not None:
-                return replay
+            parent = self._lock_running(session, caller, begun)
             # Every activity change bumps the parent revision, so it alone guards the captured state.
             if parent.revision != snapshot.parent.revision:
                 raise self._conflict(session, parent, "conversation", snapshot.parent.revision, parent.revision)
             turn_id = uuid4().hex
-            user = NewMessage(message_id=uuid4().hex, turn_id=turn_id, role="user", blocks=(),
+            user = NewMessage(message_id=begun.response.input_message_id, turn_id=turn_id, role="user", blocks=(),
                               text=request.content.text)
             assistant = NewMessage(message_id=uuid4().hex, turn_id=turn_id, role="assistant", blocks=plan.blocks)
             if plan.draft is not None:
@@ -182,8 +240,16 @@ class TurnStore:
             result = ConversationTurnResult(conversation_id=parent.id, revision=parent.revision, turn_id=turn_id,
                 message_id=assistant.message_id, committed_at=now, activity=view.active_activity,
                 blocks=project_blocks(assistant.blocks, parent.capability_snapshot))
-            response = ServiceResponse(status=200, data=result.model_dump(mode="json"))
-            self.outcomes.save(session, owner_id=caller.owner_id, operation=TURN_OPERATION,
-                resource_scope=parent.id, key=request.idempotency_key, request_hash=fingerprint,
-                conversation_id=parent.id, response=response)
-        return response
+            done = completed(begun.response, result, now)
+            self.responses.finish(session, done)
+        return done
+
+    def fail(self, begun: Begun, code: str) -> TurnResponse:
+        """Small transaction after a post-begin error; nothing else was written."""
+        with self.uow.begin() as session:
+            now = self.access.clock.now(session)
+            failed = begun.response.model_copy(update={"status": "failed", "error": ResponseError(code=code),
+                                                       "completed_at": now})
+            if not self.responses.finish(session, failed):  # cancelled or abandoned first: report that state
+                return self.responses.get(session, begun.response.id, owner_id=begun.owner_id) or failed
+        return failed

@@ -3,6 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from agent_runtime.main import create_app
+from agent_runtime.sessions.services.turn_input import to_message_body
 from tests.helpers.turns import post_turn, request_for, turn_container, turn_counts
 
 pytestmark = pytest.mark.integration
@@ -24,8 +25,10 @@ def test_turn_trace_metadata_and_sink_failure(turn_rig, caplog):
     with TestClient(create_app(turn_container(turn_rig, trace_sink=sink))) as client:
         assert post_turn(client, turn_rig, request).status_code == 200
         assert post_turn(client, turn_rig, request).json()["meta"]["replayed"] is True
-        bad = request_for(turn_rig, "set_name", key="bad").model_dump(mode="json", exclude_unset=True)
-        assert post_turn(client, turn_rig, bad | {"payload": {"display_name": "Secret 007"}}).status_code == 422
+        bad = to_message_body(request_for(turn_rig, "set_name", key="bad"))
+        bad["content"][0]["payload"] = {"display_name": "Secret 007"}
+        rejected = post_turn(client, turn_rig, bad)  # engine-level rejection past begin: a failed Response
+        assert rejected.status_code == 200 and rejected.json()["data"]["status"] == "failed"
     assert [(e.action, e.outcome) for e in sink.events] == [
         ("conversation.turn", "success"), ("conversation.turn", "replayed"), ("conversation.turn", "failure")]
     dumped = str([event.model_dump() for event in sink.events]) + caplog.text

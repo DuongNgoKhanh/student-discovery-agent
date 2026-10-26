@@ -20,8 +20,9 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers"
-markers = ["integration: requires a disposable PostgreSQL 16 database"]
+addopts = "--strict-markers -m 'not live_llm'"
+markers = ["integration: requires a disposable PostgreSQL 16 database",
+           "live_llm: calls a real model provider; run with -m live_llm and GOOGLE_API_KEY set"]
 
 [tool.ruff]
 target-version = "py311"

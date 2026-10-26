@@ -150,7 +150,7 @@ jobs:
       - name: Check dependencies
         run: python -m pip check
       - name: Unit tests
-        run: python -m pytest -m "not integration"
+        run: python -m pytest -m "not integration and not live_llm"
 
   agent-runtime-integration:
     name: Agent Runtime Integration (PostgreSQL 16)

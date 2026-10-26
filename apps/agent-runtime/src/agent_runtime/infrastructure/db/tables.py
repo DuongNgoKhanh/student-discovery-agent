@@ -69,6 +69,16 @@ operation_outcomes = Table(
     timestamp("committed_at", default=True),
 )
 
+responses = Table(
+    "responses", metadata,
+    Column("id", Text, primary_key=True), Column("conversation_id", Text, nullable=False),
+    Column("owner_id", Text, nullable=False), Column("idempotency_key", Text, nullable=False),
+    Column("request_hash", Text, nullable=False), Column("status", Text, nullable=False),
+    Column("base_revision", BigInteger, nullable=False), Column("input_message_id", Text, nullable=False),
+    Column("error_code", Text), Column("response_data", JSONB, nullable=False),
+    timestamp("created_at", default=True), timestamp("completed_at", nullable=True),
+)
+
 runtime_traces = Table(
     "runtime_traces", metadata,
     Column("event_id", Text, primary_key=True), Column("request_id", Text, nullable=False), Column("trace_id", Text),
