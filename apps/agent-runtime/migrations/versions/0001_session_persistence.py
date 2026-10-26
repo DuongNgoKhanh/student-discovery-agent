@@ -103,7 +103,7 @@ def upgrade() -> None:
             input_message_id text NOT NULL, error_code text,
             response_data jsonb NOT NULL CHECK (jsonb_typeof(response_data) = 'object'),
             created_at timestamptz NOT NULL DEFAULT clock_timestamp(), completed_at timestamptz,
-            UNIQUE (owner_id, conversation_id, idempotency_key),
+            UNIQUE (conversation_id, owner_id, idempotency_key),
             FOREIGN KEY (conversation_id) REFERENCES execution.conversations(id)
                 ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
         );
