@@ -147,3 +147,15 @@ describe('B-02 structured turn contract', () => {
       details: { ...details, resource_kind: 'result' } } })).toBe(false);
   });
 });
+
+describe('agent snapshot contract parity', () => {
+  const demo = JSON.parse(readFileSync(join(root, 'fixtures/agent-snapshot-demo.json'), 'utf8').replace(/^﻿/, ''));
+  it('accepts the demo fixture and rejects values past the runtime ceilings', () => {
+    const validate = validator('schemas/session-lifecycle.yaml', 'AgentSnapshotV1');
+    expect(validate(demo), JSON.stringify(validate.errors)).toBe(true);
+    expect(validate({ ...demo, limits: { ...demo.limits, max_tool_steps: 9 } })).toBe(false);
+    expect(validate({ ...demo, persona: { ...demo.persona, name: '   ' } })).toBe(false);
+    expect(validate({ ...demo, guardrails: { ...demo.guardrails,
+      blocked_topics: Array.from({ length: 21 }, (_, i) => `topic ${i}`) } })).toBe(false);
+  });
+});

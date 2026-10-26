@@ -19,6 +19,7 @@ from agent_runtime.sessions.schemas.release import ValidatedRelease
 from agent_runtime.sessions.schemas.result import CurrentResultRef, ResultSnapshotInput
 from agent_runtime.sessions.schemas.turn import ConversationTurnResult, SetNameInteraction, SupportedInteraction
 from agent_runtime.sessions.schemas.turn_execution import TurnDraft, TurnSnapshot
+from agent_runtime.sessions.services.blocks import project_blocks
 
 _VIEW = TypeAdapter(ActivityView)
 _BLOCK = TypeAdapter(TypedBlock)
@@ -94,7 +95,7 @@ def finalize_turn(snapshot: TurnSnapshot, request: SupportedInteraction, draft: 
         result = ConversationTurnResult(conversation_id=parent.id, revision=next_parent.revision, turn_id=turn_id,
             message_id=assistant.message_id, committed_at=committed_at,
             activity=project_activity(next_parent, next_activity, snapshot.release, current),
-            blocks=assistant.blocks)
+            blocks=project_blocks(assistant.blocks, parent.capability_snapshot))
         patch = CommitPatch(request_input=request.model_dump(mode="json", exclude_unset=True),
             activity_id=activity.id, expected_activity_revision=activity.revision, next_state=draft.next_state,
             append_messages=(user, assistant), new_result=new_result, invalidate_result_ids=(),

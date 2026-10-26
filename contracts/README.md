@@ -163,7 +163,7 @@ vẫn giữ sáu answers; v2 dùng progress min/max/phase và total null trướ
 
 DTO Python dùng synchronous ports trong `agent_runtime.sessions`; policy demo không ngầm dùng production.
 Product release descriptor phân biệt delivery schema và definition schema, snapshot agent `agent.snapshot.v1`
-chỉ chứa greeting_text và allowed_activity_profiles. Registry, canonical hash và metadata immutable được
+chứa greeting (`greeting_text`, `greeting_suggestions`), `allowed_activity_profiles` và cấu hình agent (persona, model, limits, tools, guardrails, templates); ví dụ đầy đủ ở `fixtures/agent-snapshot-demo.json`. Registry, canonical hash và metadata immutable được
 release importer kiểm trước pinning. Result/ShareCard tiếp tục dùng projection và allowlist hiện có.
 
 Contract review: A/D cần đối chiếu manifest/view/block v2, Agent snapshot và minimal end acknowledgement;

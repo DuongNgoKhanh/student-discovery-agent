@@ -1,7 +1,8 @@
 ﻿"""Versioned state, capability manifests, typed blocks and atomic harness patch."""
+import re
 from typing import Annotated, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from .common import (
@@ -34,7 +35,9 @@ class BlockCapabilityInput(ContractModel):
 
 
 class SupportedBlock(BlockCapabilityInput):
-    type: Literal["text", "assessment_question", "assessment_clarification", "personality_card"]
+    type: Literal[
+        "text", "markdown", "suggestions", "assessment_question", "assessment_clarification", "personality_card"
+    ]
 
     @model_validator(mode="after")
     def supported_version_set(self) -> "SupportedBlock":
@@ -295,6 +298,50 @@ class TextBlock(ContractModel):
     content: NonEmptyText
 
 
+_HTML_TAG = re.compile(r"<[A-Za-z/!]")
+_LINK_TARGET = re.compile(r"\]\(\s*([^)\s]*)")
+# Line prefixes cover indents, block quotes and list markers (- * + 1. 1)); labels may hold escaped brackets.
+_REFERENCE_TARGET = re.compile(r"^[ \t>*+\-\d.)]*\[(?:\\.|[^\]\\])+\]:\s*(\S+)", re.MULTILINE)
+
+
+class MarkdownBlock(ContractModel):
+    """Rejects HTML, images and non-http(s) link targets (inline and reference); clients still sanitize."""
+    block_id: OpaqueId
+    type: Literal["markdown"]
+    schema_version: Literal[1]
+    content: Annotated[str, StringConstraints(min_length=1, max_length=4000, pattern=r"\S")]
+
+    @model_validator(mode="after")
+    def safe_subset(self) -> "MarkdownBlock":
+        if _HTML_TAG.search(self.content):
+            raise ValueError("markdown must not contain HTML")
+        if "![" in self.content:
+            raise ValueError("markdown must not contain images")
+        targets = [*_LINK_TARGET.findall(self.content), *_REFERENCE_TARGET.findall(self.content)]
+        if any(not target.startswith(("http://", "https://")) for target in targets):
+            raise ValueError("markdown links must use http or https")
+        return self
+
+
+class SuggestionItem(ContractModel):
+    label: Annotated[str, StringConstraints(min_length=1, max_length=60, pattern=r"\S")]
+    message_text: Annotated[str, StringConstraints(min_length=1, max_length=500, pattern=r"\S")]
+
+
+class SuggestionsBlock(ContractModel):
+    """Quick replies; choosing one sends a message turn with message_text."""
+    block_id: OpaqueId
+    type: Literal["suggestions"]
+    schema_version: Literal[1]
+    items: Annotated[tuple[SuggestionItem, ...], Field(min_length=1, max_length=4)]
+
+    @model_validator(mode="after")
+    def unique_labels(self) -> "SuggestionsBlock":
+        if len({item.label for item in self.items}) != len(self.items):
+            raise ValueError("suggestion labels must be unique")
+        return self
+
+
 class _QuestionBlock(ContractModel):
     block_id: OpaqueId
     type: Literal["assessment_question"]
@@ -346,7 +393,10 @@ QuestionBlock = Annotated[
 ClarificationBlock = Annotated[
     AssessmentClarificationBlockV1 | AssessmentClarificationBlockV2, Field(discriminator="schema_version")
 ]
-TypedBlock = Annotated[TextBlock | QuestionBlock | ClarificationBlock | PersonalityCardBlock, Field(discriminator="type")]
+TypedBlock = Annotated[
+    TextBlock | MarkdownBlock | SuggestionsBlock | QuestionBlock | ClarificationBlock | PersonalityCardBlock,
+    Field(discriminator="type"),
+]
 
 
 class StoredInteraction(ContractModel):

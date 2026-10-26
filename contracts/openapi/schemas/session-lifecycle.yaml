@@ -51,7 +51,69 @@
             type: string
             minLength: 1
             pattern: \S
-      description: agent.snapshot.v1 content; canonical content hash uses JCS SHA-256. Greeting projects to a server-ID text v1 block without an LLM call. Adapter proposal; does not imply Product registry support.
+        greeting_suggestions:
+          type: array
+          maxItems: 4
+          items: {type: string, minLength: 1, maxLength: 60, pattern: '\S'}
+          description: Nhãn không được trùng.
+        persona:
+          type: object
+          additionalProperties: false
+          properties:
+            name: {type: string, minLength: 1, maxLength: 60, pattern: '\S'}
+            language: {type: string, enum: [vi]}
+            system_prompt: {type: string, minLength: 1, maxLength: 8000, pattern: '\S',
+                            description: "Chỉ dùng biến {{display_name}}, {{current_date}}; placeholder sai cú pháp (vd. {{display-name}}) bị từ chối."}
+        model:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [ref]
+          properties:
+            ref: {type: string, pattern: '^[a-z0-9-]+/[A-Za-z0-9._-]+$', description: "provider/model; provider hiện hỗ trợ: gemini, openai"}
+            temperature: {type: number, minimum: 0, maximum: 2}
+            max_output_tokens: {type: integer, minimum: 1, maximum: 4096}
+            timeout_ms: {type: integer, minimum: 1000, maximum: 30000}
+            max_retries: {type: integer, minimum: 0, maximum: 3}
+          description: null = tắt LLM; runtime dự kiến chạy template dự phòng. timeout_ms × (max_retries + 1) phải ≤ limits.turn_timeout_ms. Không chứa secret.
+        limits:
+          type: object
+          additionalProperties: false
+          properties:
+            max_tool_steps: {type: integer, minimum: 1, maximum: 8}
+            turn_timeout_ms: {type: integer, minimum: 1000, maximum: 30000}
+            history_messages: {type: integer, minimum: 0, maximum: 50}
+            max_input_chars: {type: integer, minimum: 1, maximum: 4000}
+        tools:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, version]
+            properties:
+              name: {type: string, minLength: 1, pattern: '\S'}
+              version: {type: integer, minimum: 1}
+              params: {type: object}
+              description: {type: string, minLength: 1, maxLength: 1000, pattern: '\S'}
+          description: Mỗi name@version phải có trong tool catalog của runtime; params kiểm theo schema của tool. Mỗi name chỉ bind một lần; experiences của assessment.start phải dùng algorithm_profile nằm trong allowed_activity_profiles.
+        guardrails:
+          type: object
+          additionalProperties: false
+          properties:
+            blocked_topics: {type: array, maxItems: 20, items: {type: string, minLength: 1, maxLength: 60, pattern: '\S'}}
+            refusal_text: {type: string, minLength: 1, maxLength: 500, pattern: '\S',
+                           description: "Cùng luật biến như persona.system_prompt."}
+        templates:
+          type: object
+          additionalProperties: false
+          description: "Mọi text template dùng cùng luật biến như persona.system_prompt; fallback_suggestions không được trùng."
+          properties:
+            unknown_message: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+            fallback_suggestions: {type: array, maxItems: 4, items: {type: string, minLength: 1, maxLength: 60, pattern: '\S'}}
+            next_question: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+            completed: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+            clarification: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+      description: "agent.snapshot.v1 content: cấu hình agent (persona, model, limits, tools, guardrails, templates); mọi field ngoài greeting_text/allowed_activity_profiles có mặc định an toàn (model null, tools rỗng). Greeting projects to a server-ID text v1 block without an LLM call. Adapter proposal; does not imply Product registry support."
     ReleaseKey:
       type: object
       additionalProperties: false
