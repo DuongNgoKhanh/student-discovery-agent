@@ -92,6 +92,77 @@ components:
         - schema_version
         - content
       additionalProperties: true
+    MarkdownBlock:
+      type: object
+      properties:
+        block_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        type:
+          type: string
+          enum:
+            - markdown
+        schema_version:
+          type: integer
+          enum:
+            - 1
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required:
+        - block_id
+        - type
+        - schema_version
+        - content
+      additionalProperties: true
+      description: Tập con an toàn (đậm, nghiêng, danh sách, link http/https, kể cả reference-style link definition), không
+        HTML. Server hạ về text v1 nếu client không khai báo markdown trong supported_blocks.
+    SuggestionItem:
+      type: object
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 60
+        message_text:
+          type: string
+          minLength: 1
+          maxLength: 500
+      required:
+        - label
+        - message_text
+      additionalProperties: false
+    SuggestionsBlock:
+      type: object
+      properties:
+        block_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        type:
+          type: string
+          enum:
+            - suggestions
+        schema_version:
+          type: integer
+          enum:
+            - 1
+        items:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/SuggestionItem'
+      required:
+        - block_id
+        - type
+        - schema_version
+        - items
+      additionalProperties: true
+      description: Quick replies. Chọn một item thì gửi message turn với content.text = message_text. Server hạ về text v1
+        nếu client không khai báo suggestions.
     AssessmentQuestionBlock:
       type: object
       properties:
@@ -229,6 +300,8 @@ components:
     TypedBlock:
       oneOf:
       - $ref: '#/components/schemas/TextBlock'
+      - $ref: '#/components/schemas/MarkdownBlock'
+      - $ref: '#/components/schemas/SuggestionsBlock'
       - $ref: '#/components/schemas/AssessmentQuestionBlock'
       - $ref: '#/components/schemas/AssessmentClarificationBlock'
       - $ref: '#/components/schemas/PersonalityCardBlock'
@@ -238,6 +311,8 @@ components:
         propertyName: type
         mapping:
           text: '#/components/schemas/TextBlock'
+          markdown: '#/components/schemas/MarkdownBlock'
+          suggestions: '#/components/schemas/SuggestionsBlock'
           assessment_question: '#/components/schemas/AssessmentQuestionBlockVersions'
           assessment_clarification: '#/components/schemas/AssessmentClarificationBlockVersions'
           personality_card: '#/components/schemas/PersonalityCardBlock'
