@@ -1,16 +1,19 @@
 """ModelPort over agno's model adapters only, no agno Agent/memory/tool execution.
 
-One logical turn per invoke: transient provider failures are retried up to settings.max_retries; timeouts and
-4xx other than 429 are not. Providers subclass AgnoChatModel and supply the agno model and wire dialect.
+One logical turn per invoke: 5xx and connection failures are retried up to settings.max_retries with
+exponential backoff; timeouts, 429 (rate_limited) and other 4xx are not, so callers fall back quickly.
+Providers subclass AgnoChatModel and supply the agno model and wire dialect.
 """
 import json
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 
 import httpx
 from agno.models.base import Model
 from agno.models.message import Message
 
 from agent_runtime.agent.model import (
+    RETRY_BACKOFF_MS,
     AssistantMessage,
     ChatMessage,
     ModelReply,
@@ -62,9 +65,9 @@ def _status(error: BaseException) -> int | None:
 
 
 def _is_deterministic(error: BaseException) -> bool:
-    """4xx other than 429 (bad request, auth) will fail identically on retry."""
+    """4xx (bad request, auth, quota) will fail again on an immediate retry."""
     status = _status(error)
-    return status is not None and 400 <= status < 500 and status != 429
+    return status is not None and 400 <= status < 500
 
 
 def _detail(error: BaseException) -> str:
@@ -77,10 +80,12 @@ class AgnoChatModel:
     replay_keys: tuple[str, ...] = ()  # provider_data keys sent back when a tool call is replayed
     merge_tool_results = False  # True: consecutive tool results travel as one tool turn
 
-    def __init__(self, api_key: str, *, proxy_url: str | None = None, model_factory=None):
+    def __init__(self, api_key: str, *, proxy_url: str | None = None, model_factory=None,
+                 sleep: Callable[[float], None] = time.sleep):
         self._api_key = api_key
         self._proxy_url = proxy_url
         self._factory = model_factory or self.default_factory
+        self._sleep = sleep
 
     def build(self, settings: ModelSettings) -> Model:
         raise NotImplementedError
@@ -160,7 +165,9 @@ class AgnoChatModel:
             logger.warning("model setup error ({}): {}", settings.model_id, _detail(error))
             return ModelUnavailable("provider_error", _detail(error))
         failure = ModelUnavailable("provider_error")
-        for _ in range(settings.max_retries + 1):
+        for attempt in range(settings.max_retries + 1):
+            if attempt:
+                self._sleep(RETRY_BACKOFF_MS * 2 ** (attempt - 1) / 1000)
             try:
                 response = model.invoke(messages=payload, assistant_message=Message(role="assistant"),
                                         tools=definitions)
@@ -170,6 +177,8 @@ class AgnoChatModel:
                     return ModelUnavailable("timeout", _detail(error))
                 logger.warning("model provider error ({}): {} {}", settings.model_id, _detail(error),
                                str(error)[:200])
+                if _status(error) == 429:
+                    return ModelUnavailable("rate_limited", _detail(error))
                 failure = ModelUnavailable("provider_error", _detail(error))
                 if _is_deterministic(error):
                     return failure

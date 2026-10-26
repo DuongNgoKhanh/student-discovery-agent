@@ -1,15 +1,15 @@
 {
-  "greeting_text": "Chào em! Mình là IHRD Mentor, mình có thể giúp em khám phá ngành học phù hợp.",
+  "greeting_text": "Chào bạn! Mình là IHRD Mentor, mình có thể giúp bạn khám phá ngành học phù hợp.",
   "allowed_activity_profiles": ["riasec.mean.bounds.v2"],
   "greeting_suggestions": ["Làm bài khám phá", "Ngành CNTT học gì?"],
   "persona": {
     "name": "IHRD Mentor",
     "language": "vi",
-    "system_prompt": "Bạn là IHRD Mentor, người đồng hành hướng nghiệp thân thiện cho học sinh THPT. Trả lời ngắn gọn bằng tiếng Việt. Gọi học sinh là {{display_name}} nếu đã biết tên. Không tự bịa điểm số, Hệ hay ngành học; chỉ dùng dữ liệu do công cụ trả về."
+    "system_prompt": "Vai trò: IHRD Mentor, người đồng hành hướng nghiệp thân thiện cho học sinh THPT. Trả lời ngắn gọn bằng tiếng Việt, gọi học sinh bằng tên {{display_name}} khi phù hợp. Không tự bịa điểm số, Hệ hay ngành học; chỉ dùng dữ liệu do công cụ trả về."
   },
-  "model": {"ref": "gemini/gemini-2.5-flash", "temperature": 0.4, "max_output_tokens": 800,
-            "timeout_ms": 8000, "max_retries": 1},
-  "limits": {"max_tool_steps": 4, "turn_timeout_ms": 20000, "history_messages": 20, "max_input_chars": 1000},
+  "model": {"ref": "gemini/gemini-3.5-flash-lite", "temperature": 0.4, "max_output_tokens": 800,
+            "timeout_ms": 10000, "max_retries": 1},
+  "limits": {"max_tool_steps": 4, "turn_timeout_ms": 25000, "history_messages": 20, "max_input_chars": 1000},
   "tools": [
     {"name": "assessment.start", "version": 1, "params": {"experiences": [
       {"experience_id": "exp_riasec", "algorithm_profile": "riasec.mean.bounds.v2", "label": "Bài khám phá tính cách"}]}},
@@ -19,13 +19,14 @@
     {"name": "result.explain", "version": 1},
     {"name": "ui.suggest_replies", "version": 1}
   ],
-  "guardrails": {"blocked_topics": ["chính trị", "nội dung người lớn"],
+  "guardrails": {"enabled": false, "blocked_topics": ["chính trị", "nội dung người lớn"],
                  "refusal_text": "Mình chỉ hỗ trợ các chủ đề học tập và hướng nghiệp nhé."},
+  "links": {"allowed_domains": ["ihrd.vn"]},
   "templates": {
-    "unknown_message": "Mình chưa hiểu ý em. Em thử chọn một gợi ý bên dưới nhé.",
+    "unknown_message": "Mình chưa hiểu ý bạn. Bạn thử chọn một gợi ý bên dưới nhé.",
     "fallback_suggestions": ["Làm bài khám phá"],
     "next_question": "Câu tiếp theo nhé, {{display_name}}!",
-    "completed": "Đây là kết quả của em!",
-    "clarification": "Em chọn ý nào dưới đây?"
+    "completed": "Đây là kết quả của bạn!",
+    "clarification": "Bạn chọn ý nào dưới đây?"
   }
 }

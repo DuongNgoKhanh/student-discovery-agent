@@ -73,9 +73,9 @@
             ref: {type: string, pattern: '^[a-z0-9-]+/[A-Za-z0-9._-]+$', description: "provider/model; provider hiện hỗ trợ: gemini, openai"}
             temperature: {type: number, minimum: 0, maximum: 2}
             max_output_tokens: {type: integer, minimum: 1, maximum: 4096}
-            timeout_ms: {type: integer, minimum: 1000, maximum: 30000}
+            timeout_ms: {type: integer, minimum: 10000, maximum: 30000, description: "Gemini từ chối deadline dưới 10s."}
             max_retries: {type: integer, minimum: 0, maximum: 3}
-          description: null = tắt LLM; runtime dự kiến chạy template dự phòng. timeout_ms × (max_retries + 1) phải ≤ limits.turn_timeout_ms. Không chứa secret.
+          description: null = tắt LLM; runtime dự kiến chạy template dự phòng. timeout_ms × (max_retries + 1) + backoff 500ms × (2^max_retries − 1) phải ≤ limits.turn_timeout_ms. Không chứa secret.
         limits:
           type: object
           additionalProperties: false
@@ -100,9 +100,19 @@
           type: object
           additionalProperties: false
           properties:
+            enabled: {type: boolean, description: "Mặc định false (đang tắt); bật thì blocked_topics/refusal_text được đưa vào prompt."}
             blocked_topics: {type: array, maxItems: 20, items: {type: string, minLength: 1, maxLength: 60, pattern: '\S'}}
             refusal_text: {type: string, minLength: 1, maxLength: 500, pattern: '\S',
                            description: "Cùng luật biến như persona.system_prompt."}
+        links:
+          type: object
+          additionalProperties: false
+          properties:
+            allowed_domains:
+              type: array
+              maxItems: 20
+              items: {type: string, maxLength: 253, pattern: '^[a-z0-9-]+(\.[a-z0-9-]+)+$'}
+              description: Domain (kèm subdomain) agent được chèn link https; link khác bị hạ thành text. Rỗng = không có link. Không trùng.
         templates:
           type: object
           additionalProperties: false
@@ -113,7 +123,7 @@
             next_question: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
             completed: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
             clarification: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
-      description: "agent.snapshot.v1 content: cấu hình agent (persona, model, limits, tools, guardrails, templates); mọi field ngoài greeting_text/allowed_activity_profiles có mặc định an toàn (model null, tools rỗng). Greeting projects to a server-ID text v1 block without an LLM call. Adapter proposal; does not imply Product registry support."
+      description: "agent.snapshot.v1 content: cấu hình agent (persona, model, limits, tools, guardrails, links, templates); mọi field ngoài greeting_text/allowed_activity_profiles có mặc định an toàn (model null, tools rỗng). Greeting projects to a server-ID text v1 block without an LLM call. Adapter proposal; does not imply Product registry support."
     ReleaseKey:
       type: object
       additionalProperties: false

@@ -1,1 +1,1 @@
-"""Agent core: tool catalog and provider-neutral model port."""
+"""Agent core: tool catalog, provider-neutral model port, prompt, output sanitising and the turn loop."""

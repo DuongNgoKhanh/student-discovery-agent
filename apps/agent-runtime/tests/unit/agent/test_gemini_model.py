@@ -74,9 +74,9 @@ def test_tool_calls_are_parsed_and_names_unwired():
 
 def test_provider_errors_retry_then_report_unavailable():
     factory, _ = stub_factory(ModelProviderError("boom"), ModelResponse(content="ok"))
-    assert GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS).text == "ok"
+    assert GeminiChatModel("key", model_factory=factory, sleep=lambda _: None).invoke([UserMessage("hi")], [], SETTINGS).text == "ok"
     factory, _ = stub_factory(ModelProviderError("boom"), ModelProviderError("boom"))
-    failure = GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS)
+    failure = GeminiChatModel("key", model_factory=factory, sleep=lambda _: None).invoke([UserMessage("hi")], [], SETTINGS)
     assert failure == ModelUnavailable("provider_error", "ModelProviderError:502")  # agno default status
 
 
@@ -147,12 +147,22 @@ def test_empty_assistant_message_is_dropped():
     assert [content.role for content in formatted] == ["user", "user"]
 
 
-def test_deterministic_client_errors_are_not_retried_but_rate_limits_are():
+def test_client_errors_and_rate_limits_are_not_retried():
     factory, created = stub_factory(ModelProviderError("bad", status_code=400), ModelResponse(content="x"))
     failure = GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS)
     assert failure == ModelUnavailable("provider_error", "ModelProviderError:400") and len(created[0].invocations) == 1
-    factory, _ = stub_factory(ModelProviderError("slow down", status_code=429), ModelResponse(content="ok"))
-    assert GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS).text == "ok"
+    factory, created = stub_factory(ModelProviderError("slow down", status_code=429), ModelResponse(content="ok"))
+    failure = GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS)
+    assert failure == ModelUnavailable("rate_limited", "ModelProviderError:429") and len(created[0].invocations) == 1
+
+
+def test_server_errors_back_off_exponentially_between_retries():
+    slept = []
+    factory, _ = stub_factory(ModelProviderError("down", status_code=503), ModelProviderError("down", status_code=503),
+                              ModelResponse(content="ok"))
+    settings = ModelSettings(model_id="m", temperature=0, max_output_tokens=10, timeout_ms=10000, max_retries=2)
+    reply = GeminiChatModel("key", model_factory=factory, sleep=slept.append).invoke([UserMessage("hi")], [], settings)
+    assert reply.text == "ok" and slept == [0.5, 1.0]
 
 
 def test_proxy_url_is_wired_into_http_options():

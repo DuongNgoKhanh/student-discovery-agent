@@ -28,7 +28,7 @@ def test_demo_snapshot_validates_through_release_import():
     release = validate_release(agent_release(content=deepcopy(DEMO)), environment="demo",
                                capabilities=CapabilitySnapshot(), validator=ExperienceValidator())
     snapshot = AgentSnapshotV1.model_validate(release.content)
-    assert (snapshot.model.provider, snapshot.model.model_id) == ("gemini", "gemini-2.5-flash")
+    assert (snapshot.model.provider, snapshot.model.model_id) == ("gemini", "gemini-3.5-flash-lite")
     assert snapshot.tool("assessment.start").params["experiences"][0]["experience_id"] == "exp_riasec"
     assert snapshot.tool("unknown.tool") is None
 
@@ -56,6 +56,7 @@ def mutate(path, value):
     mutate(("model", "ref"), "gemini"),                                           # sai định dạng ref
     mutate(("limits", "max_tool_steps"), 9),                                      # vượt trần
     mutate(("model", "timeout_ms"), 30001),
+    mutate(("model", "timeout_ms"), 9999),                                        # Gemini cần >= 10s
     mutate(("model", "temperature"), "0.4"),                                      # strict: không nhận chuỗi
     mutate(("model", "temperature"), True),                                       # strict: không nhận bool
     mutate(("guardrails", "blocked_topics"), [f"chủ đề {i}" for i in range(21)]), # vượt 20 mục
