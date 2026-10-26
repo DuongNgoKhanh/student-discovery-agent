@@ -517,7 +517,7 @@ components:
     TurnResponse:
       type: object
       additionalProperties: false
-      required: [id, conversation_id, status, revision, input_message_id, created_at]
+      required: [id, conversation_id, status, revision, input_message_id, output, activity, error, created_at, completed_at]
       properties:
         id: {type: string, pattern: '^resp_[a-f0-9]{32}$'}
         conversation_id:
