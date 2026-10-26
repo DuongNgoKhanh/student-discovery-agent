@@ -452,3 +452,135 @@ components:
                 data:
                   $ref: '#/components/schemas/ConversationTurnResult'
         - $ref: common.yaml#/components/schemas/ErrorEnvelope
+    TextPart:
+      type: object
+      additionalProperties: false
+      required: [type, text]
+      properties:
+        type: {type: string, enum: [text]}
+        text: {type: string, minLength: 1, pattern: '\S'}
+    InteractionPart:
+      type: object
+      additionalProperties: false
+      required: [type, activity_id, action, payload]
+      properties:
+        type: {type: string, enum: [interaction]}
+        activity_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        expected_activity_revision: {type: integer, minimum: 0, maximum: 9007199254740991}
+        action: {type: string, enum: [set_name, submit_answer, confirm_answer, edit_answer]}
+        payload: {type: object}
+    MessageInput:
+      type: object
+      additionalProperties: false
+      required: [expected_revision, idempotency_key, content]
+      properties:
+        schema_version: {type: integer, enum: [1]}
+        expected_revision: {type: integer, minimum: 0, maximum: 9007199254740991}
+        idempotency_key: {type: string, minLength: 1, maxLength: 256}
+        content:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/TextPart'
+              - $ref: '#/components/schemas/InteractionPart'
+            discriminator:
+              propertyName: type
+              mapping:
+                text: '#/components/schemas/TextPart'
+                interaction: '#/components/schemas/InteractionPart'
+      description: Text dài hơn limits.max_input_chars của agent bị từ chối 422 VAL_INVALID_INPUT.
+    ActivitySummary:
+      type: object
+      additionalProperties: false
+      required: [id, revision, schema_version, type, status, display_name, progress, current_question, clarification, result]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        revision: {type: integer, minimum: 0}
+        schema_version: {type: integer, enum: [1, 2]}
+        type: {type: string}
+        algorithm_profile: {type: string, nullable: true}
+        status: {type: string, enum: [collecting_name, in_progress, completed, ended, expired]}
+        display_name: {type: string, nullable: true}
+        progress: {type: object}
+        current_question: {type: object, nullable: true}
+        clarification: {type: object, nullable: true}
+        result: {type: object, nullable: true}
+      description: Không có answers[]; lịch sử đáp án đọc qua GET /conversations/{id}.
+    TurnResponse:
+      type: object
+      additionalProperties: false
+      required: [id, conversation_id, status, revision, input_message_id, created_at]
+      properties:
+        id: {type: string, pattern: '^resp_[a-f0-9]{32}$'}
+        conversation_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        status: {type: string, enum: [in_progress, completed, cancelled, failed]}
+        revision: {type: integer, minimum: 0}
+        input_message_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        output:
+          nullable: true
+          type: object
+          additionalProperties: false
+          required: [message_id, blocks]
+          properties:
+            message_id:
+              type: string
+              minLength: 1
+              pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+            blocks:
+              type: array
+              minItems: 1
+              items:
+                $ref: typed-blocks.yaml#/components/schemas/TypedBlock
+        activity:
+          anyOf:
+            - $ref: '#/components/schemas/ActivitySummary'
+            - type: object
+              nullable: true
+              enum:
+                - null
+        error:
+          nullable: true
+          type: object
+          required: [code]
+          properties:
+            code: {type: string, description: Canonical public error code từ contracts/error-codes.json}
+        created_at: {type: string, format: date-time}
+        completed_at: {type: string, format: date-time, nullable: true}
+    TurnResponseEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required:
+                - data
+              properties:
+                data:
+                  $ref: '#/components/schemas/TurnResponse'
+        - $ref: common.yaml#/components/schemas/ErrorEnvelope
+    ResponseStreamEvent:
+      description: |
+        text/event-stream. Mỗi event có `event:` và `data:` (JSON). Thứ tự: response.created (data.response,
+        status in_progress) → 0..n response.output_text.delta (data.delta, chữ thô, hiển thị dạng chữ thuần) và
+        response.tool_call (data.name) → đúng một trong response.completed | response.cancelled | response.failed
+        (data.response). Comment `: ping` mỗi 15 giây. Lỗi trước khi stream mở trả JSON envelope.
+      type: object
+      required: [event, data]
+      properties:
+        event:
+          type: string
+          enum: [response.created, response.output_text.delta, response.tool_call, response.completed, response.cancelled, response.failed]
+        data: {type: object}

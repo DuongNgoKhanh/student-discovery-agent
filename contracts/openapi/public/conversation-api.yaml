@@ -218,25 +218,32 @@ paths:
             maximum: 100
             default: 20
           description: Demo history limit; each page rechecks owner and parent lifecycle.
-  /conversations/{conversation_id}/turns:
     post:
-      operationId: submitConversationTurn
+      operationId: submitConversationMessage
       tags:
         - Conversations
-      summary: Gửi message hoặc structured interaction
+      summary: Gửi một message (text hoặc structured interaction), trả JSON hoặc SSE
       description: |-
-        Unified entrypoint. type=message → Agent intent/chat/validated activity commands; type=interaction → Activity Engine.
-        expected_revision refers to conversation; optional expected_activity_revision is an extra guard. Activity must belong to this conversation and allow the action.
-        Check owner/lifecycle, then replay key/semantic payload before old revision check; collision returns 409. JSON key order ignored; name normalization NFC/whitespace; do not paraphrase text for replay identity.
-        Persist conversation revision + activity/answer/proposal/result validity + messages/blocks + outcome atomically. No DB transaction while waiting LLM; recheck both captured revisions/lifecycle before commit.
-        General chat increments conversation revision only. Clarification changes activity revision, keeps progress. Sixth valid answer/coverage emits personality_card immediately.
-        Edit k keeps prefix, changes k, drops suffix and invalidates old proposal/result. k=6 recomputes at progress 6; new immutable result ID + next result generation.
-        Replay data/IDs/committed_at stay unchanged; meta may reflect new request. Client with newer conversation revision does not overwrite state from old replay.
+        Một content part: text → Agent loop; interaction → Activity Engine (option click không cần LLM).
+        Accept: application/json trả TurnResponseEnvelope khi turn kết thúc; Accept: text/event-stream trả ResponseStreamEvent
+        (response.created → delta/tool_call → completed|cancelled|failed, `: ping` mỗi 15 giây, header X-Accel-Buffering: no,
+        X-Request-ID, X-Trace-ID). Lỗi trước khi stream mở trả JSON envelope.
+        Idempotency theo (owner, conversation, idempotency_key) trong responses: cùng key + cùng payload replay Response đã lưu;
+        khác payload 409 CONFLICT_IDEMPOTENCY_KEY. Mỗi conversation chỉ một turn in_progress: turn thứ hai trả
+        409 CONFLICT_TURN_IN_PROGRESS với details.response_id. expected_revision cũ trả 409 CONFLICT_REVISION.
+        Turn bị bỏ dở quá hạn chuyển failed với SYS_TURN_ABANDONED. Model lỗi không làm failed: Response completed với
+        block template. Text dài hơn limits.max_input_chars trả 422 VAL_INVALID_INPUT.
       security:
         - AnonymousOwner: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/chat.yaml#/components/schemas/MessageInput
       responses:
         '200':
-          description: Validated envelope; status matches HTTP response.
+          description: Response đã kết thúc (JSON) hoặc luồng sự kiện (SSE).
           headers:
             Cache-Control:
               schema:
@@ -246,12 +253,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ../schemas/chat.yaml#/components/schemas/ConversationTurnEnvelope
-              examples:
-                question:
-                  $ref: '#/components/examples/QuestionTurn'
-                completed:
-                  $ref: '#/components/examples/CompletedTurn'
+                $ref: ../schemas/chat.yaml#/components/schemas/TurnResponseEnvelope
+            text/event-stream:
+              schema:
+                $ref: ../schemas/chat.yaml#/components/schemas/ResponseStreamEvent
         '400':
           $ref: ../schemas/common.yaml#/components/responses/ChatError400
         '401':
@@ -276,19 +281,6 @@ paths:
           $ref: ../schemas/common.yaml#/components/responses/ChatError503
         '504':
           $ref: ../schemas/common.yaml#/components/responses/ChatError504
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/chat.yaml#/components/schemas/ConversationTurnInput
-            examples:
-              NaturalMessage:
-                $ref: '#/components/examples/NaturalMessage'
-              SubmitOption:
-                $ref: '#/components/examples/SubmitOption'
-              SubmitText:
-                $ref: '#/components/examples/SubmitText'
       parameters:
         - name: conversation_id
           in: path
@@ -297,6 +289,92 @@ paths:
             type: string
             minLength: 1
             pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+  /responses/{response_id}:
+    parameters:
+      - name: response_id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^resp_[a-f0-9]{32}$
+    get:
+      operationId: getResponse
+      tags:
+        - Conversations
+      summary: Đọc Response theo id
+      description: Owner-scoped; Response không tồn tại hoặc của owner khác trả 404 RES_NOT_FOUND. Dùng để lấy lại kết quả sau khi mất kết nối stream.
+      security:
+        - AnonymousOwner: []
+      responses:
+        '200':
+          description: Response hiện tại.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/chat.yaml#/components/schemas/TurnResponseEnvelope
+        '401':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError409
+        '429':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError503
+  /responses/{response_id}/cancel:
+    parameters:
+      - name: response_id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^resp_[a-f0-9]{32}$
+    post:
+      operationId: cancelResponse
+      tags:
+        - Conversations
+      summary: Hủy Response đang in_progress
+      description: Chỉ Response in_progress hủy được (status cancelled, không commit gì); trạng thái khác trả 409 CONFLICT_RESPONSE_NOT_CANCELLABLE. Hủy lặp lại trên Response đã cancelled trả lại chính nó.
+      security:
+        - AnonymousOwner: []
+      responses:
+        '200':
+          description: Response sau khi hủy.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum:
+                  - no-store
+          content:
+            application/json:
+              schema:
+                $ref: ../schemas/chat.yaml#/components/schemas/TurnResponseEnvelope
+        '401':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError401
+        '403':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError403
+        '404':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError404
+        '409':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError409
+        '429':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError429
+        '500':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError500
+        '503':
+          $ref: ../schemas/common.yaml#/components/responses/ChatError503
   /conversations/{conversation_id}:end:
     post:
       operationId: endConversation

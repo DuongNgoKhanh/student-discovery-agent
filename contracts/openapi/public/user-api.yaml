@@ -143,10 +143,12 @@ paths:
     $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}
   /conversations/{conversation_id}/messages:
     $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}~1messages
-  /conversations/{conversation_id}/turns:
-    $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}~1turns
   /conversations/{conversation_id}:end:
     $ref: conversation-api.yaml#/paths/~1conversations~1{conversation_id}:end
+  /responses/{response_id}:
+    $ref: conversation-api.yaml#/paths/~1responses~1{response_id}
+  /responses/{response_id}/cancel:
+    $ref: conversation-api.yaml#/paths/~1responses~1{response_id}~1cancel
   /activities/{activity_id}/result:
     $ref: activity-api.yaml#/paths/~1activities~1{activity_id}~1result
   /results/{result_id}/share-card:
