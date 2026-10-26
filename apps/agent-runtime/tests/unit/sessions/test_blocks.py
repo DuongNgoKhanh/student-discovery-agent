@@ -26,10 +26,22 @@ def test_markdown_and_suggestions_join_the_typed_block_union():
     assert isinstance(_BLOCK.validate_python(suggestions("Làm bài khám phá")), SuggestionsBlock)
 
 
-@pytest.mark.parametrize("content", ["<b>x</b>", "xem [link](javascript:alert(1))", "x" * 4001, " "])
+@pytest.mark.parametrize("content", [
+    "<b>x</b>",
+    "xem [link](javascript:alert(1))",
+    "xem [link]( javascript:alert(1))",
+    "xem [x][1]\n\n[1]: javascript:alert(1)",
+    "x" * 4001,
+    " ",
+])
 def test_markdown_rejects_html_unsafe_links_and_oversize(content):
     with pytest.raises(ValidationError):
         _BLOCK.validate_python(markdown(content))
+
+
+def test_markdown_accepts_http_inline_and_reference_links():
+    assert isinstance(_BLOCK.validate_python(markdown("xem [IHRD](https://ihrd.vn)")), MarkdownBlock)
+    assert isinstance(_BLOCK.validate_python(markdown("xem [x][1]\n\n[1]: https://ihrd.vn")), MarkdownBlock)
 
 
 @pytest.mark.parametrize("labels", [(), ("a", "b", "c", "d", "e"), ("x" * 61,)])

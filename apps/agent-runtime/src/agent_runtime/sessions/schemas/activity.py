@@ -299,7 +299,8 @@ class TextBlock(ContractModel):
 
 
 _HTML_TAG = re.compile(r"<\s*[A-Za-z/!]")
-_LINK_TARGET = re.compile(r"\]\(([^)\s]*)\)")
+_LINK_TARGET = re.compile(r"\]\(\s*([^)\s]*)")
+_REFERENCE_TARGET = re.compile(r"^\s*\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
 
 
 class MarkdownBlock(ContractModel):
@@ -313,7 +314,8 @@ class MarkdownBlock(ContractModel):
     def safe_subset(self) -> "MarkdownBlock":
         if _HTML_TAG.search(self.content):
             raise ValueError("markdown must not contain HTML")
-        if any(not target.startswith(("http://", "https://")) for target in _LINK_TARGET.findall(self.content)):
+        targets = [*_LINK_TARGET.findall(self.content), *_REFERENCE_TARGET.findall(self.content)]
+        if any(not target.startswith(("http://", "https://")) for target in targets):
             raise ValueError("markdown links must use http or https")
         return self
 
