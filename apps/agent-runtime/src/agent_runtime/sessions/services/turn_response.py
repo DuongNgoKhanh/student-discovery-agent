@@ -72,7 +72,7 @@ def _new_result(snapshot: TurnSnapshot, draft: TurnDraft, committed_at: datetime
 
 
 def finalize_turn(snapshot: TurnSnapshot, request: SupportedInteraction, draft: TurnDraft,
-                  committed_at: datetime) -> FinalizedTurn:
+                  committed_at: datetime, *, input_message_id: str) -> FinalizedTurn:
     """Server-owned composition: any validation failure is an internal error and nothing is written."""
     parent, activity = snapshot.parent, snapshot.activity
     try:
@@ -80,7 +80,7 @@ def finalize_turn(snapshot: TurnSnapshot, request: SupportedInteraction, draft: 
         turn_id = uuid4().hex
         payload = request.payload
         is_name = isinstance(request, SetNameInteraction)
-        user = NewMessage(message_id=uuid4().hex, turn_id=turn_id, role="user", blocks=(),
+        user = NewMessage(message_id=input_message_id, turn_id=turn_id, role="user", blocks=(),
             text=draft.next_state.display_name if is_name else None,
             interaction=StoredInteraction(activity_id=activity.id, action=request.action,
                 question_id=None if is_name else payload.question_id,

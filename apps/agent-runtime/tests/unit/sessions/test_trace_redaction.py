@@ -86,13 +86,13 @@ def _observed_service(data, describe):
 
 def test_turn_trace_carries_completion_identifiers_only():
     from agent_runtime.sessions.services.turns import describe_turn
-    data = {"conversation_id": "conv1", "revision": 15, "activity": {
-        "id": "act1", "experience_release_id": "exp-rel", "algorithm_profile": "riasec.mean.bounds.v2",
+    data = {"conversation_id": "conv1", "status": "completed", "revision": 15, "activity": {
+        "id": "act1", "algorithm_profile": "riasec.mean.bounds.v2",
         "display_name": "Ngân", "result": {"result_id": "res1", "result_revision": 1}}}
     event = _observed_service(data, describe_turn)
     assert (event.conversation_id, event.activity_id, event.result_id, event.before_revision,
             event.after_revision, event.experience_release_id, event.algorithm_profile) == (
-        "conv1", "act1", "res1", 14, 15, "exp-rel", "riasec.mean.bounds.v2")
+        "conv1", "act1", "res1", 14, 15, None, "riasec.mean.bounds.v2")
     assert "Ngân" not in str(event.model_dump())
 
 
