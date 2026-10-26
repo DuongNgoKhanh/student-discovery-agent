@@ -1,6 +1,7 @@
 """Provider-neutral model port."""
 from .fake import FakeModel
 from .port import (
+    RETRY_BACKOFF_MS,
     AssistantMessage,
     ChatMessage,
     ModelPort,
@@ -12,10 +13,12 @@ from .port import (
     ToolCall,
     ToolDefinition,
     ToolResultMessage,
+    UnavailableReason,
     UnconfiguredModel,
     UserMessage,
+    worst_case_ms,
 )
 
-__all__ = ["AssistantMessage", "ChatMessage", "FakeModel", "ModelPort", "ModelReply", "ModelSettings",
+__all__ = ["RETRY_BACKOFF_MS", "AssistantMessage", "ChatMessage", "FakeModel", "ModelPort", "ModelReply", "ModelSettings",
            "ModelUnavailable", "ModelUsage", "SystemMessage", "ToolCall", "ToolDefinition", "ToolResultMessage",
-           "UnconfiguredModel", "UserMessage"]
+           "UnavailableReason", "UnconfiguredModel", "UserMessage", "worst_case_ms"]

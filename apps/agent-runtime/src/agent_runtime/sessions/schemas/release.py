@@ -10,7 +10,7 @@ from agent_runtime.agent.catalog import (
     TOOL_DECLARATIONS,
     StartAssessmentParams,
 )
-from agent_runtime.agent.model import ModelSettings
+from agent_runtime.agent.model import ModelSettings, worst_case_ms
 
 from .common import ContentHash, ContractModel, JsonObject, NonEmptyText, OpaqueId
 
@@ -48,7 +48,7 @@ class ReleaseKey(ContractModel):
 class AgentPersona(ContractModel):
     name: Label = "IHRD Mentor"
     language: Literal["vi"] = "vi"
-    system_prompt: PromptText = ("Bạn là người đồng hành hướng nghiệp thân thiện cho học sinh THPT. "
+    system_prompt: PromptText = ("Vai trò: người đồng hành hướng nghiệp thân thiện cho học sinh THPT. "
                                  "Trả lời ngắn gọn bằng tiếng Việt.")
 
 
@@ -56,7 +56,7 @@ class AgentModelConfig(ContractModel):
     ref: Annotated[str, StringConstraints(pattern=r"^[a-z0-9-]+/[A-Za-z0-9._-]+$")]
     temperature: Annotated[float, Field(strict=True, ge=0, le=2)] = 0.4
     max_output_tokens: Annotated[int, Field(strict=True, ge=1, le=4096)] = 800
-    timeout_ms: Annotated[int, Field(strict=True, ge=1000, le=30000)] = 8000
+    timeout_ms: Annotated[int, Field(strict=True, ge=10000, le=30000)] = 10000  # Gemini rejects deadlines < 10s
     max_retries: Annotated[int, Field(strict=True, ge=0, le=3)] = 1
 
     @property
@@ -81,7 +81,7 @@ class AgentModelConfig(ContractModel):
 
 class AgentLimits(ContractModel):
     max_tool_steps: Annotated[int, Field(strict=True, ge=1, le=8)] = 4
-    turn_timeout_ms: Annotated[int, Field(strict=True, ge=1000, le=30000)] = 20000
+    turn_timeout_ms: Annotated[int, Field(strict=True, ge=1000, le=30000)] = 25000
     history_messages: Annotated[int, Field(strict=True, ge=0, le=50)] = 20
     max_input_chars: Annotated[int, Field(strict=True, ge=1, le=4000)] = 1000
 
@@ -107,16 +107,25 @@ class AgentToolBinding(ContractModel):
 
 
 class AgentGuardrails(ContractModel):
+    enabled: bool = False  # off for now: topic refusals over-triggered on in-scope requests
     blocked_topics: Annotated[tuple[Label, ...], Field(max_length=20)] = ()
     refusal_text: TemplateText = "Mình chỉ hỗ trợ các chủ đề học tập và hướng nghiệp nhé."
 
 
+Domain = Annotated[str, StringConstraints(max_length=253, pattern=r"^[a-z0-9-]+(\.[a-z0-9-]+)+$")]
+
+
+class AgentLinks(ContractModel):
+    """https links the agent may show; a domain also allows its subdomains. Empty: links render as plain text."""
+    allowed_domains: Annotated[tuple[Domain, ...], Field(max_length=20), AfterValidator(_unique)] = ()
+
+
 class AgentTemplates(ContractModel):
-    unknown_message: TemplateText = "Mình chưa hiểu ý em. Em thử chọn một gợi ý bên dưới nhé."
+    unknown_message: TemplateText = "Mình chưa hiểu ý bạn. Bạn thử chọn một gợi ý bên dưới nhé."
     fallback_suggestions: Labels = ("Làm bài khám phá",)
     next_question: TemplateText = "Câu tiếp theo nhé, {{display_name}}!"
-    completed: TemplateText = "Đây là kết quả của em!"
-    clarification: TemplateText = "Em chọn ý nào dưới đây?"
+    completed: TemplateText = "Đây là kết quả của bạn!"
+    clarification: TemplateText = "Bạn chọn ý nào dưới đây?"
 
 
 class AgentSnapshotV1(ContractModel):
@@ -129,6 +138,7 @@ class AgentSnapshotV1(ContractModel):
     limits: AgentLimits = AgentLimits()
     tools: tuple[AgentToolBinding, ...] = ()
     guardrails: AgentGuardrails = AgentGuardrails()
+    links: AgentLinks = AgentLinks()
     templates: AgentTemplates = AgentTemplates()
 
     def tool(self, name: str) -> AgentToolBinding | None:
@@ -144,8 +154,8 @@ class AgentSnapshotV1(ContractModel):
         if start and any(item.algorithm_profile not in self.allowed_activity_profiles
                          for item in StartAssessmentParams.model_validate(start.params).experiences):
             raise ValueError("assessment.start experiences must use allowed activity profiles")
-        if self.model and self.model.timeout_ms * (self.model.max_retries + 1) > self.limits.turn_timeout_ms:
-            raise ValueError("model timeout_ms * (max_retries + 1) must fit within limits.turn_timeout_ms")
+        if self.model and worst_case_ms(self.model.timeout_ms, self.model.max_retries) > self.limits.turn_timeout_ms:
+            raise ValueError("model timeouts and retry backoff must fit within limits.turn_timeout_ms")
         return self
 
 

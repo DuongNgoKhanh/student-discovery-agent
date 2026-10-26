@@ -37,7 +37,7 @@ def test_exhausted_script_fails_the_test():
 
 def test_settings_come_from_the_snapshot_model_config():
     assert SETTINGS == ModelSettings(model_id="gemini-2.5-flash", temperature=0.4, max_output_tokens=800,
-                                     timeout_ms=8000, max_retries=1)
+                                     timeout_ms=10000, max_retries=1)
 
 
 def test_unconfigured_model_reports_not_configured():

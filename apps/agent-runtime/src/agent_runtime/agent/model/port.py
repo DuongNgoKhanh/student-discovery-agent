@@ -7,7 +7,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
-UnavailableReason = Literal["not_configured", "timeout", "provider_error", "invalid_response"]
+UnavailableReason = Literal["not_configured", "rate_limited", "timeout", "provider_error", "invalid_response"]
+
+
+RETRY_BACKOFF_MS = 500  # before retry n (1-based): RETRY_BACKOFF_MS * 2 ** (n - 1)
+
+
+def worst_case_ms(timeout_ms: int, max_retries: int) -> int:
+    """Upper bound of one invoke: every attempt times out and every backoff is slept."""
+    return timeout_ms * (max_retries + 1) + RETRY_BACKOFF_MS * (2 ** max_retries - 1)
 
 
 @dataclass(frozen=True)
