@@ -19,6 +19,14 @@ class MessageRepository:
             conversation_revision=row["committed_conversation_revision"], created_at=row["committed_at"]))
             for row in rows]
 
+    def recent(self, session: Session, conversation_id: str, limit: int) -> list[MessageView]:
+        """The last ``limit`` committed messages, oldest first."""
+        rows = session.execute(select(messages).where(messages.c.conversation_id == conversation_id)
+            .order_by(messages.c.ordinal.desc()).limit(limit)).mappings()
+        return [MessageView(**{name: row[name] for name in NewMessage.model_fields},
+                            conversation_revision=row["committed_conversation_revision"], created_at=row["committed_at"])
+                for row in reversed(list(rows))]
+
     def append(self, session: Session, conversation_id: str, revision: int,
                items: tuple[NewMessage, ...], committed_at: datetime) -> None:
         ordinal = session.scalar(select(func.coalesce(func.max(messages.c.ordinal), 0)).where(

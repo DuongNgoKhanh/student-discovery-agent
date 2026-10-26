@@ -1,0 +1,1367 @@
+{
+ "schema_version": "2.0",
+ "definition_id": "riasec_demo_vi",
+ "definition_version": "1.0.0",
+ "engine_version": "career-assessment-v1",
+ "is_demo": true,
+ "questions": [
+  {
+   "question_id": "q_r_01",
+   "house_id": "house_r",
+   "item_order": 1,
+   "prompt": "Bạn có thích tự tay lắp ráp hoặc sửa chữa đồ vật (xe đạp, quạt, đồ điện) không?",
+   "choices": [
+    {
+     "option_id": "q_r_01_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_r_01_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_r_01_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_r_01_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_r_01_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_r_02",
+   "house_id": "house_r",
+   "item_order": 2,
+   "prompt": "Bạn có hứng thú chăm sóc cây trồng hoặc vật nuôi không?",
+   "choices": [
+    {
+     "option_id": "q_r_02_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_r_02_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_r_02_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_r_02_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_r_02_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_r_03",
+   "house_id": "house_r",
+   "item_order": 3,
+   "prompt": "Bạn có thích hoạt động ngoài trời, vận động tay chân hơn ngồi một chỗ không?",
+   "choices": [
+    {
+     "option_id": "q_r_03_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_r_03_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_r_03_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_r_03_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_r_03_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_r_04",
+   "house_id": "house_r",
+   "item_order": 4,
+   "prompt": "Bạn có thích dùng máy móc, dụng cụ như khoan, tua vít, máy may không?",
+   "choices": [
+    {
+     "option_id": "q_r_04_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_r_04_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_r_04_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_r_04_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_r_04_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_r_05",
+   "house_id": "house_r",
+   "item_order": 5,
+   "prompt": "Bạn có muốn làm công việc tạo ra sản phẩm cụ thể, cầm nắm được không?",
+   "choices": [
+    {
+     "option_id": "q_r_05_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_r_05_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_r_05_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_r_05_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_r_05_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_i_01",
+   "house_id": "house_i",
+   "item_order": 1,
+   "prompt": "Bạn có thích tìm hiểu vì sao các hiện tượng tự nhiên xảy ra không?",
+   "choices": [
+    {
+     "option_id": "q_i_01_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_i_01_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_i_01_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_i_01_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_i_01_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_i_02",
+   "house_id": "house_i",
+   "item_order": 2,
+   "prompt": "Bạn có hứng thú khi giải các bài toán hoặc câu đố logic khó không?",
+   "choices": [
+    {
+     "option_id": "q_i_02_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_i_02_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_i_02_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_i_02_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_i_02_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_i_03",
+   "house_id": "house_i",
+   "item_order": 3,
+   "prompt": "Bạn có thích làm thí nghiệm, quan sát và ghi chép kết quả không?",
+   "choices": [
+    {
+     "option_id": "q_i_03_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_i_03_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_i_03_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_i_03_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_i_03_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_i_04",
+   "house_id": "house_i",
+   "item_order": 4,
+   "prompt": "Bạn có hay tự đọc thêm về khoa học, công nghệ ngoài giờ học không?",
+   "choices": [
+    {
+     "option_id": "q_i_04_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_i_04_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_i_04_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_i_04_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_i_04_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_i_05",
+   "house_id": "house_i",
+   "item_order": 5,
+   "prompt": "Bạn có thích phân tích số liệu để tìm ra quy luật không?",
+   "choices": [
+    {
+     "option_id": "q_i_05_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_i_05_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_i_05_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_i_05_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_i_05_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_a_01",
+   "house_id": "house_a",
+   "item_order": 1,
+   "prompt": "Bạn có thích vẽ, thiết kế hoặc trang trí theo ý tưởng riêng không?",
+   "choices": [
+    {
+     "option_id": "q_a_01_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_a_01_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_a_01_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_a_01_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_a_01_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_a_02",
+   "house_id": "house_a",
+   "item_order": 2,
+   "prompt": "Bạn có hứng thú với âm nhạc, ca hát hoặc chơi nhạc cụ không?",
+   "choices": [
+    {
+     "option_id": "q_a_02_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_a_02_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_a_02_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_a_02_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_a_02_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_a_03",
+   "house_id": "house_a",
+   "item_order": 3,
+   "prompt": "Bạn có thích viết truyện, làm thơ hoặc viết blog không?",
+   "choices": [
+    {
+     "option_id": "q_a_03_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_a_03_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_a_03_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_a_03_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_a_03_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_a_04",
+   "house_id": "house_a",
+   "item_order": 4,
+   "prompt": "Bạn có thích quay phim, chụp ảnh hoặc dựng video không?",
+   "choices": [
+    {
+     "option_id": "q_a_04_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_a_04_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_a_04_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_a_04_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_a_04_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_a_05",
+   "house_id": "house_a",
+   "item_order": 5,
+   "prompt": "Bạn có thích công việc được tự do sáng tạo, không theo khuôn mẫu không?",
+   "choices": [
+    {
+     "option_id": "q_a_05_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_a_05_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_a_05_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_a_05_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_a_05_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_s_01",
+   "house_id": "house_s",
+   "item_order": 1,
+   "prompt": "Bạn có thích giảng bài giúp bạn bè khi họ gặp khó khăn không?",
+   "choices": [
+    {
+     "option_id": "q_s_01_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_s_01_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_s_01_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_s_01_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_s_01_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_s_02",
+   "house_id": "house_s",
+   "item_order": 2,
+   "prompt": "Bạn có hứng thú với các hoạt động tình nguyện không?",
+   "choices": [
+    {
+     "option_id": "q_s_02_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_s_02_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_s_02_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_s_02_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_s_02_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_s_03",
+   "house_id": "house_s",
+   "item_order": 3,
+   "prompt": "Bạn có thường là người lắng nghe khi bạn bè tâm sự không?",
+   "choices": [
+    {
+     "option_id": "q_s_03_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_s_03_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_s_03_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_s_03_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_s_03_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_s_04",
+   "house_id": "house_s",
+   "item_order": 4,
+   "prompt": "Bạn có thích làm việc nhóm và kết nối mọi người với nhau không?",
+   "choices": [
+    {
+     "option_id": "q_s_04_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_s_04_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_s_04_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_s_04_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_s_04_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_s_05",
+   "house_id": "house_s",
+   "item_order": 5,
+   "prompt": "Bạn có muốn làm công việc chăm sóc sức khỏe hoặc dạy dỗ người khác không?",
+   "choices": [
+    {
+     "option_id": "q_s_05_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_s_05_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_s_05_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_s_05_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_s_05_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_e_01",
+   "house_id": "house_e",
+   "item_order": 1,
+   "prompt": "Bạn có thích đứng ra tổ chức sự kiện, hoạt động của lớp không?",
+   "choices": [
+    {
+     "option_id": "q_e_01_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_e_01_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_e_01_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_e_01_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_e_01_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_e_02",
+   "house_id": "house_e",
+   "item_order": 2,
+   "prompt": "Bạn có hứng thú với việc buôn bán, kinh doanh nhỏ không?",
+   "choices": [
+    {
+     "option_id": "q_e_02_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_e_02_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_e_02_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_e_02_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_e_02_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_e_03",
+   "house_id": "house_e",
+   "item_order": 3,
+   "prompt": "Bạn có thích thuyết phục người khác đồng ý với ý kiến của mình không?",
+   "choices": [
+    {
+     "option_id": "q_e_03_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_e_03_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_e_03_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_e_03_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_e_03_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_e_04",
+   "house_id": "house_e",
+   "item_order": 4,
+   "prompt": "Bạn có muốn giữ vai trò trưởng nhóm, lớp trưởng không?",
+   "choices": [
+    {
+     "option_id": "q_e_04_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_e_04_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_e_04_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_e_04_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_e_04_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_e_05",
+   "house_id": "house_e",
+   "item_order": 5,
+   "prompt": "Bạn có thích đặt mục tiêu lớn rồi lên kế hoạch để đạt được không?",
+   "choices": [
+    {
+     "option_id": "q_e_05_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_e_05_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_e_05_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_e_05_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_e_05_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_c_01",
+   "house_id": "house_c",
+   "item_order": 1,
+   "prompt": "Bạn có thích sắp xếp đồ đạc, tài liệu gọn gàng theo thứ tự không?",
+   "choices": [
+    {
+     "option_id": "q_c_01_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_c_01_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_c_01_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_c_01_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_c_01_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_c_02",
+   "house_id": "house_c",
+   "item_order": 2,
+   "prompt": "Bạn có thấy thoải mái khi làm việc theo quy trình rõ ràng không?",
+   "choices": [
+    {
+     "option_id": "q_c_02_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_c_02_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_c_02_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_c_02_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_c_02_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_c_03",
+   "house_id": "house_c",
+   "item_order": 3,
+   "prompt": "Bạn có cẩn thận kiểm tra lại số liệu, bài làm để tránh sai sót không?",
+   "choices": [
+    {
+     "option_id": "q_c_03_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_c_03_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_c_03_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_c_03_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_c_03_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_c_04",
+   "house_id": "house_c",
+   "item_order": 4,
+   "prompt": "Bạn có thích lập bảng tính, theo dõi chi tiêu hoặc thời gian biểu không?",
+   "choices": [
+    {
+     "option_id": "q_c_04_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_c_04_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_c_04_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_c_04_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_c_04_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  },
+  {
+   "question_id": "q_c_05",
+   "house_id": "house_c",
+   "item_order": 5,
+   "prompt": "Bạn có thích công việc ổn định, có hướng dẫn cụ thể không?",
+   "choices": [
+    {
+     "option_id": "q_c_05_opt_1",
+     "label": "Hoàn toàn không",
+     "rating": 1
+    },
+    {
+     "option_id": "q_c_05_opt_2",
+     "label": "Không lắm",
+     "rating": 2
+    },
+    {
+     "option_id": "q_c_05_opt_3",
+     "label": "Bình thường",
+     "rating": 3
+    },
+    {
+     "option_id": "q_c_05_opt_4",
+     "label": "Khá thích",
+     "rating": 4
+    },
+    {
+     "option_id": "q_c_05_opt_5",
+     "label": "Rất thích",
+     "rating": 5
+    }
+   ]
+  }
+ ],
+ "houses": [
+  {
+   "house_id": "house_r",
+   "name": "Nhà Kiến Tạo",
+   "theme_ref": "theme_r",
+   "mascot_ref": "mascot_r",
+   "strengths": [
+    "Khéo tay, thực tế",
+    "Bền bỉ khi làm việc cụ thể"
+   ],
+   "tendencies": [
+    "Thích làm ra sản phẩm nhìn thấy được",
+    "Học tốt nhất qua thực hành"
+   ],
+   "suggested_fields": [
+    "Kỹ thuật cơ khí",
+    "Điện - điện tử",
+    "Xây dựng",
+    "Nông nghiệp công nghệ cao"
+   ],
+   "quote": "Bàn tay khéo léo biến ý tưởng thành hiện thực."
+  },
+  {
+   "house_id": "house_i",
+   "name": "Nhà Khám Phá",
+   "theme_ref": "theme_i",
+   "mascot_ref": "mascot_i",
+   "strengths": [
+    "Tư duy logic",
+    "Tò mò, ham tìm hiểu"
+   ],
+   "tendencies": [
+    "Thích đặt câu hỏi “vì sao”",
+    "Thích tự nghiên cứu sâu"
+   ],
+   "suggested_fields": [
+    "Công nghệ thông tin",
+    "Khoa học dữ liệu",
+    "Y dược",
+    "Khoa học tự nhiên"
+   ],
+   "quote": "Mỗi câu hỏi là một cánh cửa mới."
+  },
+  {
+   "house_id": "house_a",
+   "name": "Nhà Sáng Tạo",
+   "theme_ref": "theme_a",
+   "mascot_ref": "mascot_a",
+   "strengths": [
+    "Giàu trí tưởng tượng",
+    "Nhạy cảm với cái đẹp"
+   ],
+   "tendencies": [
+    "Thích tự do thể hiện bản thân",
+    "Không thích khuôn mẫu cứng nhắc"
+   ],
+   "suggested_fields": [
+    "Thiết kế đồ họa",
+    "Truyền thông đa phương tiện",
+    "Kiến trúc",
+    "Nghệ thuật biểu diễn"
+   ],
+   "quote": "Sáng tạo là cách bạn kể câu chuyện của mình."
+  },
+  {
+   "house_id": "house_s",
+   "name": "Nhà Kết Nối",
+   "theme_ref": "theme_s",
+   "mascot_ref": "mascot_s",
+   "strengths": [
+    "Thấu hiểu, biết lắng nghe",
+    "Giao tiếp tốt"
+   ],
+   "tendencies": [
+    "Thích giúp đỡ người khác",
+    "Làm việc nhóm hiệu quả"
+   ],
+   "suggested_fields": [
+    "Sư phạm",
+    "Tâm lý học",
+    "Điều dưỡng",
+    "Công tác xã hội"
+   ],
+   "quote": "Bạn làm thế giới ấm áp hơn mỗi ngày."
+  },
+  {
+   "house_id": "house_e",
+   "name": "Nhà Dẫn Dắt",
+   "theme_ref": "theme_e",
+   "mascot_ref": "mascot_e",
+   "strengths": [
+    "Tự tin, quyết đoán",
+    "Có khả năng thuyết phục"
+   ],
+   "tendencies": [
+    "Thích dẫn dắt và tổ chức",
+    "Hướng tới mục tiêu lớn"
+   ],
+   "suggested_fields": [
+    "Quản trị kinh doanh",
+    "Marketing",
+    "Luật",
+    "Quản lý sự kiện"
+   ],
+   "quote": "Bạn biến tầm nhìn thành hành động."
+  },
+  {
+   "house_id": "house_c",
+   "name": "Nhà Tổ Chức",
+   "theme_ref": "theme_c",
+   "mascot_ref": "mascot_c",
+   "strengths": [
+    "Cẩn thận, chính xác",
+    "Có kế hoạch rõ ràng"
+   ],
+   "tendencies": [
+    "Thích làm việc theo quy trình",
+    "Đáng tin cậy với chi tiết"
+   ],
+   "suggested_fields": [
+    "Kế toán - kiểm toán",
+    "Tài chính - ngân hàng",
+    "Logistics",
+    "Quản trị văn phòng"
+   ],
+   "quote": "Sự ngăn nắp của bạn giữ mọi thứ vận hành."
+  }
+ ],
+ "selection_rules": {
+  "rule_schema_ref": "rule.schema.localis.selection.adaptive_bounds:v1",
+  "engine_version": "career-assessment-v1",
+  "payload": {
+   "baseline_order": [
+    "q_r_01",
+    "q_i_01",
+    "q_a_01",
+    "q_s_01",
+    "q_e_01",
+    "q_c_01",
+    "q_r_02",
+    "q_i_02",
+    "q_a_02",
+    "q_s_02",
+    "q_e_02",
+    "q_c_02"
+   ],
+   "selector": "widest_bound_gap",
+   "fallback": "tie_order_then_item_order"
+  }
+ },
+ "scoring_rules": {
+  "rule_schema_ref": "rule.schema.localis.scoring.mean_rating:v1",
+  "engine_version": "career-assessment-v1",
+  "payload": {
+   "rating_scale": [
+    1,
+    5
+   ],
+   "algorithm": "mean_rating"
+  }
+ },
+ "coverage_rules": {
+  "rule_schema_ref": "rule.schema.localis.coverage.bounded_stop:v1",
+  "engine_version": "career-assessment-v1",
+  "payload": {
+   "items_per_house": 5,
+   "baseline_total": 12,
+   "min_answers_per_house": 2,
+   "max_total": 30,
+   "stop": "strict_bounds"
+  }
+ },
+ "tie_policy": {
+  "rule_schema_ref": "rule.schema.localis.tie.fixed_order:v1",
+  "engine_version": "career-assessment-v1",
+  "payload": {
+   "order": [
+    "house_r",
+    "house_i",
+    "house_a",
+    "house_s",
+    "house_e",
+    "house_c"
+   ],
+   "apply_at": "question_limit"
+  }
+ },
+ "templates": {
+  "intro_prompt": "Cùng khám phá sở thích của bạn nhé.",
+  "clarification_prompt": "Bạn chọn ý gần nhất nhé.",
+  "completion_message": "Bạn đã hoàn thành bài khám phá!"
+ },
+ "evaluation_cases": [
+  {
+   "case_id": "case_all_neutral",
+   "mandatory": true,
+   "answers": [
+    {
+     "question_id": "q_r_01",
+     "option_id": "q_r_01_opt_3"
+    },
+    {
+     "question_id": "q_i_01",
+     "option_id": "q_i_01_opt_3"
+    },
+    {
+     "question_id": "q_a_01",
+     "option_id": "q_a_01_opt_3"
+    },
+    {
+     "question_id": "q_s_01",
+     "option_id": "q_s_01_opt_3"
+    },
+    {
+     "question_id": "q_e_01",
+     "option_id": "q_e_01_opt_3"
+    },
+    {
+     "question_id": "q_c_01",
+     "option_id": "q_c_01_opt_3"
+    },
+    {
+     "question_id": "q_r_02",
+     "option_id": "q_r_02_opt_3"
+    },
+    {
+     "question_id": "q_i_02",
+     "option_id": "q_i_02_opt_3"
+    },
+    {
+     "question_id": "q_a_02",
+     "option_id": "q_a_02_opt_3"
+    },
+    {
+     "question_id": "q_s_02",
+     "option_id": "q_s_02_opt_3"
+    },
+    {
+     "question_id": "q_e_02",
+     "option_id": "q_e_02_opt_3"
+    },
+    {
+     "question_id": "q_c_02",
+     "option_id": "q_c_02_opt_3"
+    },
+    {
+     "question_id": "q_r_03",
+     "option_id": "q_r_03_opt_3"
+    },
+    {
+     "question_id": "q_i_03",
+     "option_id": "q_i_03_opt_3"
+    },
+    {
+     "question_id": "q_a_03",
+     "option_id": "q_a_03_opt_3"
+    },
+    {
+     "question_id": "q_s_03",
+     "option_id": "q_s_03_opt_3"
+    },
+    {
+     "question_id": "q_e_03",
+     "option_id": "q_e_03_opt_3"
+    },
+    {
+     "question_id": "q_c_03",
+     "option_id": "q_c_03_opt_3"
+    },
+    {
+     "question_id": "q_r_04",
+     "option_id": "q_r_04_opt_3"
+    },
+    {
+     "question_id": "q_i_04",
+     "option_id": "q_i_04_opt_3"
+    },
+    {
+     "question_id": "q_a_04",
+     "option_id": "q_a_04_opt_3"
+    },
+    {
+     "question_id": "q_s_04",
+     "option_id": "q_s_04_opt_3"
+    },
+    {
+     "question_id": "q_e_04",
+     "option_id": "q_e_04_opt_3"
+    },
+    {
+     "question_id": "q_c_04",
+     "option_id": "q_c_04_opt_3"
+    },
+    {
+     "question_id": "q_r_05",
+     "option_id": "q_r_05_opt_3"
+    },
+    {
+     "question_id": "q_i_05",
+     "option_id": "q_i_05_opt_3"
+    },
+    {
+     "question_id": "q_a_05",
+     "option_id": "q_a_05_opt_3"
+    },
+    {
+     "question_id": "q_s_05",
+     "option_id": "q_s_05_opt_3"
+    },
+    {
+     "question_id": "q_e_05",
+     "option_id": "q_e_05_opt_3"
+    },
+    {
+     "question_id": "q_c_05",
+     "option_id": "q_c_05_opt_3"
+    }
+   ],
+   "expected": {
+    "question_ids": [
+     "q_r_01",
+     "q_i_01",
+     "q_a_01",
+     "q_s_01",
+     "q_e_01",
+     "q_c_01",
+     "q_r_02",
+     "q_i_02",
+     "q_a_02",
+     "q_s_02",
+     "q_e_02",
+     "q_c_02",
+     "q_r_03",
+     "q_i_03",
+     "q_a_03",
+     "q_s_03",
+     "q_e_03",
+     "q_c_03",
+     "q_r_04",
+     "q_i_04",
+     "q_a_04",
+     "q_s_04",
+     "q_e_04",
+     "q_c_04",
+     "q_r_05",
+     "q_i_05",
+     "q_a_05",
+     "q_s_05",
+     "q_e_05",
+     "q_c_05"
+    ],
+    "house_id": "house_r",
+    "scores": {
+     "house_r": 3.0,
+     "house_i": 3.0,
+     "house_a": 3.0,
+     "house_s": 3.0,
+     "house_e": 3.0,
+     "house_c": 3.0
+    },
+    "stopping_reason": "question_limit",
+    "tie_applied": true
+   }
+  }
+ ],
+ "approval_refs": [
+  "approval_local_demo"
+ ]
+}

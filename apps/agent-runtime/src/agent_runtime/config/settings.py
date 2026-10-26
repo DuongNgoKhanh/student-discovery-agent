@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     RUNTIME_INTERNAL_KEYRING: SecretStr | None = None
     RUNTIME_CURSOR_SIGNING_KEY: SecretStr | None = None
     RUNTIME_INTERNAL_TOKEN_MAX_AGE_SECONDS: int = 60
+    # Local development only: read active releases from this directory instead of Product.
+    RUNTIME_LOCAL_RELEASES_DIR: str | None = None
 
     # Gemini / embeddings
     GOOGLE_API_KEY: str = ""

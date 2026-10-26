@@ -126,6 +126,7 @@ class AgentTemplates(ContractModel):
     next_question: TemplateText = "Câu tiếp theo nhé, {{display_name}}!"
     completed: TemplateText = "Đây là kết quả của bạn!"
     clarification: TemplateText = "Bạn chọn ý nào dưới đây?"
+    ask_name: TemplateText = "Trước khi bắt đầu, bạn cho mình biết tên của bạn nhé?"
 
 
 class AgentSnapshotV1(ContractModel):

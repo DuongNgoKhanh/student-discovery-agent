@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import functools
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -18,6 +19,7 @@ from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_eng
 from agent_runtime.infrastructure.db.trace import DatabaseTraceSink
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
 from agent_runtime.infrastructure.http.trace import request_trace_context
+from agent_runtime.infrastructure.product.local_files import LocalReleaseSource
 from agent_runtime.infrastructure.product.releases import ProductUnavailable
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import RuntimePolicy
@@ -100,15 +102,20 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         engine = build_engine(settings.RUNTIME_DATABASE_URL.get_secret_value())
         uow = RuntimeUnitOfWork(engine)
         trace_sink = DatabaseTraceSink(uow)
-        product, validator = ProductUnavailable(), ExperienceValidator()
+        product = (LocalReleaseSource(settings.RUNTIME_LOCAL_RELEASES_DIR) if settings.RUNTIME_LOCAL_RELEASES_DIR
+                   else ProductUnavailable())
+        validator = ExperienceValidator()
         conversations = ConversationService(uow, product, validator, policy=policy, trace_sink=trace_sink)
         store = TurnStore(uow, ActivityPersistence(uow, product, validator), conversations)
         handler = TurnHandler(PinnedAssessmentEngine(), completion=EngineCompletionPort())
-        turns = TurnService(store, handler, trace_sink=trace_sink)
+        # Imported lazily: provider SDKs load only when a runtime with a database is built.
+        from agent_runtime.infrastructure.llm.model_registry import build_model_port
+        turns = TurnService(store, handler, models=functools.cache(build_model_port), trace_sink=trace_sink)
         return RuntimeContainer(policy=policy, verifier=verifier, conversations=conversations,
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
-            results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, engine=engine)
+            results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, engine=engine,
+            product_ready=isinstance(product, LocalReleaseSource))
     except Exception:
         if engine is not None:
             engine.dispose()

@@ -129,7 +129,8 @@ def run_agent_turn(snapshot: AgentSnapshotV1, model: ModelPort, executor: ToolEx
                 results.append(ToolResultMessage(call.id, call.name, {"shown": True}))
                 continue
             result = dict(executor.execute(call.name, arguments))
-            if declaration.handoff:
+            # A rejected handoff is an ordinary tool error: the model sees it and may recover.
+            if declaration.handoff and "error" not in result:
                 handoff = Handoff(call.name, arguments, result)
                 break  # later calls in the same reply are dropped: the server owns what happens next
             results.append(ToolResultMessage(call.id, call.name, result))
