@@ -2,15 +2,23 @@
 
 Studio may bind declared tools and fill their params; behaviour, argument schemas and effects stay in code.
 """
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Annotated
 
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, model_validator
 
 from agent_runtime.sessions.schemas.common import ContractModel, NonEmptyText, OpaqueId
 
 SUPPORTED_MODEL_PROVIDERS = frozenset({"gemini"})
 PROMPT_VARIABLES = frozenset({"display_name", "current_date"})
+PLACEHOLDER = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+
+
+def render_placeholders(text: str, values: Mapping[str, str]) -> str:
+    """Substitute known placeholders; anything not in values stays literal."""
+    return PLACEHOLDER.sub(lambda match: values.get(match.group(1), match.group(0)), text)
 
 
 class NoParams(ContractModel):
@@ -25,6 +33,12 @@ class StartExperience(ContractModel):
 
 class StartAssessmentParams(ContractModel):
     experiences: Annotated[tuple[StartExperience, ...], Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def unique_experiences(self) -> "StartAssessmentParams":
+        if len({item.experience_id for item in self.experiences}) != len(self.experiences):
+            raise ValueError("experience_id must be unique")
+        return self
 
 
 @dataclass(frozen=True)

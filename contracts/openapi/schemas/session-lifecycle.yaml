@@ -54,14 +54,14 @@
         greeting_suggestions:
           type: array
           maxItems: 4
-          items: {type: string, minLength: 1, maxLength: 60}
+          items: {type: string, minLength: 1, maxLength: 60, pattern: '\S'}
         persona:
           type: object
           additionalProperties: false
           properties:
-            name: {type: string, minLength: 1, maxLength: 60}
+            name: {type: string, minLength: 1, maxLength: 60, pattern: '\S'}
             language: {type: string, enum: [vi]}
-            system_prompt: {type: string, minLength: 1, maxLength: 8000,
+            system_prompt: {type: string, minLength: 1, maxLength: 8000, pattern: '\S',
                             description: "Chỉ dùng biến {{display_name}}, {{current_date}}."}
         model:
           type: object
@@ -90,26 +90,26 @@
             additionalProperties: false
             required: [name, version]
             properties:
-              name: {type: string, minLength: 1}
+              name: {type: string, minLength: 1, pattern: '\S'}
               version: {type: integer, minimum: 1}
               params: {type: object}
-              description: {type: string, minLength: 1, maxLength: 1000}
+              description: {type: string, minLength: 1, maxLength: 1000, pattern: '\S'}
           description: Mỗi name@version phải có trong tool catalog của runtime; params kiểm theo schema của tool.
         guardrails:
           type: object
           additionalProperties: false
           properties:
-            blocked_topics: {type: array, items: {type: string, minLength: 1, maxLength: 60}}
-            refusal_text: {type: string, minLength: 1, maxLength: 500}
+            blocked_topics: {type: array, maxItems: 20, items: {type: string, minLength: 1, maxLength: 60, pattern: '\S'}}
+            refusal_text: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
         templates:
           type: object
           additionalProperties: false
           properties:
-            unknown_message: {type: string, minLength: 1, maxLength: 500}
-            fallback_suggestions: {type: array, maxItems: 4, items: {type: string, minLength: 1, maxLength: 60}}
-            next_question: {type: string, minLength: 1, maxLength: 500}
-            completed: {type: string, minLength: 1, maxLength: 500}
-            clarification: {type: string, minLength: 1, maxLength: 500}
+            unknown_message: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+            fallback_suggestions: {type: array, maxItems: 4, items: {type: string, minLength: 1, maxLength: 60, pattern: '\S'}}
+            next_question: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+            completed: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+            clarification: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
       description: "agent.snapshot.v1 content: cấu hình agent (persona, model, limits, tools, guardrails, templates); mọi field ngoài greeting_text/allowed_activity_profiles có mặc định an toàn (model null, tools rỗng). Greeting projects to a server-ID text v1 block without an LLM call. Adapter proposal; does not imply Product registry support."
     ReleaseKey:
       type: object

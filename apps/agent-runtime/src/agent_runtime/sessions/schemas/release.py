@@ -1,18 +1,15 @@
 ﻿"""Immutable Product delivery descriptors, separate from definition versions."""
-import re
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, Field, StringConstraints, ValidationError, model_validator
 
-from agent_runtime.agent.catalog import PROMPT_VARIABLES, SUPPORTED_MODEL_PROVIDERS, TOOL_DECLARATIONS
+from agent_runtime.agent.catalog import PLACEHOLDER, PROMPT_VARIABLES, SUPPORTED_MODEL_PROVIDERS, TOOL_DECLARATIONS
 
 from .common import ContentHash, ContractModel, JsonObject, NonEmptyText, OpaqueId
 
-_VARIABLE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
-
 
 def _known_variables(text: str) -> str:
-    unknown = set(_VARIABLE.findall(text)) - PROMPT_VARIABLES
+    unknown = set(PLACEHOLDER.findall(text)) - PROMPT_VARIABLES
     if unknown:
         raise ValueError(f"unknown prompt variables: {sorted(unknown)}")
     return text
@@ -41,7 +38,7 @@ class AgentPersona(ContractModel):
 
 class AgentModelConfig(ContractModel):
     ref: Annotated[str, StringConstraints(pattern=r"^[a-z0-9-]+/[A-Za-z0-9._-]+$")]
-    temperature: Annotated[float, Field(ge=0, le=2)] = 0.4
+    temperature: Annotated[float, Field(strict=True, ge=0, le=2)] = 0.4
     max_output_tokens: Annotated[int, Field(strict=True, ge=1, le=4096)] = 800
     timeout_ms: Annotated[int, Field(strict=True, ge=1000, le=30000)] = 8000
     max_retries: Annotated[int, Field(strict=True, ge=0, le=3)] = 1
@@ -87,7 +84,7 @@ class AgentToolBinding(ContractModel):
 
 
 class AgentGuardrails(ContractModel):
-    blocked_topics: tuple[Label, ...] = ()
+    blocked_topics: Annotated[tuple[Label, ...], Field(max_length=20)] = ()
     refusal_text: TemplateText = "Mình chỉ hỗ trợ các chủ đề học tập và hướng nghiệp nhé."
 
 

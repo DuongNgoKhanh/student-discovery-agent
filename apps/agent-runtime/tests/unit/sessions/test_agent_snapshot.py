@@ -52,6 +52,9 @@ def mutate(path, value):
     mutate(("model", "ref"), "gemini"),                                           # sai định dạng ref
     mutate(("limits", "max_tool_steps"), 9),                                      # vượt trần
     mutate(("model", "timeout_ms"), 30001),
+    mutate(("model", "temperature"), "0.4"),                                      # strict: không nhận chuỗi
+    mutate(("model", "temperature"), True),                                       # strict: không nhận bool
+    mutate(("guardrails", "blocked_topics"), [f"chủ đề {i}" for i in range(21)]), # vượt 20 mục
     mutate(("persona", "system_prompt"), "Xin chào {{owner_id}}"),                # biến lạ
     mutate(("persona", "api_key"), "secret"),                                     # field lạ
 ])
@@ -64,3 +67,11 @@ def test_invalid_agent_config_is_rejected(content):
         validate_release(untrusted, environment="demo",
                          capabilities=CapabilitySnapshot(), validator=ExperienceValidator())
     assert error.value.code == "INCOMPATIBLE_RELEASE"
+
+
+def test_duplicate_experience_in_assessment_start_is_rejected():
+    content = deepcopy(DEMO)
+    experiences = content["tools"][0]["params"]["experiences"]
+    experiences.append(dict(experiences[0], label="Bản sao"))
+    with pytest.raises(ValidationError):
+        AgentSnapshotV1.model_validate(content)
