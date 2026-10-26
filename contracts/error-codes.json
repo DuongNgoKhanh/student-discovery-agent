@@ -74,6 +74,13 @@
         "IDEMPOTENCY_KEY_COLLISION"
       ]
     },
+    "CONFLICT_RESPONSE_NOT_CANCELLABLE": {
+      "description": "The response already completed or failed and can no longer be cancelled.",
+      "ui_action": "Read the response and show its final state; do not retry the cancel.",
+      "aliases": [
+        "RESPONSE_NOT_CANCELLABLE"
+      ]
+    },
     "CONFLICT_REVISION": {
       "description": "Conflict revision.",
       "ui_action": "Reload current state and ask for a new action; do not automatically retry.",
@@ -100,6 +107,13 @@
       "ui_action": "Reload current state and ask for a new action; do not automatically retry.",
       "aliases": [
         "STALE_RESULT_REVISION"
+      ]
+    },
+    "CONFLICT_TURN_IN_PROGRESS": {
+      "description": "Another turn of this conversation is still running.",
+      "ui_action": "Poll GET /responses/{details.response_id} until it finishes, then send again with the new revision.",
+      "aliases": [
+        "TURN_IN_PROGRESS"
       ]
     },
     "CONFLICT_VERSION_EXISTS": {
@@ -195,6 +209,13 @@
       "ui_action": "Use bounded backoff only when retryable; retain idempotency key and payload.",
       "aliases": [
         "REQUEST_TIMEOUT"
+      ]
+    },
+    "SYS_TURN_ABANDONED": {
+      "description": "The turn stopped without finishing (the runtime restarted or timed out); nothing was written.",
+      "ui_action": "Send the message again with a new idempotency key.",
+      "aliases": [
+        "TURN_ABANDONED"
       ]
     },
     "SYS_UNAVAILABLE": {

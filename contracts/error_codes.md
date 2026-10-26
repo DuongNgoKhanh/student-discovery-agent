@@ -16,10 +16,12 @@
 | `CONFLICT_ACTIVE_RELEASE` | `ACTIVE_RELEASE_CONFLICT` | Reload current state and ask for a new action; do not automatically retry. |
 | `CONFLICT_EMAIL_EXISTS` | `VAL_EMAIL_ALREADY_EXISTS` | Choose another email or sign in to the existing account. |
 | `CONFLICT_IDEMPOTENCY_KEY` | `IDEMPOTENCY_KEY_COLLISION` | Create a new key for a new action; retry an existing key only with its original payload. |
+| `CONFLICT_RESPONSE_NOT_CANCELLABLE` | `RESPONSE_NOT_CANCELLABLE` | Read the response and show its final state; do not retry the cancel. |
 | `CONFLICT_REVISION` | `REVISION_CONFLICT` | Reload current state and ask for a new action; do not automatically retry. |
 | `CONFLICT_STALE_CLARIFICATION` | `STALE_CLARIFICATION` | Reload current state and ask for a new action; do not automatically retry. |
 | `CONFLICT_STALE_REPORT` | `STALE_REPORT` | Reload current state and ask for a new action; do not automatically retry. |
 | `CONFLICT_STALE_RESULT_REVISION` | `STALE_RESULT_REVISION` | Reload current state and ask for a new action; do not automatically retry. |
+| `CONFLICT_TURN_IN_PROGRESS` | `TURN_IN_PROGRESS` | Poll GET /responses/{details.response_id} until it finishes, then send again with the new revision. |
 | `CONFLICT_VERSION_EXISTS` | `VAL_VERSION_ALREADY_EXISTS` | Reload current state and ask for a new action; do not automatically retry. |
 | `PUBLISH_GATE_FAILED` |  | Show publish gate details and repair the draft. |
 | `RES_AVATAR_NOT_FOUND` |  | Show unavailable/missing resource or terminal state; do not automatically retry. |
@@ -35,6 +37,7 @@
 | `SYS_INTERNAL_ERROR` | `INTERNAL_ERROR` | Use bounded backoff only when retryable; retain idempotency key and payload. |
 | `SYS_RATE_LIMITED` | `RATE_LIMITED` | Wait for the server cooldown before a bounded retry. |
 | `SYS_REQUEST_TIMEOUT` | `REQUEST_TIMEOUT` | Use bounded backoff only when retryable; retain idempotency key and payload. |
+| `SYS_TURN_ABANDONED` | `TURN_ABANDONED` | Send the message again with a new idempotency key. |
 | `SYS_UNAVAILABLE` | `SERVICE_UNAVAILABLE` | For not_configured repair configuration; for dependency_down use bounded backoff and Retry-After when retryable. |
 | `VAL_INCOMPATIBLE_RELEASE` | `INCOMPATIBLE_RELEASE` | Show validation feedback and correct the request. |
 | `VAL_INCOMPATIBLE_SCHEMA` | `INCOMPATIBLE_SCHEMA` | Show validation feedback and correct the request. |
