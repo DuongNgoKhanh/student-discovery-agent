@@ -31,18 +31,51 @@ def _json(value) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def to_agno_message(message: ChatMessage) -> Message:
-    if isinstance(message, SystemMessage):
-        return Message(role="system", content=message.text)
+def _function_call(call: ToolCall) -> dict:
+    """Canonical replay shape; only the opaque thought signature is carried over from provider data."""
+    raw = {"id": call.id, "type": "function",
+           "function": {"name": wire_name(call.name), "arguments": _json(call.arguments or {})}}
+    if (call.provider_data or {}).get("thought_signature"):
+        raw["thought_signature"] = call.provider_data["thought_signature"]
+    return raw
+
+
+def to_agno_message(message: ChatMessage) -> Message | None:
+    """One non-tool-result message; None when it carries nothing to send."""
     if isinstance(message, AssistantMessage):
-        calls = [call.provider_data or {"id": call.id, "type": "function", "function": {
-            "name": wire_name(call.name), "arguments": _json(call.arguments or {})}} for call in message.tool_calls]
+        calls = [_function_call(call) for call in message.tool_calls]
+        if not message.text and not calls:
+            return None
         return Message(role="assistant", content=message.text, tool_calls=calls or None)
-    if isinstance(message, ToolResultMessage):
-        content = _json(message.content)
-        return Message(role="tool", content=[content], tool_calls=[
-            {"tool_call_id": message.call_id, "tool_name": wire_name(message.name), "content": content}])
     return Message(role="user", content=message.text)
+
+
+def _tool_turn(results: list[ToolResultMessage]) -> Message:
+    contents = [_json(result.content) for result in results]
+    return Message(role="tool", content=contents, tool_calls=[
+        {"tool_call_id": result.call_id, "tool_name": wire_name(result.name), "content": content}
+        for result, content in zip(results, contents, strict=True)])
+
+
+def to_agno_messages(messages: Sequence[ChatMessage]) -> list[Message]:
+    """System texts merge into one leading message; consecutive tool results merge into one tool turn."""
+    system = [m.text for m in messages if isinstance(m, SystemMessage)]
+    converted = [Message(role="system", content="\n\n".join(system))] if system else []
+    pending: list[ToolResultMessage] = []
+    for message in messages:
+        if isinstance(message, ToolResultMessage):
+            pending.append(message)
+            continue
+        if pending:
+            converted.append(_tool_turn(pending))
+            pending = []
+        if isinstance(message, SystemMessage):
+            continue
+        if (item := to_agno_message(message)) is not None:
+            converted.append(item)
+    if pending:
+        converted.append(_tool_turn(pending))
+    return converted
 
 
 def _definition(tool: ToolDefinition) -> dict:
@@ -64,6 +97,12 @@ def _is_timeout(error: BaseException | None) -> bool:
             return True
         error = error.__cause__ or error.__context__
     return False
+
+
+def _is_deterministic(error: BaseException) -> bool:
+    """4xx other than 429 (bad request, auth) will fail identically on retry."""
+    status = getattr(error, "status_code", None)
+    return isinstance(status, int) and 400 <= status < 500 and status != 429
 
 
 def _reply(response, names: dict[str, str]) -> ModelReply:
@@ -93,14 +132,14 @@ class GeminiChatModel:
             model = self._factory(id=settings.model_id, api_key=self._api_key, temperature=settings.temperature,
                                   max_output_tokens=settings.max_output_tokens,
                                   client_params={"http_options": self._http_options(settings)})
-            payload = [to_agno_message(message) for message in messages]
+            payload = to_agno_messages(messages)
             definitions = [_definition(tool) for tool in tools] or None
         except Exception as error:  # provider boundary: nothing may raise past the port
             logger.warning("model setup error: {}", type(error).__name__)
             return ModelUnavailable("provider_error", type(error).__name__)
         names = {wire_name(tool.name): tool.name for tool in tools}
         failure = ModelUnavailable("provider_error")
-        for _ in range(settings.max_retries + 1):
+        for _ in range(max(0, settings.max_retries) + 1):
             try:
                 response = model.invoke(messages=payload, assistant_message=Message(role="assistant"),
                                         tools=definitions)
@@ -110,6 +149,8 @@ class GeminiChatModel:
                     return ModelUnavailable("timeout", type(error).__name__)
                 logger.warning("model provider error: {}", type(error).__name__)
                 failure = ModelUnavailable("provider_error", type(error).__name__)
+                if _is_deterministic(error):
+                    return failure
                 continue
             try:
                 return _reply(response, names)

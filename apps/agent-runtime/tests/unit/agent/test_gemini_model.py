@@ -17,7 +17,7 @@ from agent_runtime.agent.model import (
     ToolResultMessage,
     UserMessage,
 )
-from agent_runtime.infrastructure.llm.gemini_model import GeminiChatModel, to_agno_message
+from agent_runtime.infrastructure.llm.gemini_model import GeminiChatModel, to_agno_messages
 
 SETTINGS = ModelSettings(model_id="gemini-2.5-flash", temperature=0.2, max_output_tokens=300,
                          timeout_ms=5000, max_retries=1)
@@ -92,7 +92,7 @@ def test_history_with_tool_round_trip_formats_offline_for_gemini():
     history = [SystemMessage("persona"), UserMessage("em thích sửa máy"), AssistantMessage(None, (call,)),
                ToolResultMessage(call_id="c1", name="assessment.propose_answer", content={"ok": True})]
     formatted, system = Gemini(id="gemini-2.5-flash", api_key="unused")._format_messages(
-        [to_agno_message(message) for message in history])
+        to_agno_messages(history))
     assert system == "persona"
     assert formatted[1].parts[0].function_call.name == "assessment__propose_answer"
     assert formatted[2].parts[0].function_response.response == {"result": json.dumps({"ok": True})}
@@ -111,3 +111,50 @@ def test_setup_failures_never_raise_past_the_port():
 
     failure = GeminiChatModel("key", model_factory=broken_factory).invoke([UserMessage("hi")], [], SETTINGS)
     assert failure == ModelUnavailable("provider_error", "ValueError")
+
+
+def _format(history):
+    return Gemini(id="gemini-2.5-flash", api_key="unused")._format_messages(to_agno_messages(history))
+
+
+def test_zero_arg_call_with_empty_provider_arguments_replays_and_keeps_signature():
+    raw = {"id": "c1", "type": "function", "thought_signature": "c2ln",
+           "function": {"name": "assessment__propose_answer", "arguments": ""}}
+    call = ToolCall(id="c1", name="assessment.propose_answer", arguments={}, provider_data=raw)
+    formatted, _ = _format([UserMessage("hi"), AssistantMessage(None, (call,)),
+                            ToolResultMessage(call_id="c1", name="assessment.propose_answer", content={"ok": 1})])
+    part = formatted[1].parts[0]
+    assert part.function_call.name == "assessment__propose_answer" and part.thought_signature
+
+
+def test_parallel_tool_results_form_one_function_response_turn():
+    calls = (ToolCall(id="c1", name="a.one", arguments={}), ToolCall(id="c2", name="a.two", arguments={"x": 1}))
+    formatted, _ = _format([UserMessage("hi"), AssistantMessage(None, calls),
+                            ToolResultMessage(call_id="c1", name="a.one", content={"r": 1}),
+                            ToolResultMessage(call_id="c2", name="a.two", content={"r": 2})])
+    assert len(formatted) == 3 and len(formatted[1].parts) == 2
+    assert [part.function_response.name for part in formatted[2].parts] == ["a__one", "a__two"]
+
+
+def test_multiple_system_messages_are_joined():
+    _, system = _format([SystemMessage("persona"), SystemMessage("brief"), UserMessage("hi")])
+    assert system == "persona\n\nbrief"
+
+
+def test_empty_assistant_message_is_dropped():
+    formatted, _ = _format([UserMessage("hi"), AssistantMessage(None, ()), UserMessage("again")])
+    assert [content.role for content in formatted] == ["user", "user"]
+
+
+def test_deterministic_client_errors_are_not_retried_but_rate_limits_are():
+    factory, created = stub_factory(ModelProviderError("bad", status_code=400), ModelResponse(content="x"))
+    failure = GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS)
+    assert failure == ModelUnavailable("provider_error", "ModelProviderError") and len(created[0].invocations) == 1
+    factory, _ = stub_factory(ModelProviderError("slow down", status_code=429), ModelResponse(content="ok"))
+    assert GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS).text == "ok"
+
+
+def test_proxy_url_is_wired_into_http_options():
+    factory, created = stub_factory(ModelResponse(content="ok"))
+    GeminiChatModel("key", proxy_url="http://p:1", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS)
+    assert created[0].kwargs["client_params"]["http_options"].client_args == {"proxy": "http://p:1"}
