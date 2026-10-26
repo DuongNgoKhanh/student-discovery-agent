@@ -1,6 +1,7 @@
 """Code-owned declarations an agent snapshot may reference.
 
-Studio may bind declared tools and fill their params; behaviour, argument schemas and effects stay in code.
+Studio may bind declared tools, fill their params and override their description; the tool set and its params
+schema stay in code.
 """
 import re
 from collections.abc import Mapping
@@ -11,13 +12,13 @@ from pydantic import BaseModel, Field, StringConstraints, model_validator
 
 from agent_runtime.sessions.schemas.common import ContractModel, NonEmptyText, OpaqueId
 
-SUPPORTED_MODEL_PROVIDERS = frozenset({"gemini"})
+SUPPORTED_MODEL_PROVIDERS = frozenset({"gemini", "openai"})  # adapters: infrastructure/llm/model_registry.py
 PROMPT_VARIABLES = frozenset({"display_name", "current_date"})
 PLACEHOLDER = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 
 
 def render_placeholders(text: str, values: Mapping[str, str]) -> str:
-    """Substitute known placeholders; anything not in values stays literal."""
+    """Substitute {{name}} placeholders whose name is in values; others stay literal."""
     return PLACEHOLDER.sub(lambda match: values.get(match.group(1), match.group(0)), text)
 
 

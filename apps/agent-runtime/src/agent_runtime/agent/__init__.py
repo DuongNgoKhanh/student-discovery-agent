@@ -1,1 +1,1 @@
-"""Agent core: catalog, model port, tools and loop."""
+"""Agent core: tool catalog and provider-neutral model port."""

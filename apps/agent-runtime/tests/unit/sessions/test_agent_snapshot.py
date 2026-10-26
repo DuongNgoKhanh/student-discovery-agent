@@ -48,7 +48,11 @@ def mutate(path, value):
     mutate(("tools", 0, "params"), {"experiences": []}),                          # params sai schema
     mutate(("tools", 0, "params", "experiences", 0, "algorithm_profile"), "x"),   # ngoài allowed_activity_profiles
     mutate(("tools", 2, "name"), "assessment.set_name"),                          # trùng tool
-    mutate(("model", "ref"), "openai/gpt-4.1"),                                   # provider chưa hỗ trợ
+    mutate(("model", "ref"), "mistral/large"),                                    # provider chưa hỗ trợ
+    mutate(("model", "timeout_ms"), 15000),                                       # 15s x 2 lần > turn 20s
+    mutate(("persona", "system_prompt"), "Chào {{display-name}}"),                # placeholder sai cú pháp
+    mutate(("templates", "next_question"), "Câu tiếp {{ }}"),                     # placeholder rỗng
+    mutate(("greeting_suggestions",), ["Làm bài", "Làm bài"]),                     # gợi ý trùng
     mutate(("model", "ref"), "gemini"),                                           # sai định dạng ref
     mutate(("limits", "max_tool_steps"), 9),                                      # vượt trần
     mutate(("model", "timeout_ms"), 30001),
@@ -75,3 +79,13 @@ def test_duplicate_experience_in_assessment_start_is_rejected():
     experiences.append(dict(experiences[0], label="Bản sao"))
     with pytest.raises(ValidationError):
         AgentSnapshotV1.model_validate(content)
+
+
+def test_openai_models_are_supported():
+    snapshot = AgentSnapshotV1.model_validate(mutate(("model", "ref"), "openai/gpt-4.1-mini"))
+    assert (snapshot.model.provider, snapshot.model.settings().model_id) == ("openai", "gpt-4.1-mini")
+
+
+def test_invalid_tool_params_name_the_failing_field():
+    with pytest.raises(ValidationError, match=r"experiences\.0\.label"):
+        AgentSnapshotV1.model_validate(mutate(("tools", 0, "params", "experiences", 0, "label"), " "))

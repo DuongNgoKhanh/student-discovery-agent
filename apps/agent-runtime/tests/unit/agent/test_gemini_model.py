@@ -1,7 +1,8 @@
-"""Gemini adapter: one agno model call per invoke, no tool execution, every failure normalised."""
+"""Gemini dialect over the shared agno adapter: retries, failure normalisation and wire format."""
 import json
 
 import httpx
+import pytest
 from agno.exceptions import ModelProviderError
 from agno.models.google import Gemini
 from agno.models.metrics import Metrics
@@ -17,7 +18,7 @@ from agent_runtime.agent.model import (
     ToolResultMessage,
     UserMessage,
 )
-from agent_runtime.infrastructure.llm.gemini_model import GeminiChatModel, to_agno_messages
+from agent_runtime.infrastructure.llm.gemini_model import GeminiChatModel
 
 SETTINGS = ModelSettings(model_id="gemini-2.5-flash", temperature=0.2, max_output_tokens=300,
                          timeout_ms=5000, max_retries=1)
@@ -76,7 +77,7 @@ def test_provider_errors_retry_then_report_unavailable():
     assert GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS).text == "ok"
     factory, _ = stub_factory(ModelProviderError("boom"), ModelProviderError("boom"))
     failure = GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS)
-    assert failure == ModelUnavailable("provider_error", "ModelProviderError")
+    assert failure == ModelUnavailable("provider_error", "ModelProviderError:502")  # agno default status
 
 
 def test_timeouts_are_not_retried():
@@ -91,8 +92,7 @@ def test_history_with_tool_round_trip_formats_offline_for_gemini():
     call = ToolCall(id="c1", name="assessment.propose_answer", arguments={"option_ids": ["o1"]})
     history = [SystemMessage("persona"), UserMessage("em thích sửa máy"), AssistantMessage(None, (call,)),
                ToolResultMessage(call_id="c1", name="assessment.propose_answer", content={"ok": True})]
-    formatted, system = Gemini(id="gemini-2.5-flash", api_key="unused")._format_messages(
-        to_agno_messages(history))
+    formatted, system = _format(history)
     assert system == "persona"
     assert formatted[1].parts[0].function_call.name == "assessment__propose_answer"
     assert formatted[2].parts[0].function_response.response == {"result": json.dumps({"ok": True})}
@@ -114,7 +114,8 @@ def test_setup_failures_never_raise_past_the_port():
 
 
 def _format(history):
-    return Gemini(id="gemini-2.5-flash", api_key="unused")._format_messages(to_agno_messages(history))
+    return Gemini(id="gemini-2.5-flash", api_key="unused")._format_messages(
+        GeminiChatModel("unused").to_agno_messages(history))
 
 
 def test_zero_arg_call_with_empty_provider_arguments_replays_and_keeps_signature():
@@ -149,7 +150,7 @@ def test_empty_assistant_message_is_dropped():
 def test_deterministic_client_errors_are_not_retried_but_rate_limits_are():
     factory, created = stub_factory(ModelProviderError("bad", status_code=400), ModelResponse(content="x"))
     failure = GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS)
-    assert failure == ModelUnavailable("provider_error", "ModelProviderError") and len(created[0].invocations) == 1
+    assert failure == ModelUnavailable("provider_error", "ModelProviderError:400") and len(created[0].invocations) == 1
     factory, _ = stub_factory(ModelProviderError("slow down", status_code=429), ModelResponse(content="ok"))
     assert GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS).text == "ok"
 
@@ -158,3 +159,33 @@ def test_proxy_url_is_wired_into_http_options():
     factory, created = stub_factory(ModelResponse(content="ok"))
     GeminiChatModel("key", proxy_url="http://p:1", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS)
     assert created[0].kwargs["client_params"]["http_options"].client_args == {"proxy": "http://p:1"}
+
+
+def test_empty_completion_is_invalid_response():
+    factory, _ = stub_factory(ModelResponse(content="  "))
+    failure = GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS)
+    assert failure == ModelUnavailable("invalid_response", "empty response")
+
+
+def test_missing_call_id_and_non_object_arguments_are_normalised():
+    raw = {"type": "function", "function": {"name": "assessment__propose_answer", "arguments": "[1]"}}
+    factory, _ = stub_factory(ModelResponse(content=None, tool_calls=[raw]))
+    (call,) = GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [PROPOSE],
+                                                                    SETTINGS).tool_calls
+    assert (call.id, call.arguments) == ("call_0", None)
+
+
+def test_conversion_bugs_raise_instead_of_posing_as_provider_errors():
+    factory, created = stub_factory(ModelResponse(content="ok"))
+    result = ToolResultMessage(call_id="c1", name="a.one", content={"at": object()})
+    with pytest.raises(TypeError):
+        GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi"), result], [], SETTINGS)
+    assert created == []
+
+
+def test_assistant_text_and_tool_calls_replay_as_one_model_turn():
+    call = ToolCall(id="c1", name="a.one", arguments={})
+    formatted, _ = _format([UserMessage("hi"), AssistantMessage("Để mình xem", (call,)),
+                            ToolResultMessage(call_id="c1", name="a.one", content={"r": 1})])
+    parts = formatted[1].parts
+    assert formatted[1].role == "model" and parts[0].text == "Để mình xem" and parts[1].function_call.name == "a__one"

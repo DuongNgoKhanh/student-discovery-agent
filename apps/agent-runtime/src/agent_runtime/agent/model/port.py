@@ -1,12 +1,13 @@
 """Provider-neutral, synchronous chat model port.
 
 Adapters normalise every provider failure into ModelUnavailable; callers never see provider exceptions.
+Bugs in the caller's own messages (e.g. a non-JSON tool result) still raise.
 """
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
-UnavailableReason = Literal["disabled", "not_configured", "timeout", "provider_error", "invalid_response"]
+UnavailableReason = Literal["not_configured", "timeout", "provider_error", "invalid_response"]
 
 
 @dataclass(frozen=True)
@@ -22,7 +23,7 @@ class UserMessage:
 @dataclass(frozen=True)
 class ToolCall:
     id: str
-    name: str
+    name: str  # catalog name; may be one the caller never offered, so callers must check it
     arguments: dict[str, Any] | None  # None when the provider sent unparseable arguments
     provider_data: dict[str, Any] = field(default_factory=dict, compare=False)  # opaque, e.g. thought signatures
 
@@ -52,11 +53,12 @@ class ToolDefinition:
 
 @dataclass(frozen=True)
 class ModelSettings:
+    """Per-call settings; bounds and defaults live in AgentModelConfig (see its settings())."""
     model_id: str
-    temperature: float = 0.4
-    max_output_tokens: int = 800
-    timeout_ms: int = 8000
-    max_retries: int = 1
+    temperature: float
+    max_output_tokens: int
+    timeout_ms: int
+    max_retries: int
 
 
 @dataclass(frozen=True)
@@ -84,7 +86,7 @@ class ModelPort(Protocol):
 
 
 class UnconfiguredModel:
-    """Provider referenced by a snapshot but not configured in this runtime: callers fall back to templates."""
+    """Provider referenced by a snapshot but not configured here; callers are expected to fall back to templates."""
 
     def invoke(self, messages, tools, settings) -> ModelUnavailable:
         return ModelUnavailable("not_configured")
