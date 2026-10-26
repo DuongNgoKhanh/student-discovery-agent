@@ -2,7 +2,8 @@
 
 Serves index.html and forwards /rt/<path> to the runtime's /api/v1/internal/<path>, signing each request the way
 Product's BFF does (HS256 X-Caller-Context bound to method, raw target and body hash). The student identity is
-the X-Dev-Owner header the page sends. Binds to 127.0.0.1; never expose it: it signs for any owner.
+the X-Dev-Owner header the page sends. Server-sent event streams (POST /messages with Accept: text/event-stream)
+are relayed chunk by chunk. Binds to 127.0.0.1; never expose it: it signs for any owner.
 
 Environment: SDA_CHAT_KEYRING (JSON {kid: base64 key}; the first key signs), SDA_CHAT_RUNTIME_URL
 (default http://127.0.0.1:18100), SDA_CHAT_PORT (default 8787).
@@ -73,11 +74,15 @@ class Handler(BaseHTTPRequestHandler):
                        "X-Internal-Caller": "sda-product-bff"}
         if body:
             headers["Content-Type"] = "application/json"
+        if self.headers.get("Accept"):
+            headers["Accept"] = self.headers["Accept"]
         request = urllib.request.Request(RUNTIME_URL + target, data=body or None, method=self.command,
                                          headers=headers)
         started = time.monotonic()
         try:
-            with OPENER.open(request, timeout=60) as response:
+            with OPENER.open(request, timeout=60) as response:  # streams ping every 15 s, well inside the timeout
+                if response.headers.get("Content-Type", "").startswith("text/event-stream"):
+                    return self._relay(response)
                 status, payload = response.status, response.read()
         except urllib.error.HTTPError as error:
             status, payload = error.code, error.read()
@@ -85,6 +90,25 @@ class Handler(BaseHTTPRequestHandler):
             status, payload = 502, json.dumps({"error": f"runtime unreachable: {error}"}).encode()
         elapsed = f"{(time.monotonic() - started) * 1000:.0f}"
         self._send(status, payload, "application/json", {"X-Proxy-Elapsed-Ms": elapsed})
+
+    def _relay(self, response):
+        """Pass SSE frames through as they arrive. A closed browser tab only stops the relay; the runtime still
+        finishes and commits the turn, which GET /rt/responses/{id} then returns."""
+        self.send_response(response.status)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        for name in ("X-Request-ID", "X-Trace-ID"):
+            if response.headers.get(name):
+                self.send_header(name, response.headers[name])
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+        try:
+            while chunk := response.read1(8192):
+                self.wfile.write(chunk)
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_GET(self):
         if self.path in {"/", "/index.html"}:

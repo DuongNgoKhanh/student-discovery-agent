@@ -100,6 +100,7 @@ button,input,textarea,select{font:inherit}
 .rate button{cursor:pointer;border:1px solid var(--bd);background:var(--white);border-radius:6px;padding:1px 7px;font-size:.78rem}
 .rate button.on{background:var(--blue);color:#fff;border-color:var(--blue)}
 .rate input{border:0;border-bottom:1px dashed var(--bd);background:transparent;font-size:.74rem;padding:2px 4px;min-width:0;width:220px;color:var(--dark)}
+.bubble.draft{color:var(--muted);white-space:pre-wrap}
 .typing{display:flex;gap:4px;padding:12px 14px}
 .typing i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:b 1s infinite}
 .typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
@@ -138,6 +139,11 @@ dialog h3{margin:0 0 10px;color:var(--dark)}
         <label><input type="checkbox" id="capSuggestions" checked> suggestions v1</label>
       </div>
       <p class="hint" style="margin-top:6px">Bỏ chọn để xem server hạ cấp về text v1. Áp dụng cho hội thoại mới.</p>
+    </section>
+    <section>
+      <p class="eyebrow">Gửi tin nhắn</p>
+      <div class="checks"><label><input type="checkbox" id="capStream" checked> stream (SSE)</label></div>
+      <p class="hint" style="margin-top:6px">Bật: chữ hiện dần và có nút Hủy. Tắt: chờ JSON. Bấm đáp án luôn dùng JSON.</p>
     </section>
     <section class="row">
       <button class="btn primary" id="create">Hội thoại mới</button>
@@ -203,7 +209,7 @@ const store = {
   get(key, fallback) { try { const v = localStorage.getItem("agentChat." + key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } },
   set(key, value) { try { localStorage.setItem("agentChat." + key, JSON.stringify(value)); } catch {} },
 };
-const state = { owner: store.get("owner", null), conversation: null, entries: [], busy: false, logs: [],
+const state = { owner: store.get("owner", null), conversation: null, entries: [], busy: false, logs: [], draft: null,
                 ratings: store.get("ratings", {}), labels: {} };
 
 function newId(prefix) { return prefix + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 20); }
@@ -302,35 +308,116 @@ async function endConversation() {
   render();
 }
 
-// ---------- turns ----------
-async function submitTurn(body, userEntry, key = newId("turn")) {
+// ---------- turns: POST /messages (SSE or JSON), GET /responses/{id}, cancel ----------
+// One content part per message: {type:"text", text} or {type:"interaction", activity_id, action, payload, ...}.
+async function submitTurn(part, userEntry, key = newId("turn")) {
   if (state.busy || !state.conversation) return;
   if (userEntry) state.entries.push(userEntry);
   setBusy(true); render();
-  const payload = { ...body, expected_revision: state.conversation.revision, idempotency_key: key };
-  const result = await api("POST", `/conversations/${state.conversation.id}/turns`, payload);
-  setBusy(false);
-  if (result.ok) {
-    const data = result.json.data;
-    state.conversation = { ...state.conversation, revision: data.revision, active_activity: data.activity ?? state.conversation.active_activity };
-    state.entries.push({ kind: "assistant", messageId: data.message_id, blocks: data.blocks, turn: data });
-    $("lastTurn").textContent = JSON.stringify(data, null, 2);
-  } else {
-    if (result.status === 409 && result.json?.error?.details?.conversation) {
-      const details = result.json.error.details;
-      state.conversation = details.conversation;
-      state.entries.push({ kind: "warn", message: `Revision lệch (client ${details.expected_revision}, server ${details.actual_revision}) — đã đồng bộ lại trạng thái, gửi lại nếu cần.` });
+  const payload = { expected_revision: state.conversation.revision, idempotency_key: key, content: [part] };
+  const path = `/conversations/${state.conversation.id}/messages`;
+  // Free text streams; form interactions never call the model, so plain JSON is enough for them.
+  const result = part.type === "text" && $("capStream").checked ? await streamTurn(path, payload) : await api("POST", path, payload);
+  state.draft = null;
+  if (result.ok) await applyResponse(result.json.data, () => submitTurn(part, null));
+  else await turnRejected(result, () => submitTurn(part, null, key));
+  setBusy(false); render();
+}
+
+// Reads text/event-stream frames; returns the same {status, json, ok} shape as api() with the final Response.
+async function streamTurn(path, body) {
+  const started = performance.now();
+  let status = 0, json = null;
+  try {
+    const res = await fetch("/rt" + path, { method: "POST", body: JSON.stringify(body),
+      headers: { "X-Dev-Owner": state.owner, "Content-Type": "application/json", "Accept": "text/event-stream" } });
+    status = res.status;
+    if (!(res.headers.get("Content-Type") ?? "").startsWith("text/event-stream")) {
+      json = await res.json().catch(() => null);  // guard errors before the stream opens stay JSON envelopes
     } else {
-      state.entries.push(errorEntry(result, () => submitTurn(body, null, key)));
+      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = "", final = null;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += value;
+        let cut;
+        while ((cut = buffer.indexOf("\n\n")) >= 0) {
+          const frame = buffer.slice(0, cut); buffer = buffer.slice(cut + 2);
+          const event = frame.match(/^event: (.*)$/m)?.[1];
+          const data = frame.match(/^data: (.*)$/m)?.[1];
+          if (!event || data === undefined) continue;  // ": ping" keepalive
+          const payload = JSON.parse(data);
+          if (event === "response.created") state.draft = { text: "", tool: null, responseId: payload.response.id };
+          else if (event === "response.output_text.delta" && state.draft) state.draft.text += payload.delta;
+          else if (event === "response.tool_call" && state.draft) { state.draft.text = ""; state.draft.tool = payload.name; }
+          else final = payload.response;
+          render();
+        }
+      }
+      json = final ? { data: final } : { error: { code: "STREAM_CLOSED", message: "Stream đóng trước event kết thúc" } };
+      if (!final) {  // the server still commits: fetch the outcome instead of guessing
+        const id = state.draft?.responseId;
+        if (id) { const polled = await pollResponse(id); if (polled) json = { data: polled }; }
+      }
     }
+  } catch (error) { json = { error: String(error) }; }
+  const ms = Math.round(performance.now() - started);
+  const ok = status >= 200 && status < 300 && Boolean(json?.data);
+  state.logs.unshift({ method: "POST", path: path + " (SSE)", status, ms, request: body, response: json, at: new Date().toISOString() });
+  renderLogs();
+  return { status, json, ok };
+}
+
+async function pollResponse(responseId) {
+  const deadline = Date.now() + 90_000;
+  for (let wait = 500; Date.now() < deadline; wait = Math.min(wait * 2, 4000)) {
+    const r = await api("GET", `/responses/${responseId}`);
+    if (r.ok && r.json.data.status !== "in_progress") return r.json.data;
+    if (!r.ok && r.status !== 404) return null;
+    await new Promise(done => setTimeout(done, wait));
   }
-  render();
+  return null;
+}
+
+async function applyResponse(data, retryWithNewKey) {
+  $("lastTurn").textContent = JSON.stringify(data, null, 2);
+  if (data.status === "completed") {
+    state.conversation = { ...state.conversation, revision: data.revision };
+    if (data.activity) state.conversation.active_activity = { ...(state.conversation.active_activity ?? {}), ...data.activity };
+    state.entries.push({ kind: "assistant", messageId: data.output.message_id, blocks: data.output.blocks, turn: data });
+    if (data.activity) await readConversation();  // the compact response has no answers[]; the read view does
+  } else if (data.status === "cancelled") {
+    state.entries.push({ kind: "warn", message: "Đã hủy lượt này — không có gì được ghi." });
+  } else {
+    state.entries.push({ kind: "error", status: 200, code: data.error?.code ?? "UNKNOWN", message: `Lượt ${data.status} (${data.id})`, retry: retryWithNewKey });
+  }
+}
+
+async function turnRejected(result, retrySameKey) {
+  const details = result.json?.error?.details;
+  if (result.status === 409 && details?.response_id) {
+    state.entries.push({ kind: "warn", message: `Đang có lượt khác chạy (${details.response_id}) — đợi nó xong…` });
+    render();
+    const done = await pollResponse(details.response_id);
+    if (done) { await readConversation(); state.entries.push({ kind: "warn", message: `Lượt ${details.response_id}: ${done.status}. Gửi lại nếu cần.` }); }
+  } else if (result.status === 409 && details?.conversation) {
+    state.conversation = details.conversation;
+    state.entries.push({ kind: "warn", message: `Revision lệch (client ${details.expected_revision}, server ${details.actual_revision}) — đã đồng bộ lại trạng thái, gửi lại nếu cần.` });
+  } else {
+    state.entries.push(errorEntry(result, retrySameKey));
+  }
+}
+
+async function cancelTurn() {
+  const id = state.draft?.responseId;
+  if (id) await api("POST", `/responses/${id}/cancel`);  // the stream then ends with response.cancelled
 }
 
 function sendMessage(text) {
   text = text.trim();
   if (!text) return;
-  submitTurn({ type: "message", content: { text } }, { kind: "user", text });
+  submitTurn({ type: "text", text }, { kind: "user", text });
 }
 
 function answer(block, option) {
@@ -459,7 +546,20 @@ function render() {
   }
   if (state.busy) {
     const t = document.createElement("div"); t.className = "msg";
-    t.innerHTML = `<div class="avatar">IM</div><div class="bubble typing"><i></i><i></i><i></i></div>`; thread.append(t);
+    t.innerHTML = `<div class="avatar">IM</div>`;
+    const stack = document.createElement("div"); stack.className = "stack";
+    const d = state.draft;
+    if (d?.text) {  // raw tokens: plain text only until the final, sanitised blocks arrive
+      stack.append(Object.assign(document.createElement("div"), { className: "bubble draft", textContent: d.text }));
+    } else {
+      stack.insertAdjacentHTML("beforeend", `<div class="bubble typing"><i></i><i></i><i></i></div>`);
+    }
+    if (d?.tool) stack.insertAdjacentHTML("beforeend", `<span class="pill">đang tra cứu… ${escapeHtml(d.tool)}</span>`);
+    if (d?.responseId) {
+      const b = document.createElement("button"); b.className = "btn small danger"; b.textContent = "Hủy";
+      b.onclick = cancelTurn; stack.append(b);
+    }
+    t.append(stack); thread.append(t);
   }
   thread.scrollTop = thread.scrollHeight;
   renderSide();
@@ -477,8 +577,8 @@ function renderSide() {
   $("headSub").textContent = c ? (open ? "Đang hoạt động" : "Đã đóng") + ` · rev ${c.revision}` : "Chưa kết nối";
   const a = c?.active_activity;
   $("activityInfo").innerHTML = a ? `<dt>status</dt><dd>${escapeHtml(a.status)}</dd><dt>id</dt><dd>${escapeHtml(a.id)}</dd><dt>revision</dt><dd>${a.revision}</dd>
-    <dt>profile</dt><dd>${escapeHtml(a.algorithm_profile ?? "legacy")}</dd><dt>release</dt><dd>${escapeHtml(a.experience_release_id)}</dd>
-    <dt>tên</dt><dd>${escapeHtml(a.display_name ?? "—")}</dd><dt>đã trả lời</dt><dd>${(a.answers ?? []).length}</dd>
+    <dt>profile</dt><dd>${escapeHtml(a.algorithm_profile ?? "legacy")}</dd><dt>release</dt><dd>${escapeHtml(a.experience_release_id ?? "—")}</dd>
+    <dt>tên</dt><dd>${escapeHtml(a.display_name ?? "—")}</dd><dt>đã trả lời</dt><dd>${a.answers?.length ?? a.progress?.completed ?? 0}</dd>
     <dt>câu hiện tại</dt><dd>${escapeHtml(a.current_question?.question_id ?? "—")}</dd><dt>kết quả</dt><dd>${escapeHtml(a.result?.result_id ?? "—")}</dd>` : `<dt>activity</dt><dd>chưa bắt đầu</dd>`;
   const p = a?.progress;
   $("progress").hidden = !p;
@@ -505,7 +605,7 @@ function renderReview() {
   const ids = state.entries.filter(e => e.kind === "assistant" && e.messageId).map(e => e.messageId);
   const rated = ids.map(id => state.ratings[id]).filter(r => r?.score);
   const up = rated.filter(r => r.score > 0).length, down = rated.filter(r => r.score < 0).length;
-  const turns = state.logs.filter(l => l.path.endsWith("/turns") && l.status === 200).map(l => Number(l.ms));
+  const turns = state.logs.filter(l => l.method === "POST" && /\/messages( \(SSE\))?$/.test(l.path) && l.status === 200).map(l => Number(l.ms));
   const avg = turns.length ? Math.round(turns.reduce((a, b) => a + b, 0) / turns.length) : "—";
   $("reviewStats").innerHTML = `<dt>câu trả lời agent</dt><dd>${ids.length}</dd><dt>👍 / 👎</dt><dd>${up} / ${down}</dd><dt>độ trễ turn TB</dt><dd>${avg} ms</dd>`;
 }
