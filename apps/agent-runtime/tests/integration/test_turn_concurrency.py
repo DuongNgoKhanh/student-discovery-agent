@@ -1,6 +1,6 @@
 """Competing turns and late writes on the real PostgreSQL parent lock."""
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier, Event
+from threading import Event
 
 import pytest
 from fastapi.testclient import TestClient
@@ -32,14 +32,22 @@ class GatedEngine:
 
 def test_two_keys_same_revisions_one_commit_one_conflict(turn_rig):
     rig = turn_rig
-    handler = TurnHandler(GatedEngine(rig.handler.engine, barrier=Barrier(2)))
+    entered, release = Event(), Event()
+    handler = TurnHandler(GatedEngine(rig.handler.engine, release=release, entered=entered))
     left, right = (request_for(rig, "set_name", key=key) for key in ("left", "right"))
     before = turn_counts(rig)
     with TestClient(create_app(turn_container(rig, handler=handler))) as client:
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            responses = list(pool.map(lambda request: post_turn(client, rig, request), (left, right)))
-    assert sorted(response.status_code for response in responses) == [200, 409]
-    failed = next(response for response in responses if response.status_code == 409).json()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            first = pool.submit(post_turn, client, rig, left)
+            assert entered.wait(timeout=10)
+            overlapping = post_turn(client, rig, right)  # one active turn per conversation
+            release.set()
+            committed = first.result(timeout=15)
+        stale = post_turn(client, rig, right)  # same stale revisions once the first turn committed
+    assert (overlapping.status_code, overlapping.json()["error"]["code"]) == (409, "CONFLICT_TURN_IN_PROGRESS")
+    assert committed.status_code == 200 and committed.json()["data"]["status"] == "completed"
+    assert stale.status_code == 409
+    failed = stale.json()
     assert failed["error"]["code"] == "CONFLICT_REVISION"
     details = failed["error"]["details"]
     assert (details["resource_kind"], details["expected_revision"], details["actual_revision"]) == (
@@ -64,7 +72,9 @@ def test_end_while_engine_runs_blocks_stale_candidate(turn_rig):
                 EndConversationInput(expected_revision=1, idempotency_key="end"))
             release.set()
             response = future.result(timeout=15)
-    assert (response.status_code, response.json()["error"]["code"]) == (410, "RES_CONVERSATION_ENDED")
+    data = response.json()["data"]  # past begin the guard failure is a failed Response, not an error envelope
+    assert (response.status_code, data["status"], data["error"]) == (200, "failed", {"code": "CONVERSATION_ENDED"})
     after = turn_counts(rig)
-    assert after["messages"] == before["messages"] and after["outcomes"] == before["outcomes"] + 1  # end only
+    # end's acknowledgement stays in operation_outcomes; the failed Response is the only new responses row
+    assert after["messages"] == before["messages"] and after["outcomes"] == before["outcomes"] + 1
     assert after["answers"] == 0

@@ -61,8 +61,9 @@ def test_worker_exits_after_disconnect_even_with_a_full_queue():
 
     stream = stream_turn({"id": "r1", "status": "in_progress"}, work, ping_seconds=0.01)
     assert next(stream).startswith("event: response.created")
+    # Capture the thread while it is still blocked on the full queue: after close() it may already be gone.
+    worker = next(t for t in threading.enumerate() if t.name == "turn-r1")
     stream.close()  # client disconnect
     assert ran.wait(5)
-    worker = next(t for t in threading.enumerate() if t.name == "turn-r1")
     worker.join(5)
     assert not worker.is_alive()

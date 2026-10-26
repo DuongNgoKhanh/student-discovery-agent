@@ -13,6 +13,7 @@ from agent_runtime.sessions.services.activity import ActivityPersistence
 from agent_runtime.sessions.services.conversations import ConversationService
 from agent_runtime.sessions.services.lifecycle import LifecycleService
 from agent_runtime.sessions.services.turn_handlers import TurnHandler
+from agent_runtime.sessions.services.turn_input import to_message_body
 from agent_runtime.sessions.services.turn_store import TurnStore
 from tests.helpers.turns import post_turn, request_for, signed_call, turn_container, turn_counts
 
@@ -72,13 +73,18 @@ def test_old_turn_replays_after_new_turn_and_new_pool(turn_http):
 
 def test_semantic_identity_over_http(turn_http):
     client, rig = turn_http
-    body = request_for(rig, "set_name", key="name").model_dump(mode="json", exclude_unset=True)
+    body = to_message_body(request_for(rig, "set_name", key="name"))
     first = post_turn(client, rig, body)
-    equivalent = dict(reversed(list(body.items()))) | {"payload": {"display_name": " Ngân "}}
+    item = body["content"][0]
+    equivalent = dict(reversed(list(body.items()))) | {
+        "content": [dict(reversed(list(item.items()))) | {"payload": {"display_name": " Ngân "}}]}
     assert post_turn(client, rig, equivalent).json()["data"] == first.json()["data"]
-    for change in ({"action": "submit_answer", "payload": {"question_id": "q_r_01", "option_id": "q_r_01_opt_3"}},
-                   {"expected_activity_revision": 1}, {"expected_revision": 2}):
-        response = post_turn(client, rig, body | change)
+
+    def changed(**change):
+        return body | {"content": [item | change]}
+    for variant in (changed(action="submit_answer", payload={"question_id": "q_r_01", "option_id": "q_r_01_opt_3"}),
+                    changed(expected_activity_revision=item["expected_activity_revision"] + 1), body | {"expected_revision": 3}):
+        response = post_turn(client, rig, variant)
         assert (response.status_code, response.json()["error"]["code"]) == (409, "CONFLICT_IDEMPOTENCY_KEY")
         assert response.json()["error"]["details"] is None
 

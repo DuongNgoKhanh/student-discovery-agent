@@ -18,6 +18,7 @@ from agent_runtime.infrastructure.db.tables import result_snapshots
 from agent_runtime.main import create_app
 from agent_runtime.sessions.services.completion import EngineCompletionPort
 from agent_runtime.sessions.services.turn_handlers import PinnedAssessmentEngine, TurnHandler
+from agent_runtime.sessions.services.turn_input import to_message_body
 from tests.helpers.turns import (
     build_turn_rig,
     current_state,
@@ -110,8 +111,9 @@ def test_golden_path_reaches_a_valid_card_at_the_cap(completion_http, capped_def
     name(client, rig)
     response, sent = run_answers(client, rig, favour(code), 12)
     data = response.json()["data"]
-    activity, block = data["activity"], data["blocks"][0]
-    assert activity["status"] == "completed" and len(activity["answers"]) == 12
+    activity, block = data["activity"], data["output"]["blocks"][0]
+    assert data["status"] == "completed" and activity["status"] == "completed"
+    assert len(current_state(rig)[2]["answers"]) == 12 and "answers" not in activity
     assert activity["progress"] == {"completed": 12, "min_total": 12, "max_total": 12, "total": 12,
                                     "phase": "completed"}
     assert block["type"] == "personality_card" and block["data"]["house"]["house_id"] == house_id
@@ -148,9 +150,9 @@ def test_answer_after_completion_is_rejected_without_side_effects(completion_htt
     last, sent = run_answers(client, rig, favour("r"), 12)
     before = turn_counts(rig)
     question_id = sent[-1]["question_id"]
-    payload = request_for(rig, "set_name", key="late").model_dump(mode="json", exclude_unset=True)
-    payload |= {"action": "submit_answer", "payload": {"question_id": question_id,
-                                                       "option_id": f"{question_id}_opt_1"}}
+    payload = to_message_body(request_for(rig, "set_name", key="late"))
+    payload["content"][0] |= {"action": "submit_answer", "payload": {"question_id": question_id,
+                                                                     "option_id": f"{question_id}_opt_1"}}
     late = post_turn(client, rig, payload)
     assert late.status_code == 422 and late.json()["error"]["code"] == "VAL_INVALID_ACTIVITY_TRANSITION"
     assert turn_counts(rig) == before and before["results"] == 1 and before["answers"] == 12
@@ -166,11 +168,17 @@ def test_scorer_failure_leaves_no_partial_completion_and_retry_succeeds(completi
     broken = TurnHandler(PinnedAssessmentEngine(), EngineCompletionPort(FailingScorer()))
     with TestClient(create_app(turn_container(rig, handler=broken))) as failing:
         failed = post_turn(failing, rig, request)
-    assert failed.status_code == 422 and failed.json()["error"]["code"] == "SYS_ENGINE_FAILURE"
-    assert turn_counts(rig) == before and current_state(rig)[2]["status"] == "in_progress"
+    body = failed.json()["data"]  # a post-begin engine failure is a failed Response, not an error envelope
+    assert failed.status_code == 200 and body["status"] == "failed" and body["error"] == {"code": "ENGINE_FAILURE"}
+    after = turn_counts(rig)
+    assert after == before | {"outcomes": before["outcomes"] + 1}
+    assert current_state(rig)[2]["status"] == "in_progress"
 
     with TestClient(create_app(turn_container(rig))) as healthy:
-        done = post_turn(healthy, rig, request)  # same key/payload once the engine is healthy
+        replay = post_turn(healthy, rig, request)  # the failed Response owns its key and replays unchanged
+        assert replay.json()["data"] == body
+        retry = request_for(rig, "submit_answer", key="final-retry", option_id=favour("s")(question_id))
+        done = post_turn(healthy, rig, retry)  # a fresh key succeeds once the engine is healthy
     assert done.status_code == 200 and done.json()["data"]["activity"]["status"] == "completed"
     assert turn_counts(rig)["results"] == 1
 
