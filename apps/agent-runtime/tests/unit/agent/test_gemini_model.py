@@ -96,3 +96,18 @@ def test_history_with_tool_round_trip_formats_offline_for_gemini():
     assert system == "persona"
     assert formatted[1].parts[0].function_call.name == "assessment__propose_answer"
     assert formatted[2].parts[0].function_response.response == {"result": json.dumps({"ok": True})}
+
+
+def test_malformed_provider_response_is_invalid_response_and_not_retried():
+    factory, created = stub_factory(ModelResponse(content=None, tool_calls=[{"id": "c1"}]),
+                                    ModelResponse(content="again"))
+    failure = GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS)
+    assert failure == ModelUnavailable("invalid_response", "KeyError") and len(created[0].invocations) == 1
+
+
+def test_setup_failures_never_raise_past_the_port():
+    def broken_factory(**_):
+        raise ValueError("bad config")
+
+    failure = GeminiChatModel("key", model_factory=broken_factory).invoke([UserMessage("hi")], [], SETTINGS)
+    assert failure == ModelUnavailable("provider_error", "ValueError")

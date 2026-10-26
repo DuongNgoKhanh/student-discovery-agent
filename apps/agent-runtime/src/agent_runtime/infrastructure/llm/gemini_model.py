@@ -89,11 +89,15 @@ class GeminiChatModel:
 
     def invoke(self, messages: Sequence[ChatMessage], tools: Sequence[ToolDefinition],
                settings: ModelSettings) -> ModelReply | ModelUnavailable:
-        model = self._factory(id=settings.model_id, api_key=self._api_key, temperature=settings.temperature,
-                              max_output_tokens=settings.max_output_tokens,
-                              client_params={"http_options": self._http_options(settings)})
-        payload = [to_agno_message(message) for message in messages]
-        definitions = [_definition(tool) for tool in tools] or None
+        try:
+            model = self._factory(id=settings.model_id, api_key=self._api_key, temperature=settings.temperature,
+                                  max_output_tokens=settings.max_output_tokens,
+                                  client_params={"http_options": self._http_options(settings)})
+            payload = [to_agno_message(message) for message in messages]
+            definitions = [_definition(tool) for tool in tools] or None
+        except Exception as error:  # provider boundary: nothing may raise past the port
+            logger.warning("model setup error: {}", type(error).__name__)
+            return ModelUnavailable("provider_error", type(error).__name__)
         names = {wire_name(tool.name): tool.name for tool in tools}
         failure = ModelUnavailable("provider_error")
         for _ in range(settings.max_retries + 1):
@@ -107,5 +111,9 @@ class GeminiChatModel:
                 logger.warning("model provider error: {}", type(error).__name__)
                 failure = ModelUnavailable("provider_error", type(error).__name__)
                 continue
-            return _reply(response, names)
+            try:
+                return _reply(response, names)
+            except Exception as error:  # malformed provider payload: not retryable
+                logger.warning("model invalid response: {}", type(error).__name__)
+                return ModelUnavailable("invalid_response", type(error).__name__)
         return failure
