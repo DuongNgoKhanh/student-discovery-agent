@@ -10,15 +10,24 @@ from agent_runtime.sessions.schemas.activity import (
     TypedBlock,
 )
 
-_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
-_EMPHASIS = re.compile(r"(\*\*|__|\*|_)(?=\S)(.+?)(?<=\S)\1")
+_LINK = re.compile(r"\[([^\]]+)\]\(\s*(https?://[^)\s]+)\)")
+# Underscore emphasis never matches intraword (CommonMark), so snake_case and URLs stay intact.
+_EMPHASIS = re.compile(r"(\*\*|\*)(?=\S)(.+?)(?<=\S)\1|(?<!\w)(__|_)(?=\S)(.+?)(?<=\S)\3(?!\w)")
 _BULLET = re.compile(r"^(\s*)[-*+]\s+", re.MULTILINE)
 
 
+def _strip_emphasis(text: str) -> str:
+    return _EMPHASIS.sub(lambda m: m.group(2) or m.group(4), text)
+
+
 def markdown_to_text(content: str) -> str:
-    text = _LINK.sub(r"\1 (\2)", content)
-    text = _EMPHASIS.sub(r"\2", text)
-    return _BULLET.sub(r"\1• ", text)
+    out, pos = [], 0
+    for link in _LINK.finditer(content):  # emphasis is stripped around link targets, never inside them
+        out.append(_strip_emphasis(content[pos:link.start()]))
+        out.append(f"{_strip_emphasis(link.group(1))} ({link.group(2)})")
+        pos = link.end()
+    out.append(_strip_emphasis(content[pos:]))
+    return _BULLET.sub(r"\1• ", "".join(out))
 
 
 def _text(block_id: str, content: str) -> TextBlock:

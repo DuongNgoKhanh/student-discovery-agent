@@ -203,6 +203,7 @@ class ActivityPersistence:
     @observed("activity.commit")
     def commit(self, caller: VerifiedCaller, conversation_id: str, expected_revision: int,
                idempotency_key: str, patch: CommitPatch) -> ServiceResponse:
+        # patch.response_data must already be capability-projected: it is stored and replayed as-is.
         fingerprint = request_fingerprint({"request_input": patch.request_input, "expected_revision": expected_revision,
                                            "expected_activity_revision": patch.expected_activity_revision})
         operation, scope = "activity.commit", f"{conversation_id}/{patch.activity_id}"
