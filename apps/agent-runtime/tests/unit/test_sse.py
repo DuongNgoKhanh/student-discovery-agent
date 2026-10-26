@@ -40,3 +40,29 @@ def test_worker_exception_still_ends_with_one_failed_event():
     assert [c.split("\n")[0] for c in chunks] == ["event: response.created", "event: response.failed"]
     final = json.loads(chunks[-1].split("data: ")[1])["response"]
     assert final["id"] == "r1" and final["status"] == "failed" and final["error"] == {"code": "INTERNAL_ERROR"}
+
+
+def test_unknown_terminal_status_still_ends_with_failed_event():
+    pending = {"id": "r1", "status": "in_progress"}
+    chunks = [c for c in stream_turn(pending, lambda on_event: {"id": "r1", "status": "weird"}, ping_seconds=0.01)
+              if c.startswith("event:")]
+    assert [c.split("\n")[0] for c in chunks] == ["event: response.created", "event: response.failed"]
+
+
+def test_worker_exits_after_disconnect_even_with_a_full_queue():
+    import threading
+    ran = threading.Event()
+
+    def work(on_event):
+        for _ in range(600):  # more than the queue holds, nobody reading
+            on_event(("delta", "x"))
+        ran.set()
+        return {"id": "r1", "status": "completed"}
+
+    stream = stream_turn({"id": "r1", "status": "in_progress"}, work, ping_seconds=0.01)
+    assert next(stream).startswith("event: response.created")
+    stream.close()  # client disconnect
+    assert ran.wait(5)
+    worker = next(t for t in threading.enumerate() if t.name == "turn-r1")
+    worker.join(5)
+    assert not worker.is_alive()

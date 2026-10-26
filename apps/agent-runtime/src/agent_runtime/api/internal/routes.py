@@ -94,7 +94,9 @@ def create_message(request: Request, conversation_id: str):
     else:
         body = stream_turn(begun.response.model_dump(mode="json"),
                            lambda on_event: turns.finish(caller, begun, on_event).model_dump(mode="json"))
-    return StreamingResponse(body, media_type="text/event-stream", headers=SSE_HEADERS)
+    request_id, trace_id, _ = request.state.meta
+    return StreamingResponse(body, media_type="text/event-stream",
+                             headers={**SSE_HEADERS, "X-Request-ID": request_id, "X-Trace-ID": trace_id})
 
 
 @router.get("/responses/{response_id}", operation_id="internalReadResponse")

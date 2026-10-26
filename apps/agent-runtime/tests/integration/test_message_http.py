@@ -31,6 +31,7 @@ def test_json_and_stream_modes_return_the_same_response_shape(turn_http):
     body = to_message_body(request_for(rig, "set_name", key="name"))
     response = post(client, rig, body, stream=True)
     assert response.headers["content-type"].startswith("text/event-stream")
+    assert response.headers["x-request-id"] and response.headers["x-trace-id"]
     names, data = events(response)
     assert names == ["response.created", "response.completed"]
     final = data[-1]["response"]
