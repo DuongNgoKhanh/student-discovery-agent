@@ -10,6 +10,7 @@ from .port import (
     ModelUnavailable,
     ModelUsage,
     SystemMessage,
+    TextDeltaSink,
     ToolCall,
     ToolDefinition,
     ToolResultMessage,
@@ -20,5 +21,5 @@ from .port import (
 )
 
 __all__ = ["RETRY_BACKOFF_MS", "AssistantMessage", "ChatMessage", "FakeModel", "ModelPort", "ModelReply", "ModelSettings",
-           "ModelUnavailable", "ModelUsage", "SystemMessage", "ToolCall", "ToolDefinition", "ToolResultMessage",
+           "ModelUnavailable", "ModelUsage", "SystemMessage", "TextDeltaSink", "ToolCall", "ToolDefinition", "ToolResultMessage",
            "UnavailableReason", "UnconfiguredModel", "UserMessage", "worst_case_ms"]

@@ -199,3 +199,42 @@ def test_assistant_text_and_tool_calls_replay_as_one_model_turn():
                             ToolResultMessage(call_id="c1", name="a.one", content={"r": 1})])
     parts = formatted[1].parts
     assert formatted[1].role == "model" and parts[0].text == "Để mình xem" and parts[1].function_call.name == "a__one"
+
+
+def stream_factory(*chunks):
+    created = []
+
+    class Stub:
+        def __init__(self, **kwargs):
+            created.append(self)
+
+        def invoke_stream(self, **kwargs):
+            yield from chunks
+
+    return Stub, created
+
+
+def test_stream_forwards_text_deltas_and_assembles_the_reply():
+    seen = []
+    factory, _ = stream_factory(ModelResponse(content="Chào "), ModelResponse(content="bạn!"),
+                                ModelResponse(response_usage=Metrics(input_tokens=5, output_tokens=2)))
+    reply = GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [], SETTINGS,
+                                                                  on_text_delta=seen.append)
+    assert seen == ["Chào ", "bạn!"] and reply.text == "Chào bạn!" and reply.usage.output_tokens == 2
+
+
+def test_stream_collects_tool_calls_across_chunks():
+    first = {"id": "c1", "type": "function", "function": {"name": "assessment__propose_answer",
+                                                          "arguments": '{"option_ids": ["o1"]}'}}
+    factory, _ = stream_factory(ModelResponse(content="Ok"), ModelResponse(tool_calls=[first]))
+    reply = GeminiChatModel("key", model_factory=factory).invoke([UserMessage("hi")], [PROPOSE], SETTINGS,
+                                                                  on_text_delta=lambda _: None)
+    assert [call.name for call in reply.tool_calls] == ["assessment.propose_answer"]
+
+
+def test_sink_returning_false_cancels_the_stream():
+    factory, _ = stream_factory(ModelResponse(content="a"), ModelResponse(content="b"))
+    seen = []
+    result = GeminiChatModel("key", model_factory=factory).invoke(
+        [UserMessage("hi")], [], SETTINGS, on_text_delta=lambda text: seen.append(text) or False)
+    assert result == ModelUnavailable("cancelled") and seen == ["a"]
