@@ -25,6 +25,7 @@ from agent_runtime.sessions.schemas.common import IdempotencyKey, ServiceRespons
 from agent_runtime.sessions.schemas.conversation import ConversationRecord
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.services.access import AccessPolicy
+from agent_runtime.sessions.services.blocks import DEGRADABLE_TYPES
 from agent_runtime.sessions.services.releases import validate_release
 from agent_runtime.sessions.trace import observed
 
@@ -166,7 +167,8 @@ class ActivityPersistence:
             if message.interaction and message.interaction.activity_id != current.id:
                 raise RuntimeSessionError(400, "INVALID_REQUEST")
             for block in message.blocks:
-                if block.schema_version not in supported.get(block.type, ()):
+                if (block.type not in DEGRADABLE_TYPES
+                        and block.schema_version not in supported.get(block.type, ())):
                     raise RuntimeSessionError(422, "INCOMPATIBLE_SCHEMA")
                 if hasattr(block, "activity_id") and block.activity_id != current.id:
                     raise RuntimeSessionError(400, "INVALID_REQUEST")

@@ -38,6 +38,8 @@ _DEGRADE: dict[str, Callable[[TypedBlock], TypedBlock]] = {
     "markdown": _degrade_markdown,
     "suggestions": _degrade_suggestions,
 }
+# Stored canonically whatever the capability; projected to a supported fallback on output.
+DEGRADABLE_TYPES = frozenset(_DEGRADE)
 
 
 def project_blocks(blocks: Iterable[TypedBlock], capability: CapabilitySnapshot) -> tuple[TypedBlock, ...]:

@@ -28,7 +28,9 @@ from agent_runtime.sessions.schemas.activity import (
     ActivityStateV2,
     CapabilitySnapshot,
     CommitPatch,
+    MarkdownBlock,
     NewMessage,
+    SuggestionsBlock,
 )
 from agent_runtime.sessions.schemas.conversation import ConversationRecord
 from agent_runtime.sessions.schemas.result import ResultSnapshotInput
@@ -515,3 +517,22 @@ def test_invalid_direct_owner_guards_start_commit_and_end(rig, owner):
         assert session.scalar(select(conversations.c.revision).where(conversations.c.id == "conv")) == 1
         assert session.scalar(select(func.count()).select_from(messages)) == 0
         assert session.scalar(select(func.count()).select_from(operation_outcomes)) == 1
+
+
+def test_degradable_blocks_commit_canonically_for_legacy_capability_but_others_still_rejected(rig):
+    act = start(rig)
+    base = patch(act)
+    content = (MarkdownBlock(block_id="md", type="markdown", schema_version=1, content="**Hi**"),
+               SuggestionsBlock(block_id="sg", type="suggestions", schema_version=1,
+                                items=({"label": "Go", "message_text": "Go"},)))
+    legacy_block = {"block_id": "q", "type": "assessment_question", "schema_version": 1, "activity_id": act,
+                    "question_id": "q1", "title": "Question", "options": question()["options"],
+                    "progress": {"completed": 0, "total": 6}}
+    rejected = base.model_copy(update={"append_messages": (NewMessage(
+        message_id="msg-legacy", role="assistant", blocks=(legacy_block,)),)})
+    with pytest.raises(RuntimeSessionError) as error:
+        rig[5].commit(rig[3], "conv", 1, "legacy", rejected)
+    assert error.value.code == "INCOMPATIBLE_SCHEMA"
+    accepted = base.model_copy(update={"append_messages": (NewMessage(
+        message_id="msg-content", role="assistant", blocks=content),)})
+    assert rig[5].commit(rig[3], "conv", 1, "content", accepted).status == 200

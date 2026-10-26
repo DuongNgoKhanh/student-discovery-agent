@@ -8,7 +8,7 @@ from agent_runtime.sessions.schemas.activity import (
     SuggestionsBlock,
     TypedBlock,
 )
-from agent_runtime.sessions.services.blocks import markdown_to_text, project_blocks
+from agent_runtime.sessions.services.blocks import DEGRADABLE_TYPES, markdown_to_text, project_blocks
 
 _BLOCK = TypeAdapter(TypedBlock)
 
@@ -83,3 +83,7 @@ def test_legacy_clients_receive_text_with_stable_ids():
 
 def test_markdown_to_text_strips_emphasis():
     assert markdown_to_text("*nghiêng* và __đậm__") == "nghiêng và đậm"
+
+
+def test_degradable_types_are_the_content_blocks():
+    assert DEGRADABLE_TYPES == {"markdown", "suggestions"}
