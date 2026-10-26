@@ -89,6 +89,7 @@ def create_message(request: Request, conversation_id: str):
     if not _wants_stream(request):
         return success(turns.submit(caller, _id(conversation_id), data), *request.state.meta)
     begun = turns.begin(caller, _id(conversation_id), data)  # guard errors stay JSON
+    # stream_turn starts the worker now, in this request's context: the turn runs even if the body never is read.
     if isinstance(begun, ServiceResponse):
         body = stream_turn(begun.data, None)
     else:
