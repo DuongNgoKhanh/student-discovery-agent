@@ -286,6 +286,9 @@ async function readConversation() {
 async function reloadHistory() {
   if (!state.conversation) return;
   const read = await readConversation();
+  if (read.status === 404) {  // gone (DB reset or another owner): forget it instead of showing an error
+    state.conversation = null; state.entries = []; store.set("conversation", null); render(); return;
+  }
   if (!read.ok) { state.entries.push(errorEntry(read)); render(); return; }
   const items = []; let cursor = null;
   do {
@@ -595,7 +598,7 @@ function renderLogs() {
   for (const log of state.logs.slice(0, 80)) {
     const d = document.createElement("details"); d.className = "log";
     const cls = log.status >= 200 && log.status < 300 ? "ok" : log.status === 409 ? "warn" : "bad";
-    d.innerHTML = `<summary><span class="pill ${cls}">${log.status || "ERR"}</span><span class="path">${escapeHtml(log.method + " " + log.path)}</span><span>${log.ms} ms</span></summary>
+    d.innerHTML = `<summary><span class="pill ${cls}">${log.status || "ERR"}</span><span class="path" title="${escapeHtml(log.path)}">${escapeHtml(log.method + " " + log.path.replace(/(resp_)?[0-9a-f]{32}/g, id => id.slice(0, id.startsWith("resp_") ? 11 : 6) + "…"))}</span><span>${log.ms} ms</span></summary>
       <div class="body">${log.request ? `<span>request</span><pre>${escapeHtml(JSON.stringify(log.request, null, 2))}</pre>` : ""}<span>response</span><pre>${escapeHtml(JSON.stringify(log.response, null, 2))}</pre></div>`;
     list.append(d);
   }
