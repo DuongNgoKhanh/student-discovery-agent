@@ -5,7 +5,9 @@ import pytest
 
 from agent_runtime.evaluations.services.compatibility import PILOT_ENGINE_REGISTRY
 from agent_runtime.sessions.errors import RuntimeSessionError
+from agent_runtime.sessions.schemas.activity import MarkdownBlock
 from agent_runtime.sessions.schemas.turn import ConversationTurnResult
+from agent_runtime.sessions.services import turn_response
 from agent_runtime.sessions.services.turn_handlers import PinnedAssessmentEngine, TurnHandler
 from agent_runtime.sessions.services.turn_input import parse_turn_input
 from agent_runtime.sessions.services.turn_response import finalize_turn
@@ -96,3 +98,16 @@ def test_mutated_nested_draft_is_internal_error(prepared_name_turn):
     with pytest.raises(RuntimeSessionError) as error:
         finalize_turn(snapshot, request, draft.model_copy(update={"next_state": state}), COMMITTED_AT)
     assert (error.value.status, error.value.code) == (500, "INTERNAL_ERROR")
+
+
+def test_response_is_projected_while_stored_message_stays_canonical(monkeypatch, valid_v2_doc, handler):
+    snapshot = make_turn_snapshot(valid_v2_doc)  # adaptive capabilities: no markdown advertised
+    request = parse_turn_input(interaction(snapshot, "set_name", {"display_name": "Ngân"}))
+    draft = handler.prepare(snapshot, request)
+    canonical = MarkdownBlock(block_id="md1", type="markdown", schema_version=1, content="**Chào** Ngân")
+    monkeypatch.setattr(turn_response, "_assistant_block", lambda activity, draft: canonical)
+    output = finalize_turn(snapshot, request, draft, COMMITTED_AT)
+    assert output.patch.append_messages[1].blocks == (canonical,)
+    (sent,) = output.result.blocks
+    assert (sent.type, sent.block_id, sent.content) == ("text", "md1", "Chào Ngân")
+    assert output.patch.response_data["blocks"][0]["type"] == "text"

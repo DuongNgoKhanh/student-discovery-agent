@@ -10,7 +10,7 @@ from agent_runtime.infrastructure.db.tables import conversations
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.repositories.conversations import ConversationRepository
 from agent_runtime.sessions.repositories.messages import MessageRepository
-from agent_runtime.sessions.schemas.activity import NewMessage
+from agent_runtime.sessions.schemas.activity import MarkdownBlock, NewMessage, SuggestionsBlock
 from agent_runtime.sessions.schemas.history import HistoryCursor
 from agent_runtime.sessions.services.history import HistoryCursorCodec, HistoryService
 from tests.helpers.builders import seed_conversation
@@ -160,3 +160,18 @@ def test_history_keeps_shared_parent_lock_and_does_not_mutate(rig):
     assert any("FOR SHARE" in sql for sql in statements)
     assert any("LIMIT" in sql and "ORDINAL" in sql for sql in statements)
     assert all(not sql.lstrip().startswith(("INSERT", "UPDATE", "DELETE")) for sql in statements)
+
+
+def test_history_degrades_content_blocks_for_legacy_capabilities(rig):
+    service, _ = readers(rig)
+    with rig[1].begin() as session:
+        parent = seed_conversation(session, created_at=NOW)
+        ConversationRepository().save(session, parent.model_copy(update={"revision": 1}))
+        MessageRepository().append(session, parent.id, 1, (NewMessage(
+            message_id="m-content", role="assistant", blocks=(
+                MarkdownBlock(block_id="md", type="markdown", schema_version=1, content="**Hi**"),
+                SuggestionsBlock(block_id="sg", type="suggestions", schema_version=1,
+                                 items=({"label": "Bắt đầu", "message_text": "Bắt đầu"},)))),), NOW)
+    (item,) = service.read(rig[3], parent.id).data["items"]
+    assert [(b["type"], b["block_id"]) for b in item["blocks"]] == [("text", "md"), ("text", "sg")]
+    assert item["blocks"][1]["content"] == "Gợi ý: Bắt đầu"

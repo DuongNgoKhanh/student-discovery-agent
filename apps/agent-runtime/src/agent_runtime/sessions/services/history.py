@@ -15,6 +15,7 @@ from agent_runtime.sessions.repositories.results import ResultRepository
 from agent_runtime.sessions.schemas.common import ServiceResponse
 from agent_runtime.sessions.schemas.history import HistoryCursor, MessagePage
 from agent_runtime.sessions.services.access import AccessPolicy
+from agent_runtime.sessions.services.blocks import project_blocks
 from agent_runtime.sessions.services.results import is_current_result
 from agent_runtime.sessions.trace import observed
 
@@ -92,8 +93,11 @@ class HistoryService:
             next_cursor = None
             if len(rows) > limit:
                 next_cursor = self.codec.encode(boundary.model_copy(update={"last_ordinal": rows[limit - 1][0]}))
-            page = MessagePage(conversation_id=parent.id,
-                               items=tuple(self._content_status(session, parent, item) for _, item in rows[:limit]),
+            capability = parent.capability_snapshot
+            items = tuple(
+                message.model_copy(update={"blocks": project_blocks(message.blocks, capability)})
+                for message in (self._content_status(session, parent, item) for _, item in rows[:limit]))
+            page = MessagePage(conversation_id=parent.id, items=items,
                                next_cursor=next_cursor, snapshot_revision=boundary.watermark_revision)
             response = ServiceResponse(status=200, data=page.model_dump(mode="json"))
         return response
