@@ -69,8 +69,6 @@ def test_http_boundary_rejections_preserve_envelope(turn_http):
     assert_error(post_turn(client, rig, body, path=path + "?debug=1"), 422, "VAL_INVALID_INPUT")
     assert_error(post_turn(client, rig, body, owner="stranger"), 404, "RES_NOT_FOUND")
     assert_error(post_turn(client, rig, json.dumps(body | {"pad": "x" * 70000}).encode()), 413, "VAL_PAYLOAD_TOO_LARGE")
-    message = {"type": "message", "content": {"text": "hi"}, "expected_revision": 1, "idempotency_key": "msg"}
-    assert_error(post_turn(client, rig, message), 422, "VAL_INVALID_ACTIVITY_TRANSITION")
     unsigned = client.post("/api/v1/internal" + path, content=json.dumps(body).encode(),
                            headers={"X-Caller-Context": "bad", "X-Internal-Caller": "sda-product-bff"})
     assert_error(unsigned, 401, "AUTH_CALLER_CONTEXT_INVALID")

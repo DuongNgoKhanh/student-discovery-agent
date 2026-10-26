@@ -42,7 +42,8 @@ def project_activity(parent: ConversationRecord, activity: ActivityRecord, relea
         "created_at": activity.created_at, "expires_at": None})
 
 
-def _assistant_block(activity: ActivityRecord, draft: TurnDraft):
+def activity_block(activity: ActivityRecord, draft: TurnDraft):
+    """The server-rendered block for a state: the personality card on completion, else the current question."""
     state = draft.next_state
     if draft.completion is not None:
         bundle = draft.completion
@@ -85,7 +86,7 @@ def finalize_turn(snapshot: TurnSnapshot, request: SupportedInteraction, draft: 
                 question_id=None if is_name else payload.question_id,
                 option_id=None if is_name else payload.option_id))
         assistant = NewMessage(message_id=uuid4().hex, turn_id=turn_id, role="assistant",
-                               blocks=(_assistant_block(activity, draft),))
+                               blocks=(activity_block(activity, draft),))
         new_result = _new_result(snapshot, draft, committed_at)
         next_activity = ActivityRecord.model_validate(activity.model_dump(mode="json") | {
             "revision": activity.revision + 1, "state": draft.next_state.model_dump(mode="json")})

@@ -23,7 +23,7 @@ from agent_runtime.sessions.schemas.activity import (
 )
 from agent_runtime.sessions.schemas.common import IdempotencyKey, ServiceResponse
 from agent_runtime.sessions.schemas.conversation import ConversationRecord
-from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+from agent_runtime.sessions.schemas.release import AgentSnapshotV1, ValidatedRelease
 from agent_runtime.sessions.services.access import AccessPolicy
 from agent_runtime.sessions.services.blocks import DEGRADABLE_TYPES
 from agent_runtime.sessions.services.releases import validate_release
@@ -96,37 +96,52 @@ class ActivityPersistence:
                 return replay
             self._permission(session, parent, algorithm_profile)
         # A separate preflight transaction permits replay even if Product has become unavailable.
-        descriptor = self.product.resolve_active_experience(parent.environment, experience_id, algorithm_profile)
-        release = validate_release(descriptor, environment=parent.environment,
-                                   capabilities=parent.capability_snapshot, validator=self.validator)
-        if release.kind != "experience" or release.algorithm_profile != algorithm_profile:
-            raise RuntimeSessionError(422, "INCOMPATIBLE_RELEASE")
+        release = self.resolve_experience(parent, experience_id, algorithm_profile)
         with self.uow.begin() as session:
             parent, replay = self._guard(session, caller, conversation_id, expected_revision,
                                          idempotency_key, operation, scope, fingerprint)
             if replay is not None:
                 return replay
-            self._permission(session, parent, algorithm_profile)
-            pin = self.snapshots.store(session, release)
-            now = self.access.check_open(session, caller, parent)
-            state = dict(status="collecting_name", display_name=None, current_question=None, clarification=None,
-                         answers=(), current_result_id=None)
-            initial = (ActivityStateV2(**state, state_schema_version=2, schema_version=2,
-                        type="personality_assessment_adaptive", algorithm_profile=ADAPTIVE_PROFILE,
-                        progress={"completed": 0, "total": None, "phase": "baseline"})
-                       if algorithm_profile == ADAPTIVE_PROFILE else
-                       ActivityStateV1(**state, state_schema_version=1, schema_version=1,
-                                       type="personality_assessment", progress={"completed": 0}))
-            activity = ActivityRecord(id=uuid4().hex, conversation_id=parent.id, experience_id=experience_id,
-                experience_snapshot=pin, engine_version=release.engine_version, revision=0, state=initial, created_at=now)
-            self.activities.insert(session, activity)
-            updated = parent.model_copy(update={"revision": parent.revision + 1, "active_activity_id": activity.id})
-            self.conversations.save(session, updated)
+            activity, updated, _ = self.insert_activity(session, caller, parent, release, experience_id,
+                                                        algorithm_profile)
             response = ServiceResponse(status=201, data={"activity_id": activity.id, "conversation_id": parent.id,
                                         "conversation_revision": updated.revision, "activity_revision": 0})
             self.outcomes.save(session, owner_id=caller.owner_id, operation=operation, resource_scope=scope,
                 key=idempotency_key, request_hash=fingerprint, conversation_id=parent.id, response=response)
         return response
+
+    def resolve_experience(self, parent: ConversationRecord, experience_id: str,
+                           algorithm_profile: str | None) -> ValidatedRelease:
+        """Product resolution and validation; runs outside any write transaction."""
+        descriptor = self.product.resolve_active_experience(parent.environment, experience_id, algorithm_profile)
+        release = validate_release(descriptor, environment=parent.environment,
+                                   capabilities=parent.capability_snapshot, validator=self.validator)
+        if release.kind != "experience" or release.algorithm_profile != algorithm_profile:
+            raise RuntimeSessionError(422, "INCOMPATIBLE_RELEASE")
+        return release
+
+    def insert_activity(self, session, caller: VerifiedCaller, parent: ConversationRecord, release: ValidatedRelease,
+                        experience_id: str, algorithm_profile: str | None
+                        ) -> tuple[ActivityRecord, ConversationRecord, datetime]:
+        """Pin and insert a collecting_name activity inside the caller's UoW, which holds the parent lock and has
+        applied replay/revision guards; saves no outcome. Returns the activity, the saved parent and the time."""
+        self._permission(session, parent, algorithm_profile)
+        pin = self.snapshots.store(session, release)
+        now = self.access.check_open(session, caller, parent)
+        state = dict(status="collecting_name", display_name=None, current_question=None, clarification=None,
+                     answers=(), current_result_id=None)
+        initial = (ActivityStateV2(**state, state_schema_version=2, schema_version=2,
+                    type="personality_assessment_adaptive", algorithm_profile=ADAPTIVE_PROFILE,
+                    progress={"completed": 0, "total": None, "phase": "baseline"})
+                   if algorithm_profile == ADAPTIVE_PROFILE else
+                   ActivityStateV1(**state, state_schema_version=1, schema_version=1,
+                                   type="personality_assessment", progress={"completed": 0}))
+        activity = ActivityRecord(id=uuid4().hex, conversation_id=parent.id, experience_id=experience_id,
+            experience_snapshot=pin, engine_version=release.engine_version, revision=0, state=initial, created_at=now)
+        self.activities.insert(session, activity)
+        updated = parent.model_copy(update={"revision": parent.revision + 1, "active_activity_id": activity.id})
+        self.conversations.save(session, updated)
+        return activity, updated, now
 
     def _validate_patch(self, session, parent, current, patch):
         try:

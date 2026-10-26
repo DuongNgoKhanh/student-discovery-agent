@@ -110,9 +110,14 @@ paths:
       operationId: internalSubmitConversationTurn
       summary: Commit one structured interaction turn
       description: |
-        B-02 subset of the public ConversationTurnInput union: only interaction set_name and submit_answer with an
-        option payload execute. Well-formed message/text/confirm/edit requests return 422 VAL_INVALID_ACTIVITY_TRANSITION
+        Subset of the public ConversationTurnInput union: message, interaction set_name and submit_answer with an
+        option payload execute. Well-formed text/confirm/edit interactions return 422 VAL_INVALID_ACTIVITY_TRANSITION
         after owner/lifecycle, replay and revision guards; malformed input returns 422 VAL_INVALID_INPUT.
+        A message runs the pinned agent loop outside any transaction. Tools are checked against the state captured at
+        preflight; the handoffs start, set_name, current_question and propose_answer make the server render the next
+        block (name prompt, question, or proposal text plus the question). A proposal never records an answer: the
+        student confirms by choosing the option. Model failures fall back to the snapshot templates. The commit
+        rechecks the conversation revision and writes both messages, any activity change and the outcome atomically.
         Replay identity is (owner, conversation.turn, conversation_id, idempotency_key); the fingerprint covers the
         normalized request (NFC/whitespace-normalized name, key order ignored) including expected_revision and
         expected_activity_revision only when sent. Replay returns the stored status/data with fresh meta.

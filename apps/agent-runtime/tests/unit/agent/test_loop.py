@@ -66,6 +66,15 @@ def test_handoff_without_text_yields_no_agent_blocks():
     assert result.blocks == () and result.handoff.arguments == SetNameArguments(display_name="Minh")
 
 
+def test_rejected_handoff_goes_back_to_the_model_instead_of_ending_the_turn():
+    executor = Executor(**{"assessment.set_name": {"error": "invalid_name"}})
+    model = FakeModel(ModelReply(text="", tool_calls=(call("assessment.set_name", {"display_name": "M1nh"}),)),
+                      ModelReply(text="Tên chỉ gồm chữ cái thôi nhé, bạn nhập lại giúp mình?"))
+    result = turn(model, executor, context=AgentContext(today=date(2026, 10, 26), phase="collecting_name"))
+    assert model.calls[1][0][-1].content == {"error": "invalid_name"}
+    assert result.handoff is None and result.blocks[0].type == "markdown" and result.steps == 2
+
+
 def test_non_handoff_tool_results_go_back_to_the_model():
     executor = Executor(**{"result.explain": {"top_codes": ["R", "I", "A"]}})
     model = FakeModel(ModelReply(text="", tool_calls=(call("result.explain", {}),)),

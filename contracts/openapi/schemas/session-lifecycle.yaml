@@ -123,6 +123,7 @@
             next_question: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
             completed: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
             clarification: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+            ask_name: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
       description: "agent.snapshot.v1 content: cấu hình agent (persona, model, limits, tools, guardrails, links, templates); mọi field ngoài greeting_text/allowed_activity_profiles có mặc định an toàn (model null, tools rỗng). Greeting projects to a server-ID text v1 block without an LLM call. Adapter proposal; does not imply Product registry support."
     ReleaseKey:
       type: object

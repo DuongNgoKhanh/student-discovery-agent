@@ -105,7 +105,7 @@ def test_response_is_projected_while_stored_message_stays_canonical(monkeypatch,
     request = parse_turn_input(interaction(snapshot, "set_name", {"display_name": "Ngân"}))
     draft = handler.prepare(snapshot, request)
     canonical = MarkdownBlock(block_id="md1", type="markdown", schema_version=1, content="**Chào** Ngân")
-    monkeypatch.setattr(turn_response, "_assistant_block", lambda activity, draft: canonical)
+    monkeypatch.setattr(turn_response, "activity_block", lambda activity, draft: canonical)
     output = finalize_turn(snapshot, request, draft, COMMITTED_AT)
     assert output.patch.append_messages[1].blocks == (canonical,)
     (sent,) = output.result.blocks
