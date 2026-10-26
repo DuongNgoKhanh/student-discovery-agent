@@ -300,11 +300,12 @@ class TextBlock(ContractModel):
 
 _HTML_TAG = re.compile(r"<[A-Za-z/!]")
 _LINK_TARGET = re.compile(r"\]\(\s*([^)\s]*)")
-_REFERENCE_TARGET = re.compile(r"^[ \t>*+\-\d.]*\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
+# Line prefixes cover indents, block quotes and list markers (- * + 1. 1)); labels may hold escaped brackets.
+_REFERENCE_TARGET = re.compile(r"^[ \t>*+\-\d.)]*\[(?:\\.|[^\]\\])+\]:\s*(\S+)", re.MULTILINE)
 
 
 class MarkdownBlock(ContractModel):
-    """Safe subset only: emphasis, lists and http(s) links; clients still sanitize."""
+    """Rejects HTML, images and non-http(s) link targets (inline and reference); clients still sanitize."""
     block_id: OpaqueId
     type: Literal["markdown"]
     schema_version: Literal[1]
@@ -333,6 +334,12 @@ class SuggestionsBlock(ContractModel):
     type: Literal["suggestions"]
     schema_version: Literal[1]
     items: Annotated[tuple[SuggestionItem, ...], Field(min_length=1, max_length=4)]
+
+    @model_validator(mode="after")
+    def unique_labels(self) -> "SuggestionsBlock":
+        if len({item.label for item in self.items}) != len(self.items):
+            raise ValueError("suggestion labels must be unique")
+        return self
 
 
 class _QuestionBlock(ContractModel):

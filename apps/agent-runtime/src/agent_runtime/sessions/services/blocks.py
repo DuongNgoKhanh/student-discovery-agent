@@ -11,7 +11,8 @@ from agent_runtime.sessions.schemas.activity import (
 )
 
 _LINK = re.compile(r"\[([^\]]+)\]\(\s*(https?://[^)\s]+)\)")
-# Underscore emphasis never matches intraword (CommonMark), so snake_case and URLs stay intact.
+# Underscore emphasis never matches intraword (CommonMark), so snake_case stays intact; link targets are shielded
+# in markdown_to_text, bare URLs are not.
 _EMPHASIS = re.compile(r"(\*\*|\*)(?=\S)(.+?)(?<=\S)\1|(?<!\w)(__|_)(?=\S)(.+?)(?<=\S)\3(?!\w)")
 _BULLET = re.compile(r"^(\s*)[-*+]\s+", re.MULTILINE)
 
