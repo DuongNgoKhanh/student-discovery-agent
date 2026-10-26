@@ -1,4 +1,6 @@
 """Provider-neutral model port: scripted fake and unconfigured fallback never raise."""
+from types import SimpleNamespace
+
 from agent_runtime.agent.model import (
     FakeModel,
     ModelReply,
@@ -8,6 +10,8 @@ from agent_runtime.agent.model import (
     UnconfiguredModel,
     UserMessage,
 )
+from agent_runtime.infrastructure.llm.gemini_model import GeminiChatModel
+from agent_runtime.infrastructure.llm.model_registry import build_model_port
 
 SETTINGS = ModelSettings(model_id="gemini-2.5-flash")
 
@@ -29,3 +33,11 @@ def test_exhausted_script_is_unavailable_not_an_exception():
 
 def test_unconfigured_model_reports_not_configured():
     assert UnconfiguredModel().invoke([UserMessage("hi")], [], SETTINGS).reason == "not_configured"
+
+
+def test_registry_builds_gemini_only_when_a_key_is_configured():
+    configured = SimpleNamespace(GOOGLE_API_KEY="key", PROXY_URL=None)
+    missing = SimpleNamespace(GOOGLE_API_KEY="", PROXY_URL=None)
+    assert isinstance(build_model_port("gemini", config=configured), GeminiChatModel)
+    assert isinstance(build_model_port("gemini", config=missing), UnconfiguredModel)
+    assert isinstance(build_model_port("openai", config=configured), UnconfiguredModel)
