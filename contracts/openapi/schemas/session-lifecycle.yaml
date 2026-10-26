@@ -51,7 +51,66 @@
             type: string
             minLength: 1
             pattern: \S
-      description: agent.snapshot.v1 content; canonical content hash uses JCS SHA-256. Greeting projects to a server-ID text v1 block without an LLM call. Adapter proposal; does not imply Product registry support.
+        greeting_suggestions:
+          type: array
+          maxItems: 4
+          items: {type: string, minLength: 1, maxLength: 60}
+        persona:
+          type: object
+          additionalProperties: false
+          properties:
+            name: {type: string, minLength: 1, maxLength: 60}
+            language: {type: string, enum: [vi]}
+            system_prompt: {type: string, minLength: 1, maxLength: 8000,
+                            description: "Chỉ dùng biến {{display_name}}, {{current_date}}."}
+        model:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [ref]
+          properties:
+            ref: {type: string, pattern: '^[a-z0-9-]+/[A-Za-z0-9._-]+$', description: "provider/model; provider hiện hỗ trợ: gemini"}
+            temperature: {type: number, minimum: 0, maximum: 2}
+            max_output_tokens: {type: integer, minimum: 1, maximum: 4096}
+            timeout_ms: {type: integer, minimum: 1000, maximum: 30000}
+            max_retries: {type: integer, minimum: 0, maximum: 3}
+          description: null = tắt LLM, runtime chạy template dự phòng. Không chứa secret.
+        limits:
+          type: object
+          additionalProperties: false
+          properties:
+            max_tool_steps: {type: integer, minimum: 1, maximum: 8}
+            turn_timeout_ms: {type: integer, minimum: 1000, maximum: 30000}
+            history_messages: {type: integer, minimum: 0, maximum: 50}
+            max_input_chars: {type: integer, minimum: 1, maximum: 4000}
+        tools:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, version]
+            properties:
+              name: {type: string, minLength: 1}
+              version: {type: integer, minimum: 1}
+              params: {type: object}
+              description: {type: string, minLength: 1, maxLength: 1000}
+          description: Mỗi name@version phải có trong tool catalog của runtime; params kiểm theo schema của tool.
+        guardrails:
+          type: object
+          additionalProperties: false
+          properties:
+            blocked_topics: {type: array, items: {type: string, minLength: 1, maxLength: 60}}
+            refusal_text: {type: string, minLength: 1, maxLength: 500}
+        templates:
+          type: object
+          additionalProperties: false
+          properties:
+            unknown_message: {type: string, minLength: 1, maxLength: 500}
+            fallback_suggestions: {type: array, maxItems: 4, items: {type: string, minLength: 1, maxLength: 60}}
+            next_question: {type: string, minLength: 1, maxLength: 500}
+            completed: {type: string, minLength: 1, maxLength: 500}
+            clarification: {type: string, minLength: 1, maxLength: 500}
+      description: "agent.snapshot.v1 content: cấu hình agent (persona, model, limits, tools, guardrails, templates); mọi field ngoài greeting_text/allowed_activity_profiles có mặc định an toàn (model null, tools rỗng). Greeting projects to a server-ID text v1 block without an LLM call. Adapter proposal; does not imply Product registry support."
     ReleaseKey:
       type: object
       additionalProperties: false
