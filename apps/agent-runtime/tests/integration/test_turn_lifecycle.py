@@ -1,4 +1,6 @@
 """begin/finish: one in-progress turn, replay through responses, cancel before commit, failure writes nothing."""
+from datetime import timedelta
+
 import pytest
 
 from agent_runtime.agent.model import ModelReply
@@ -6,6 +8,10 @@ from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.services.turn_input import parse_message_input
 from agent_runtime.sessions.services.turns import Begun
 from tests.helpers.chat import build_chat
+from tests.helpers.turns import NOW
+
+# Demo agent: turn_timeout_ms 25s + 30s grace; still inside the 60s caller token.
+PAST_STALE = timedelta(seconds=56)
 
 pytestmark = pytest.mark.integration
 
@@ -68,3 +74,29 @@ def test_response_activity_is_a_summary(chat):
     chat.model._outcomes.append(ModelReply(text="ok"))
     data = chat.service.submit(chat.caller, chat.conversation_id, text("hi", 0, "k1")).data
     assert data["activity"] is None or "answers" not in data["activity"]
+
+
+def test_stale_same_key_retry_replays_the_abandoned_response(chat):
+    begun = chat.service.begin(chat.caller, chat.conversation_id, text("hi", 0, "k1"))  # process dies here
+    chat.clock.set(NOW + PAST_STALE)
+    again = chat.service.submit(chat.caller, chat.conversation_id, text("hi", 0, "k1"))
+    assert again.replayed and again.data["id"] == begun.response.id
+    assert (again.data["status"], again.data["error"]) == ("failed", {"code": "TURN_ABANDONED"})
+    assert chat.model.calls == [] and chat.revision() == 0
+
+
+def test_stale_row_does_not_block_a_new_key(chat):
+    chat.service.begin(chat.caller, chat.conversation_id, text("hi", 0, "k1"))
+    chat.clock.set(NOW + PAST_STALE)
+    chat.model._outcomes.append(ModelReply(text="Chào!"))
+    done = chat.service.submit(chat.caller, chat.conversation_id, text("hi again", 0, "k2"))
+    assert not done.replayed and (done.data["status"], done.data["revision"]) == ("completed", 1)
+
+
+def test_same_key_while_running_is_rejected_with_its_id(chat):
+    begun = chat.service.begin(chat.caller, chat.conversation_id, text("hi", 0, "k1"))
+    chat.clock.set(NOW + PAST_STALE - timedelta(seconds=2))  # not yet abandoned
+    with pytest.raises(RuntimeSessionError) as error:
+        chat.service.begin(chat.caller, chat.conversation_id, text("hi", 0, "k1"))
+    assert (error.value.status, error.value.code) == (409, "TURN_IN_PROGRESS")
+    assert error.value.details == {"response_id": begun.response.id}

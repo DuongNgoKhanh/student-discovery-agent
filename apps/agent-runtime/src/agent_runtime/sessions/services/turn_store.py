@@ -1,6 +1,7 @@
 """Turn begin (in-progress Response) and guarded commit. Engine/agent work happens between the two transactions."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
+from time import monotonic_ns
 from uuid import uuid4
 
 from agent_runtime.infrastructure.auth.caller import VerifiedCaller
@@ -45,12 +46,12 @@ class Begun:
     snapshot: TurnSnapshot | MessageSnapshot
     fingerprint: str
     owner_id: str
+    started_ns: int = field(default_factory=monotonic_ns)  # trace latency spans begin..terminal state
 
 
-def _stale_after(snapshot) -> timedelta:
+def _stale_after(agent: AgentSnapshotV1) -> timedelta:
     """An in-progress row older than the agent's turn budget + 30s belongs to a dead process."""
-    agent = getattr(snapshot, "agent", None)
-    return timedelta(milliseconds=agent.limits.turn_timeout_ms) + timedelta(seconds=30) if agent else timedelta(seconds=60)
+    return timedelta(milliseconds=agent.limits.turn_timeout_ms) + timedelta(seconds=30)
 
 
 def completed(pending: TurnResponse, result: ConversationTurnResult, now) -> TurnResponse:
@@ -76,6 +77,11 @@ class TurnStore:
     def _lock_and_replay(self, session, caller, conversation_id, request, fingerprint):
         # Owner + lifecycle win before any stored content can be replayed.
         parent = self.access.lock_open(session, caller, conversation_id, write=True)
+        # A dead process's row becomes failed TURN_ABANDONED first, so a same-key retry replays that outcome.
+        if self.responses.active(session, parent.id) is not None:
+            agent = AgentSnapshotV1.model_validate(self.snapshots.get(session, parent.agent_snapshot).content)
+            self.responses.expire_stale(session, parent.id, now=self.access.clock.now(session),
+                                        older_than=_stale_after(agent))
         replay = self.responses.find_by_key(session, caller.owner_id, parent.id, request.idempotency_key,
                                             request_hash=fingerprint)
         if replay is not None and replay.status == "in_progress":
@@ -103,7 +109,6 @@ class TurnStore:
                 raise self._conflict(session, parent, "conversation", request.expected_revision, parent.revision)
             snapshot = self._snapshot(session, parent, request)
             now = self.access.clock.now(session)
-            self.responses.expire_stale(session, parent.id, now=now, older_than=_stale_after(snapshot))
             running = self.responses.active(session, parent.id)
             if running is not None:
                 raise RuntimeSessionError(409, "TURN_IN_PROGRESS", {"response_id": running.id})

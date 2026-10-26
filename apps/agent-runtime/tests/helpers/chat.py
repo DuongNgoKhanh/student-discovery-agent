@@ -84,5 +84,5 @@ def build_chat(test_database, valid_v2_doc, validator) -> SimpleNamespace:
                 messages.c.conversation_id == conversation_id, messages.c.role == "user")))
 
     return SimpleNamespace(model=model, service=service, responses=responses, conversations=conversations,
-                           caller=caller, conversation_id=conversation_id, send=send, message_count=message_count,
+                           clock=clock, caller=caller, conversation_id=conversation_id, send=send, message_count=message_count,
                            revision=revision, user_message_ids=user_message_ids, dispose=db_engine.dispose)

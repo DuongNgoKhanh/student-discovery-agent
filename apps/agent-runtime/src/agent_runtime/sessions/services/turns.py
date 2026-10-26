@@ -1,6 +1,8 @@
 """Turn orchestration: begin UoW, engine/agent work outside transactions, guarded commit UoW."""
 import time
 from collections.abc import Callable
+from dataclasses import replace
+from time import monotonic_ns
 from typing import Literal
 
 from agent_runtime.agent.loop import TextDelta, run_agent_turn
@@ -19,23 +21,37 @@ from agent_runtime.sessions.services.message_turns import (
 from agent_runtime.sessions.services.responses import ResponseService
 from agent_runtime.sessions.services.turn_handlers import TurnHandler
 from agent_runtime.sessions.services.turn_store import Begun, TurnCancelled, TurnStore
-from agent_runtime.sessions.trace import observed
+from agent_runtime.sessions.trace import describe_metadata, emit_trace
 
-__all__ = ["CANCEL_POLL_SECONDS", "Begun", "StreamEvent", "TurnCancelled", "TurnService", "describe_turn"]
+__all__ = ["CANCEL_POLL_SECONDS", "Begun", "StreamEvent", "TurnCancelled", "TurnService", "describe_response",
+           "describe_turn"]
+
+TRACE_ACTION = "conversation.turn"
 
 CANCEL_POLL_SECONDS = 0.5
 StreamEvent = tuple[Literal["delta"], str] | tuple[Literal["tool_call"], str]
 
 
 def describe_turn(response: ServiceResponse) -> dict:
-    """Identifiers and revisions of the turn's Response; result_id is set once the activity completed."""
+    """A replayed Response's identifiers and revisions; result_id is set once the activity completed."""
     data = response.data
     activity = data.get("activity") or {}
-    committed = data["status"] == "completed" and not response.replayed
     return {"conversation_id": data["conversation_id"], "activity_id": activity.get("id"),
             "result_id": (activity.get("result") or {}).get("result_id"),
-            "before_revision": data["revision"] - (1 if committed else 0), "after_revision": data["revision"],
+            "before_revision": data["revision"], "after_revision": data["revision"],
             "experience_release_id": None, "algorithm_profile": activity.get("algorithm_profile")}
+
+
+def describe_response(subject: tuple[Begun, TurnResponse]) -> dict:
+    """A terminal Response's identifiers; the release is the activity's pinned one captured at begin."""
+    begun, response = subject
+    activity = response.activity or begun.response.activity
+    release = getattr(begun.snapshot, "release", None)
+    return {"conversation_id": response.conversation_id, "activity_id": activity.id if activity else None,
+            "result_id": activity.result.result_id if activity and activity.result else None,
+            "before_revision": begun.response.revision, "after_revision": response.revision,
+            "experience_release_id": release.release_id if release else None,
+            "algorithm_profile": activity.algorithm_profile if activity else None}
 
 
 class TurnService:
@@ -51,11 +67,20 @@ class TurnService:
 
     def begin(self, caller: VerifiedCaller, conversation_id: str,
               request: ConversationTurnInput) -> ServiceResponse | Begun:
-        return self.store.begin(caller, conversation_id, request)
+        """Traces rejections and replays here; a begun turn is traced once, by ``finish``."""
+        start = monotonic_ns()
+        try:
+            begun = self.store.begin(caller, conversation_id, request)
+        except Exception:
+            emit_trace(self.trace_sink, TRACE_ACTION, "failure", {}, start)
+            raise
+        if isinstance(begun, ServiceResponse):
+            emit_trace(self.trace_sink, TRACE_ACTION, "replayed", describe_metadata(describe_turn, begun), start)
+            return begun
+        return replace(begun, started_ns=start)
 
-    @observed("conversation.turn", describe_turn)
     def submit(self, caller: VerifiedCaller, conversation_id: str, request: ConversationTurnInput) -> ServiceResponse:
-        """JSON mode: begin + finish; a finished same-key Response replays."""
+        """JSON mode: begin + finish (each traces its own outcome); a finished same-key Response replays."""
         begun = self.begin(caller, conversation_id, request)
         if isinstance(begun, ServiceResponse):
             return begun
@@ -63,7 +88,13 @@ class TurnService:
 
     def finish(self, caller: VerifiedCaller, begun: Begun,
                on_event: Callable[[StreamEvent], None] | None = None) -> TurnResponse:
-        """Never raises after begin: every outcome is a terminal Response."""
+        """Never raises after begin: every outcome is a terminal Response, traced exactly once."""
+        response = self._settle(caller, begun, on_event)
+        emit_trace(self.trace_sink, TRACE_ACTION, "failure" if response.status == "failed" else "success",
+                   describe_metadata(describe_response, (begun, response)), begun.started_ns)
+        return response
+
+    def _settle(self, caller: VerifiedCaller, begun: Begun, on_event) -> TurnResponse:
         try:
             return self._run(caller, begun, on_event)
         except TurnCancelled:
