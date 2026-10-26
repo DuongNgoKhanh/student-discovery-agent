@@ -43,6 +43,15 @@ DB_URL="postgresql+psycopg://postgres:$DB_PASSWORD@127.0.0.1:$DB_PORT/postgres"
 (cd "$RUNTIME" && .venv/bin/python -c 'import sys
 from agent_runtime.infrastructure.db.migrate import upgrade_database
 upgrade_database(sys.argv[1])' "$DB_URL")
+# Pre-production migrations are edited in place, so a DB created by an older 0001 is never upgraded.
+if ! (cd "$RUNTIME" && .venv/bin/python -c 'import sys
+from sqlalchemy import create_engine, text
+with create_engine(sys.argv[1]).connect() as c:
+    sys.exit(0 if c.scalar(text("SELECT to_regclass(:t)"), {"t": "execution.responses"}) else 1)' "$DB_URL"); then
+  echo "DB của prototype được tạo bằng migration cũ (thiếu execution.responses)." >&2
+  echo "Chạy: bash prototypes/agent-chat/start.sh reset   (xóa hội thoại cũ), rồi chạy lại start.sh." >&2
+  exit 1
+fi
 
 export RUNTIME_ENVIRONMENT=demo RUNTIME_DATABASE_URL="$DB_URL" RUNTIME_INTERNAL_KEYRING="$KEYRING" \
   RUNTIME_CURSOR_SIGNING_KEY="$CURSOR_KEY" RUNTIME_LOCAL_RELEASES_DIR="$HERE/releases"
