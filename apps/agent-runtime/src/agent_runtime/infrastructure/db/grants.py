@@ -2,7 +2,8 @@
 
 from sqlalchemy import Connection, text
 
-MUTABLE_TABLES = ("conversations", "activities", "messages", "result_snapshots", "operation_outcomes", "runtime_traces")
+MUTABLE_TABLES = ("conversations", "activities", "messages", "result_snapshots", "operation_outcomes", "responses",
+                  "runtime_traces")
 
 
 def grant_execution_roles(connection: Connection, runtime_role: str, cleanup_role: str) -> None:

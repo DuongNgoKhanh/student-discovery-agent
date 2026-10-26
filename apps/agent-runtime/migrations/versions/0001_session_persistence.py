@@ -94,6 +94,21 @@ def upgrade() -> None:
             FOREIGN KEY (conversation_id) REFERENCES execution.conversations(id)
                 ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
         );
+        CREATE TABLE execution.responses (
+            id text PRIMARY KEY, conversation_id text NOT NULL, owner_id text NOT NULL,
+            idempotency_key text NOT NULL,
+            request_hash text NOT NULL CHECK (request_hash ~ '^sha256:[a-f0-9]{64}$'),
+            status text NOT NULL CHECK (status IN ('in_progress', 'completed', 'cancelled', 'failed')),
+            base_revision bigint NOT NULL CHECK (base_revision BETWEEN 0 AND 9007199254740991),
+            input_message_id text NOT NULL, error_code text,
+            response_data jsonb NOT NULL CHECK (jsonb_typeof(response_data) = 'object'),
+            created_at timestamptz NOT NULL DEFAULT clock_timestamp(), completed_at timestamptz,
+            UNIQUE (owner_id, conversation_id, idempotency_key),
+            FOREIGN KEY (conversation_id) REFERENCES execution.conversations(id)
+                ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
+        );
+        CREATE UNIQUE INDEX responses_one_in_progress ON execution.responses (conversation_id)
+            WHERE status = 'in_progress';
         CREATE TABLE execution.runtime_traces (
             event_id text PRIMARY KEY, request_id text NOT NULL, trace_id text,
             conversation_id text, activity_id text, result_id text,
@@ -194,7 +209,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute("""
         ALTER TABLE execution.conversations DROP CONSTRAINT conversations_active_activity_fk;
-        DROP TABLE execution.runtime_traces, execution.operation_outcomes, execution.messages,
+        DROP TABLE execution.runtime_traces, execution.responses, execution.operation_outcomes, execution.messages,
             execution.result_snapshots, execution.activities, execution.conversations, execution.release_snapshots;
         DROP FUNCTION execution.check_current_result(), execution.check_active_activity(),
             execution.guard_result_generation(), execution.reject_release_update();
