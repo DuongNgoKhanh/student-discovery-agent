@@ -1,5 +1,7 @@
 """Minimal definition data built in memory for validator tests."""
 
+import copy
+
 import pytest
 
 from agent_runtime.evaluations.services.compatibility import (
@@ -109,6 +111,14 @@ def valid_v2_doc():
     }
     doc = document("2.0", questions, rules, question_ids, {house_id: 3.0 for house_id in HOUSE_IDS})
     doc["evaluation_cases"][0]["expected"].update(stopping_reason="question_limit", tie_applied=True)
+    return doc
+
+
+@pytest.fixture
+def seeded_v2_doc(valid_v2_doc):
+    doc = copy.deepcopy(valid_v2_doc)
+    doc["selection_rules"]["payload"] = {"selector": "widest_bound_gap", "fallback": "seeded"}
+    doc["tie_policy"]["payload"] = {"apply_at": "question_limit"}
     return doc
 
 

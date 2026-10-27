@@ -3,10 +3,10 @@
 Verifies:
 - FR-ENG-01: Adaptive Question Selection algorithm based on ADR-002 (§7.6, §7.7).
 - AT-12: Deterministic question selection and stop conditions across golden fixtures.
-- Baseline 12 items order and coverage across all 6 Holland RIASEC houses.
-- EX-02: Bounded winner early stopping at 18 answers (House R).
+- Seeded baseline: 12 items, two rounds covering all 6 Holland RIASEC houses.
+- EX-02: Bounded winner early stopping (House R).
 - Equality of bounds: strict inequality check prevents premature stopping.
-- EX-03: Maximum limit stopping at 30 items with tie-breaking order.
+- EX-03: Maximum limit stopping at 30 items with the seeded tie-break.
 - Anti-repeat invariant: no duplicate question selection under any path.
 - Typed failure handling: InvalidPrefixError, BankExhaustedError, UnsupportedDefinitionError, MissingMappingError.
 - Backward compatibility with Definition 1.0 fixed 6 questions.
@@ -35,15 +35,35 @@ from agent_runtime.engine.schemas.selector import (
     SelectionStatus,
     StoppingReason,
 )
+from agent_runtime.engine.services.ordering import seeded_order
 from agent_runtime.engine.services.selector import (
     AdaptiveQuestionSelector,
     select_next_question,
 )
 
+SEED = "act_fixture"
+HOUSES = ["house_r", "house_i", "house_a", "house_s", "house_e", "house_c"]
+
+
+class SeededSelector(AdaptiveQuestionSelector):
+    """Selector bound to one activity seed, so tests read like the runtime's per-activity calls."""
+
+    def select_next_question(self, answers=None, definition=None, validate_sequence=True, *, seed=SEED):
+        return super().select_next_question(answers, definition, validate_sequence, seed=seed)
+
+
+def _baseline(definition):
+    return AdaptiveQuestionSelector._baseline_sequence(AdaptiveQuestionSelector._coerce_definition(definition), SEED)
+
+
+def _seeded_first(houses):
+    """Winner among houses tied on mean and top-rating count: the lowest seeded key."""
+    return seeded_order(SEED, "house", houses)[0]
+
 
 @pytest.fixture
-def valid_v2_dict(valid_v2_doc):
-    return copy.deepcopy(valid_v2_doc)
+def valid_v2_dict(seeded_v2_doc):
+    return copy.deepcopy(seeded_v2_doc)
 
 
 @pytest.fixture
@@ -53,7 +73,7 @@ def valid_v1_dict(valid_v1_doc):
 
 def _run_path(definition, rate):
     """Answer every selected question with rate(question) until completion; return each step's result."""
-    selector = AdaptiveQuestionSelector(definition)
+    selector = SeededSelector(definition)
     answers, trace = [], []
     while True:
         result = selector.select_next_question(answers, validate_sequence=False)
@@ -67,14 +87,14 @@ def _run_path(definition, rate):
 class TestAdaptiveQuestionSelectorBaseline:
     """Test Suite for Phase 1: Baseline 12 Questions (ADR-002 §7.4)."""
 
-    def test_start_with_empty_answers_returns_first_baseline_question(self, valid_v2_doc):
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+    def test_start_with_empty_answers_returns_first_baseline_question(self, seeded_v2_doc):
+        selector = SeededSelector(seeded_v2_doc)
         result = selector.select_next_question(answers=[])
 
         assert result.status == SelectionStatus.NEXT_QUESTION
-        assert result.next_question_id == "q_r_01"
+        assert result.next_question_id == _baseline(seeded_v2_doc)[0]
         assert result.next_question is not None
-        assert result.next_question.question_id == "q_r_01"
+        assert result.next_question.question_id == result.next_question_id
         assert result.phase == SelectionPhase.BASELINE
         assert result.progress.completed == 0
         assert result.progress.min_total == 12
@@ -82,14 +102,14 @@ class TestAdaptiveQuestionSelectorBaseline:
         assert result.progress.total is None
         assert result.stopping_reason is None
 
-    def test_baseline_full_sequence_12_questions(self, valid_v2_doc):
-        """Verify that baseline follows exact order R1, I1, A1, S1, E1, C1, R2, I2, A2, S2, E2, C2."""
-        expected_baseline = [
-            "q_r_01", "q_i_01", "q_a_01", "q_s_01", "q_e_01", "q_c_01",
-            "q_r_02", "q_i_02", "q_a_02", "q_s_02", "q_e_02", "q_c_02",
-        ]
+    def test_baseline_full_sequence_12_questions(self, seeded_v2_doc):
+        """Baseline follows the activity's seeded sequence: two rounds, each visiting every house once."""
+        expected_baseline = _baseline(seeded_v2_doc)
+        house_of = {q["question_id"]: q["house_id"] for q in seeded_v2_doc["questions"]}
+        rounds = [[house_of[qid] for qid in expected_baseline[i:i + 6]] for i in (0, 6)]
+        assert all(sorted(r) == sorted(HOUSES) for r in rounds)
 
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+        selector = SeededSelector(seeded_v2_doc)
         answers = []
 
         for i, expected_qid in enumerate(expected_baseline):
@@ -114,113 +134,36 @@ class TestAdaptiveQuestionSelectorBaseline:
 class TestAdaptiveQuestionSelectorGoldenEX02:
     """Test Suite for ADR-002 §8.3 / EX-02: Bounded Winner Early Stopping at 18 Answers."""
 
-    def test_ex02_early_stopping_at_18_answers(self, valid_v2_doc):
-        """Replay EX-02: R ratings are 5, others are 1.
+    def test_ex02_bounded_winner_early_stop(self, seeded_v2_doc):
+        """EX-02: R ratings are 5, others are 1.
 
-        At 12: lower_r=2.6, upper_others=3.4 -> continue, next is q_r_03
-        At 13: lower_r=3.4, upper_others=3.4 -> equality of bounds (not >), continue, next is q_i_03
-        At 14: next is q_a_03
-        At 15: next is q_s_03
-        At 16: next is q_e_03
-        At 17: next is q_c_03
-        At 18: lower_r=3.4 > max upper_others=2.6 -> STOP bounded_winner House R!
+        After the baseline every house has 2 answers: lower_r = 2.6 < upper_others = 3.4, so it continues.
+        The seeded order decides which items follow; the stop must be a strict bounded win for R.
         """
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
-        answers = []
+        trace = _run_path(seeded_v2_doc, lambda q: 5 if q.house_id == "house_r" else 1)
+        after_baseline = trace[12]
+        assert after_baseline.status == SelectionStatus.NEXT_QUESTION
+        assert after_baseline.statistics["house_r"].lower.value == pytest.approx(2.6)
+        assert after_baseline.statistics["house_i"].upper.value == pytest.approx(3.4)
 
-        # Baseline: R items get rating 5, all others get rating 1
-        baseline_qids = [
-            ("q_r_01", 5), ("q_i_01", 1), ("q_a_01", 1),
-            ("q_s_01", 1), ("q_e_01", 1), ("q_c_01", 1),
-            ("q_r_02", 5), ("q_i_02", 1), ("q_a_02", 1),
-            ("q_s_02", 1), ("q_e_02", 1), ("q_c_02", 1),
-        ]
-
-        for qid, rating in baseline_qids:
-            answers.append({
-                "question_id": qid,
-                "option_id": f"{qid}_opt_{rating}",
-            })
-
-        # Step 12: Check state
-        res12 = selector.select_next_question(answers)
-        assert res12.status == SelectionStatus.NEXT_QUESTION
-        assert res12.next_question_id == "q_r_03"
-        assert res12.statistics["house_r"].lower.value == pytest.approx(2.6)
-        assert res12.statistics["house_i"].upper.value == pytest.approx(3.4)
-
-        # Step 13: Answer q_r_03 with rating 5
-        answers.append({"question_id": "q_r_03", "option_id": "q_r_03_opt_5"})
-        res13 = selector.select_next_question(answers)
-        assert res13.status == SelectionStatus.NEXT_QUESTION
-        assert res13.next_question_id == "q_i_03"
-        # Verify equality of bounds: lower_r = 3.4 == upper_others = 3.4
-        assert res13.statistics["house_r"].lower.value == pytest.approx(3.4)
-        assert res13.statistics["house_i"].upper.value == pytest.approx(3.4)
-
-        # Step 14: Answer q_i_03 with rating 1
-        answers.append({"question_id": "q_i_03", "option_id": "q_i_03_opt_1"})
-        res14 = selector.select_next_question(answers)
-        assert res14.status == SelectionStatus.NEXT_QUESTION
-        assert res14.next_question_id == "q_a_03"
-
-        # Step 15: Answer q_a_03 with rating 1
-        answers.append({"question_id": "q_a_03", "option_id": "q_a_03_opt_1"})
-        res15 = selector.select_next_question(answers)
-        assert res15.status == SelectionStatus.NEXT_QUESTION
-        assert res15.next_question_id == "q_s_03"
-
-        # Step 16: Answer q_s_03 with rating 1
-        answers.append({"question_id": "q_s_03", "option_id": "q_s_03_opt_1"})
-        res16 = selector.select_next_question(answers)
-        assert res16.status == SelectionStatus.NEXT_QUESTION
-        assert res16.next_question_id == "q_e_03"
-
-        # Step 17: Answer q_e_03 with rating 1
-        answers.append({"question_id": "q_e_03", "option_id": "q_e_03_opt_1"})
-        res17 = selector.select_next_question(answers)
-        assert res17.status == SelectionStatus.NEXT_QUESTION
-        assert res17.next_question_id == "q_c_03"
-
-        # Step 18: Answer q_c_03 with rating 1
-        answers.append({"question_id": "q_c_03", "option_id": "q_c_03_opt_1"})
-        res18 = selector.select_next_question(answers)
-
-        # VERIFY EARLY STOP
-        assert res18.status == SelectionStatus.COMPLETED
-        assert res18.stopping_reason == StoppingReason.BOUNDED_WINNER
-        assert res18.primary_house_id == "house_r"
-        assert res18.tie_applied is False
-        assert res18.next_question_id is None
-        assert res18.phase == SelectionPhase.COMPLETED
-        assert res18.progress.completed == 18
-        assert res18.progress.total == 18
-        assert res18.progress.phase == "completed"
-
-        # Verify statistics at stop
-        stat_r = res18.statistics["house_r"]
-        assert stat_r.count == 3
-        assert stat_r.sum == 15
-        assert stat_r.mean.value == 5.0
-        assert stat_r.lower.value == pytest.approx(3.4)  # (15 + 2) / 5 = 17/5
-        assert stat_r.upper.value == pytest.approx(5.0)  # (15 + 10) / 5 = 25/5
-
-        for other_h in ["house_i", "house_a", "house_s", "house_e", "house_c"]:
-            stat_o = res18.statistics[other_h]
-            assert stat_o.count == 3
-            assert stat_o.sum == 3
-            assert stat_o.mean.value == 1.0
-            assert stat_o.lower.value == pytest.approx(1.0)  # (3 + 2) / 5 = 5/5
-            assert stat_o.upper.value == pytest.approx(2.6)  # (3 + 10) / 5 = 13/5
-            # lower_r (3.4) > upper_other (2.6) holds strictly!
+        final = trace[-1]
+        assert final.status == SelectionStatus.COMPLETED
+        assert final.stopping_reason == StoppingReason.BOUNDED_WINNER
+        assert final.primary_house_id == "house_r"
+        assert final.tie_applied is False
+        assert final.next_question_id is None
+        assert final.phase == SelectionPhase.COMPLETED
+        assert final.progress.total == final.progress.completed == len(trace) - 1 < 30
+        lower_r = final.statistics["house_r"].lower.to_fraction()
+        assert all(final.statistics[h].upper.to_fraction() < lower_r for h in HOUSES if h != "house_r")
 
 
 class TestAdaptiveQuestionSelectorEdgeCases:
     """Test Suite for Edge Cases: Equality of Bounds, 30-item limit, Anti-repeat, Challengers."""
 
-    def test_equality_of_bounds_does_not_stop_early(self, valid_v2_doc):
+    def test_equality_of_bounds_does_not_stop_early(self, seeded_v2_doc):
         """ADR-002 §7.6: lower_w == max(upper_h) must continue, not stop early."""
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+        selector = SeededSelector(seeded_v2_doc)
         # Create answers up to step 13 where lower_r == upper_i == 3.4
         answers = [
             {"question_id": "q_r_01", "option_id": "q_r_01_opt_5"},
@@ -237,13 +180,16 @@ class TestAdaptiveQuestionSelectorEdgeCases:
             {"question_id": "q_c_02", "option_id": "q_c_02_opt_1"},
             {"question_id": "q_r_03", "option_id": "q_r_03_opt_5"},
         ]
-        res = selector.select_next_question(answers)
+        # Hand-built prefix (not this seed's path): only the bounds logic is under test.
+        res = selector.select_next_question(answers, validate_sequence=False)
+        assert res.statistics["house_r"].lower.value == pytest.approx(3.4)
+        assert res.statistics["house_i"].upper.value == pytest.approx(3.4)
         assert res.status == SelectionStatus.NEXT_QUESTION
         assert res.stopping_reason is None
 
-    def test_max_question_limit_with_perfect_tie_ex03(self, valid_v2_doc):
-        """ADR-002 §8.4 / EX-03: All 30 ratings are 3 -> question_limit, house_r by tie order."""
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+    def test_max_question_limit_with_perfect_tie_ex03(self, seeded_v2_doc):
+        """ADR-002 §8.4 / EX-03: All 30 ratings are 3 -> question_limit, winner by the seeded key."""
+        selector = SeededSelector(seeded_v2_doc)
         answers = []
 
         # Play all 30 questions with rating 3
@@ -260,14 +206,14 @@ class TestAdaptiveQuestionSelectorEdgeCases:
         final_res = selector.select_next_question(answers)
         assert final_res.status == SelectionStatus.COMPLETED
         assert final_res.stopping_reason == StoppingReason.QUESTION_LIMIT
-        assert final_res.primary_house_id == "house_r"
+        assert final_res.primary_house_id == _seeded_first(HOUSES)
         assert final_res.tie_applied is True
         assert final_res.progress.completed == 30
         assert final_res.progress.total == 30
 
-    def test_all_ratings_low_stops_at_limit_with_tie(self, valid_v2_doc):
-        """ADR-002 §8.4: All 30 ratings are 1 -> question_limit, house_r by tie policy."""
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+    def test_all_ratings_low_stops_at_limit_with_tie(self, seeded_v2_doc):
+        """ADR-002 §8.4: All 30 ratings are 1 -> question_limit, winner by the seeded key."""
+        selector = SeededSelector(seeded_v2_doc)
         answers = []
 
         while len(answers) < 30:
@@ -283,12 +229,12 @@ class TestAdaptiveQuestionSelectorEdgeCases:
         final_res = selector.select_next_question(answers)
         assert final_res.status == SelectionStatus.COMPLETED
         assert final_res.stopping_reason == StoppingReason.QUESTION_LIMIT
-        assert final_res.primary_house_id == "house_r"
+        assert final_res.primary_house_id == _seeded_first(HOUSES)
         assert final_res.tie_applied is True
 
-    def test_anti_repeat_invariant_across_complete_trajectory(self, valid_v2_doc):
+    def test_anti_repeat_invariant_across_complete_trajectory(self, seeded_v2_doc):
         """Verify that throughout 30 question selections, no question is ever repeated."""
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+        selector = SeededSelector(seeded_v2_doc)
         answers = []
         asked_set = set()
 
@@ -307,39 +253,41 @@ class TestAdaptiveQuestionSelectorEdgeCases:
 
         assert len(asked_set) == 30
 
-    def test_challenger_reenters_candidate_set_and_is_selected(self, valid_v2_doc):
-        """ADR-002 §7.11 challenger: a house dropped from C returns when the leader's lower bound falls.
+    def test_candidate_set_follows_the_challenger_rule(self, seeded_v2_doc):
+        """ADR-002 §7.11: C = {w if unfinished} + {h != w unfinished with upper_h >= lower_w}, at every step.
 
-        Ratings by (house, item_order) are fixed below. Hand-checked bounds:
-        - 14 answers: leader I (5,5,5) lower = 17/5; R (1,1,4) upper = 16/5 < 17/5, so R is out of C.
-        - 19 answers: I answered 2, A (4,5,5) leads with lower = 16/5; R upper 16/5 >= 16/5, so R is back.
-          Gaps of R, A, S, E, C all equal 8/5, so tie order picks R: next question q_r_04.
+        Re-entry of a dropped challenger follows from this rule; checking the rule itself keeps the test
+        independent of which seeded order a run happens to take.
         """
         ratings = {
             "house_r": [1, 1, 4, 3, 5], "house_i": [5, 5, 5, 2, 3], "house_a": [4, 5, 5, 4, 5],
             "house_s": [2, 5, 3, 5, 2], "house_e": [4, 2, 4, 1, 4], "house_c": [4, 3, 1, 2, 4],
         }
-        trace = _run_path(valid_v2_doc, lambda q: ratings[q.house_id][q.item_order - 1])
+        dropped_seen = False
+        for n in range(20):
+            selector, answers = SeededSelector(seeded_v2_doc), []
+            while (res := selector.select_next_question(answers, validate_sequence=False, seed=f"act_{n}")).status \
+                    == SelectionStatus.NEXT_QUESTION:
+                if res.phase == SelectionPhase.ADAPTIVE:
+                    stats = res.statistics
+                    leader = next(line.split(": ")[1] for line in res.decision_log
+                                  if line.startswith("Current leading house"))
+                    expected = {h for h, st in stats.items() if st.count < 5
+                                and (h == leader or st.upper.to_fraction() >= stats[leader].lower.to_fraction())}
+                    assert set(res.candidate_houses) == expected
+                    dropped_seen |= len(expected) < len([h for h, st in stats.items() if st.count < 5])
+                q = res.next_question
+                answers.append({"question_id": q.question_id,
+                                "option_id": f"{q.question_id}_opt_{ratings[q.house_id][q.item_order - 1]}"})
+        assert dropped_seen, "the scenario must drop at least one challenger from C"
 
-        assert "house_r" in trace[12].candidate_houses
-        assert "house_r" not in trace[14].candidate_houses
-        assert trace[14].statistics["house_r"].upper.to_fraction() == Fraction(16, 5)
-        assert trace[14].statistics["house_i"].lower.to_fraction() == Fraction(17, 5)
-
-        assert "house_r" in trace[19].candidate_houses
-        assert trace[19].statistics["house_a"].lower.to_fraction() == Fraction(16, 5)
-        assert trace[19].next_question_id == "q_r_04"
-
-        assert trace[-1].stopping_reason == StoppingReason.BOUNDED_WINNER
-        assert trace[-1].primary_house_id == "house_a"
-
-    def test_partial_tie_at_limit_resolved_by_tie_order(self, valid_v2_doc):
-        """A and E tie at mean 4 so bounds never separate them; tie order R,I,A,S,E,C picks A."""
-        trace = _run_path(valid_v2_doc, lambda q: 4 if q.house_id in ("house_a", "house_e") else 2)
+    def test_partial_tie_at_limit_resolved_by_seeded_rank(self, seeded_v2_doc):
+        """A and E tie at mean 4 (no top ratings) so bounds never separate them; the seeded key decides."""
+        trace = _run_path(seeded_v2_doc, lambda q: 4 if q.house_id in ("house_a", "house_e") else 2)
         final = trace[-1]
         assert final.stopping_reason == StoppingReason.QUESTION_LIMIT
         assert final.progress.total == 30
-        assert final.primary_house_id == "house_a"
+        assert final.primary_house_id == _seeded_first(["house_a", "house_e"])
         assert final.tie_applied is True
 
     def test_clear_winner_at_limit_does_not_apply_tie(self, valid_v2_dict):
@@ -352,29 +300,29 @@ class TestAdaptiveQuestionSelectorEdgeCases:
         assert final.primary_house_id == "house_r"
         assert final.tie_applied is False
 
-    def test_empty_candidate_set_falls_back_to_tie_order_house(self, valid_v2_doc):
+    def test_empty_candidate_set_falls_back_to_seeded_house(self, seeded_v2_doc):
         """ADR-002 §7.7 step 5: R and I exhausted at mean 5 (lower_R = 5 is not > upper_I = 5, so no stop);
-        every other house has upper 13/5 < 5, so C is empty and the selector keeps asking by tie order."""
-        trace = _run_path(valid_v2_doc, lambda q: 5 if q.house_id in ("house_r", "house_i") else 1)
+        every other house has upper 13/5 < 5, so C is empty and the selector keeps asking a seeded house."""
+        trace = _run_path(seeded_v2_doc, lambda q: 5 if q.house_id in ("house_r", "house_i") else 1)
 
-        fallback = trace[22]
-        assert fallback.candidate_houses == []
+        fallback = next(r for r in trace if r.status == SelectionStatus.NEXT_QUESTION and r.phase == SelectionPhase.ADAPTIVE
+                        and r.candidate_houses == [])
         assert fallback.statistics["house_r"].count == 5
         assert fallback.statistics["house_i"].count == 5
-        assert fallback.next_question_id == "q_a_04"
+        assert fallback.next_question.house_id not in ("house_r", "house_i")
         assert any("fallback" in line for line in fallback.decision_log)
 
         final = trace[-1]
         assert final.stopping_reason == StoppingReason.QUESTION_LIMIT
-        assert final.primary_house_id == "house_r"
+        assert final.primary_house_id == _seeded_first(["house_r", "house_i"])
         assert final.tie_applied is True
 
 
 class TestAdaptiveQuestionSelectorValidationAndFailures:
     """Test Suite for Typed Failure Handling (DEC-04 & ADR-002 §7.7)."""
 
-    def test_duplicate_question_in_answers_raises_invalid_prefix(self, valid_v2_doc):
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+    def test_duplicate_question_in_answers_raises_invalid_prefix(self, seeded_v2_doc):
+        selector = SeededSelector(seeded_v2_doc)
         answers = [
             {"question_id": "q_r_01", "option_id": "q_r_01_opt_5"},
             {"question_id": "q_r_01", "option_id": "q_r_01_opt_4"},  # Duplicate!
@@ -383,8 +331,8 @@ class TestAdaptiveQuestionSelectorValidationAndFailures:
             selector.select_next_question(answers)
         assert exc_info.value.code == "REQ_QUESTION_ALREADY_ANSWERED"
 
-    def test_unknown_question_id_raises_invalid_prefix(self, valid_v2_doc):
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+    def test_unknown_question_id_raises_invalid_prefix(self, seeded_v2_doc):
+        selector = SeededSelector(seeded_v2_doc)
         answers = [
             {"question_id": "q_unknown_99", "option_id": "q_r_01_opt_5"},
         ]
@@ -392,8 +340,8 @@ class TestAdaptiveQuestionSelectorValidationAndFailures:
             selector.select_next_question(answers)
         assert exc_info.value.code == "VAL_UNKNOWN_QUESTION_ID"
 
-    def test_option_not_belonging_to_question_raises_invalid_prefix(self, valid_v2_doc):
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+    def test_option_not_belonging_to_question_raises_invalid_prefix(self, seeded_v2_doc):
+        selector = SeededSelector(seeded_v2_doc)
         answers = [
             {"question_id": "q_r_01", "option_id": "q_i_01_opt_1"},  # Option belongs to q_i_01!
         ]
@@ -401,8 +349,8 @@ class TestAdaptiveQuestionSelectorValidationAndFailures:
             selector.select_next_question(answers)
         assert exc_info.value.code == "VAL_INVALID_OPTION_ID"
 
-    def test_rating_mismatch_raises_invalid_prefix(self, valid_v2_doc):
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+    def test_rating_mismatch_raises_invalid_prefix(self, seeded_v2_doc):
+        selector = SeededSelector(seeded_v2_doc)
         answers = [
             {"question_id": "q_r_01", "option_id": "q_r_01_opt_5", "rating": 3},  # Option has rating 5!
         ]
@@ -410,18 +358,17 @@ class TestAdaptiveQuestionSelectorValidationAndFailures:
             selector.select_next_question(answers)
         assert exc_info.value.code == "VAL_RATING_MISMATCH"
 
-    def test_sequence_mismatch_raises_invalid_prefix(self, valid_v2_doc):
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
-        # Step 0 should be q_r_01, but user answers q_i_01 first
-        answers = [
-            {"question_id": "q_i_01", "option_id": "q_i_01_opt_1"},
-        ]
+    def test_sequence_mismatch_raises_invalid_prefix(self, seeded_v2_doc):
+        selector = SeededSelector(seeded_v2_doc)
+        # Answer a question other than the seed's first baseline item
+        wrong = next(q["question_id"] for q in seeded_v2_doc["questions"] if q["question_id"] != _baseline(seeded_v2_doc)[0])
+        answers = [{"question_id": wrong, "option_id": f"{wrong}_opt_1"}]
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers, validate_sequence=True)
         assert exc_info.value.code == "REQ_SEQUENCE_MISMATCH"
 
-    def test_sequence_mismatch_ignored_when_flag_false(self, valid_v2_doc):
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+    def test_sequence_mismatch_ignored_when_flag_false(self, seeded_v2_doc):
+        selector = SeededSelector(seeded_v2_doc)
         # When validate_sequence=False, sequence replay is bypassed
         answers = [
             {"question_id": "q_i_01", "option_id": "q_i_01_opt_1"},
@@ -431,20 +378,20 @@ class TestAdaptiveQuestionSelectorValidationAndFailures:
 
     def test_unsupported_schema_version_raises_error(self, valid_v2_dict):
         valid_v2_dict["schema_version"] = "99.0"
-        selector = AdaptiveQuestionSelector()
+        selector = SeededSelector()
         with pytest.raises(UnsupportedDefinitionError) as exc_info:
             selector.select_next_question(answers=[], definition=valid_v2_dict)
         assert exc_info.value.code == "VAL_INVALID_SCHEMA_VERSION"
 
     def test_unsupported_selection_rule_raises_error(self, valid_v2_dict):
         valid_v2_dict["selection_rules"]["rule_schema_ref"] = "rule.schema.unsupported:v1"
-        selector = AdaptiveQuestionSelector()
+        selector = SeededSelector()
         with pytest.raises(UnsupportedDefinitionError) as exc_info:
             selector.select_next_question(answers=[], definition=valid_v2_dict)
         assert exc_info.value.code == "VAL_UNSUPPORTED_RULE_SCHEMA"
 
     def test_invalid_definition_payload_raises_error(self):
-        selector = AdaptiveQuestionSelector()
+        selector = SeededSelector()
         with pytest.raises(UnsupportedDefinitionError):
             selector.select_next_question(answers=[], definition="not-a-dict")
 
@@ -453,7 +400,7 @@ class TestAdaptiveQuestionSelectorDefinition10Compatibility:
     """Test Suite for Definition 1.0 (Fixed 6 questions) Backward Compatibility."""
 
     def test_v1_start_with_empty_answers_returns_initial_question(self, valid_v1_doc):
-        selector = AdaptiveQuestionSelector(valid_v1_doc)
+        selector = SeededSelector(valid_v1_doc)
         res = selector.select_next_question(answers=[])
 
         assert res.status == SelectionStatus.NEXT_QUESTION
@@ -463,7 +410,7 @@ class TestAdaptiveQuestionSelectorDefinition10Compatibility:
         assert res.progress.total is None
 
     def test_v1_sequential_selection_up_to_6(self, valid_v1_doc):
-        selector = AdaptiveQuestionSelector(valid_v1_doc)
+        selector = SeededSelector(valid_v1_doc)
         answers = []
         expected_seq = [
             "q_demo_01", "q_demo_02", "q_demo_03",
@@ -489,14 +436,11 @@ class TestAdaptiveQuestionSelectorDefinition10Compatibility:
 class TestAdaptiveQuestionSelectorDeterminismAndEdit:
     """Test Suite for Determinism (AT-12) & Edit Invalidation (EX-04)."""
 
-    def test_determinism_50_repeated_calls(self, valid_v2_doc):
+    def test_determinism_50_repeated_calls(self, seeded_v2_doc):
         """Same input prefix must yield 100% identical outputs every time."""
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
-        answers = [
-            {"question_id": "q_r_01", "option_id": "q_r_01_opt_5"},
-            {"question_id": "q_i_01", "option_id": "q_i_01_opt_1"},
-            {"question_id": "q_a_01", "option_id": "q_a_01_opt_1"},
-        ]
+        selector = SeededSelector(seeded_v2_doc)
+        answers = [{"question_id": qid, "option_id": f"{qid}_opt_{rating}"}
+                   for qid, rating in zip(_baseline(seeded_v2_doc)[:3], (5, 1, 1), strict=True)]
 
         first_res = selector.select_next_question(answers)
 
@@ -506,17 +450,18 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
             assert repeated_res.status == first_res.status
             assert repeated_res.phase == first_res.phase
             assert repeated_res.progress.completed == first_res.progress.completed
-            assert repeated_res.statistics["house_r"].mean.value == first_res.statistics["house_r"].mean.value
+            assert repeated_res.model_dump() == first_res.model_dump()
 
-    def test_ex04_edit_answer_13_recalculates_bounds_and_selects_qi03(self, valid_v2_doc):
+    def test_ex04_edit_answer_13_recalculates_bounds_and_selects_qi03(self, seeded_v2_doc):
         """ADR-002 §8.5 / EX-04: Edit answer 13 from rating 5 to rating 1.
 
         Previous state had early stop at 18.
         When answer 13 (q_r_03) is edited to rating 1, answers 14..18 are pruned.
         The prefix now has 13 answers.
-        lower_r is now 2.6 < upper_others 3.4 -> in_progress, next question is q_i_03!
+        lower_r is now 2.6 < upper_others 3.4 -> in_progress; R has the narrowest gap, so the next
+        question comes from another house (which one is seeded).
         """
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+        selector = SeededSelector(seeded_v2_doc)
 
         # Build baseline (12 items)
         answers = [
@@ -536,10 +481,12 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
             {"question_id": "q_r_03", "option_id": "q_r_03_opt_1"},
         ]
 
-        res = selector.select_next_question(answers, validate_sequence=True)
+        # Hand-built prefix (the old fixed path), so only the bounds/edit logic is under test.
+        res = selector.select_next_question(answers, validate_sequence=False)
 
         assert res.status == SelectionStatus.NEXT_QUESTION
-        assert res.next_question_id == "q_i_03"
+        assert res.next_question.house_id != "house_r"
+        assert res.next_question_id not in {a["question_id"] for a in answers}
         assert res.phase == SelectionPhase.ADAPTIVE
         assert res.progress.completed == 13
         assert res.progress.total is None
@@ -553,50 +500,36 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
         assert res.statistics["house_i"].lower.value == pytest.approx(1.0)
         assert res.statistics["house_i"].upper.value == pytest.approx(3.4)
 
-    def test_convenience_function_select_next_question(self, valid_v2_doc):
+    def test_convenience_function_select_next_question(self, seeded_v2_doc):
         """Verify module-level select_next_question convenience wrapper."""
-        res = select_next_question(valid_v2_doc, [])
+        res = select_next_question(seeded_v2_doc, [], seed=SEED)
         assert res.status == SelectionStatus.NEXT_QUESTION
-        assert res.next_question_id == "q_r_01"
+        assert res.next_question_id == _baseline(seeded_v2_doc)[0]
 
-    def test_submitting_answer_after_assessment_completed_raises_error(self, valid_v2_doc):
+    def test_submitting_answer_after_assessment_completed_raises_error(self, seeded_v2_doc):
         """Verify that submitting an answer when assessment already completed raises ASSESSMENT_ALREADY_COMPLETED."""
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
-        # 18 answers leading to early stop (EX-02)
-        answers = [
-            {"question_id": "q_r_01", "option_id": "q_r_01_opt_5"},
-            {"question_id": "q_i_01", "option_id": "q_i_01_opt_1"},
-            {"question_id": "q_a_01", "option_id": "q_a_01_opt_1"},
-            {"question_id": "q_s_01", "option_id": "q_s_01_opt_1"},
-            {"question_id": "q_e_01", "option_id": "q_e_01_opt_1"},
-            {"question_id": "q_c_01", "option_id": "q_c_01_opt_1"},
-            {"question_id": "q_r_02", "option_id": "q_r_02_opt_5"},
-            {"question_id": "q_i_02", "option_id": "q_i_02_opt_1"},
-            {"question_id": "q_a_02", "option_id": "q_a_02_opt_1"},
-            {"question_id": "q_s_02", "option_id": "q_s_02_opt_1"},
-            {"question_id": "q_e_02", "option_id": "q_e_02_opt_1"},
-            {"question_id": "q_c_02", "option_id": "q_c_02_opt_1"},
-            {"question_id": "q_r_03", "option_id": "q_r_03_opt_5"},
-            {"question_id": "q_i_03", "option_id": "q_i_03_opt_1"},
-            {"question_id": "q_a_03", "option_id": "q_a_03_opt_1"},
-            {"question_id": "q_s_03", "option_id": "q_s_03_opt_1"},
-            {"question_id": "q_e_03", "option_id": "q_e_03_opt_1"},
-            {"question_id": "q_c_03", "option_id": "q_c_03_opt_1"},
-            # 19th answer submitted when already completed at 18
-            {"question_id": "q_r_04", "option_id": "q_r_04_opt_5"},
-        ]
+        selector = SeededSelector(seeded_v2_doc)
+        house_of = {q["question_id"]: q["house_id"] for q in seeded_v2_doc["questions"]}
+        answers = []
+        while (res := selector.select_next_question(answers)).status == SelectionStatus.NEXT_QUESTION:
+            qid = res.next_question_id
+            answers.append({"question_id": qid, "option_id": f"{qid}_opt_{5 if house_of[qid] == 'house_r' else 1}"})
+        assert res.stopping_reason == StoppingReason.BOUNDED_WINNER
+        extra = next(qid for qid in house_of if qid not in {a["question_id"] for a in answers})
+        answers.append({"question_id": extra, "option_id": f"{extra}_opt_5"})
 
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers, validate_sequence=True)
         assert exc_info.value.code == "REQ_ASSESSMENT_ALREADY_COMPLETED"
 
-    def test_answers_with_rich_session_metadata_accepted(self, valid_v2_doc):
+    def test_answers_with_rich_session_metadata_accepted(self, seeded_v2_doc):
         """Verify that AnswerInput accepts full ActivityAnswer dictionaries from database sessions."""
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+        selector = SeededSelector(seeded_v2_doc)
+        first, second = _baseline(seeded_v2_doc)[:2]
         answers = [
             {
-                "question_id": "q_r_01",
-                "option_id": "q_r_01_opt_5",
+                "question_id": first,
+                "option_id": f"{first}_opt_5",
                 "answer_id": "ans_001",
                 "ordinal": 1,
                 "source": "option",
@@ -605,11 +538,11 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
         ]
         res = selector.select_next_question(answers)
         assert res.status == SelectionStatus.NEXT_QUESTION
-        assert res.next_question_id == "q_i_01"
+        assert res.next_question_id == second
 
-    def test_boolean_rating_in_answers_rejected(self, valid_v2_doc):
+    def test_boolean_rating_in_answers_rejected(self, seeded_v2_doc):
         """Verify that boolean rating (e.g. True) is strictly rejected."""
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+        selector = SeededSelector(seeded_v2_doc)
         answers = [
             {"question_id": "q_r_01", "option_id": "q_r_01_opt_5", "rating": True}
         ]
@@ -617,16 +550,16 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
             selector.select_next_question(answers)
         assert exc_info.value.code == "VAL_INVALID_TYPE"
 
-    def test_none_answers_treated_as_empty_list(self, valid_v2_doc):
+    def test_none_answers_treated_as_empty_list(self, seeded_v2_doc):
         """Verify that passing answers=None gracefully defaults to empty list."""
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+        selector = SeededSelector(seeded_v2_doc)
         res = selector.select_next_question(answers=None)
         assert res.status == SelectionStatus.NEXT_QUESTION
-        assert res.next_question_id == "q_r_01"
+        assert res.next_question_id == _baseline(seeded_v2_doc)[0]
 
-    def test_non_list_answers_raises_error(self, valid_v2_doc):
+    def test_non_list_answers_raises_error(self, seeded_v2_doc):
         """Verify that passing a non-list answers payload raises InvalidPrefixError."""
-        selector = AdaptiveQuestionSelector(valid_v2_doc)
+        selector = SeededSelector(seeded_v2_doc)
         with pytest.raises(InvalidPrefixError) as exc_info:
             selector.select_next_question(answers="not-a-list")
         assert exc_info.value.code == "VAL_INVALID_TYPE"
@@ -653,7 +586,7 @@ class TestAdaptiveQuestionSelectorDeterminismAndEdit:
 
     def test_v1_sequence_mismatch_raises_error(self, valid_v1_doc):
         """Verify that Definition 1.0 sequence replay mismatch raises SEQUENCE_MISMATCH."""
-        selector = AdaptiveQuestionSelector(valid_v1_doc)
+        selector = SeededSelector(valid_v1_doc)
         # Expected step 0 is q_demo_01, but user answers q_demo_03 first
         answers = [{"question_id": "q_demo_03", "option_id": "q_demo_03_opt_1"}]
         with pytest.raises(InvalidPrefixError) as exc_info:
@@ -666,7 +599,7 @@ class TestDefinitionIntegrityValidation:
 
     @staticmethod
     def _select(definition, answers=None):
-        return AdaptiveQuestionSelector().select_next_question(
+        return SeededSelector().select_next_question(
             answers=answers or [], definition=definition
         )
 
@@ -718,24 +651,6 @@ class TestDefinitionIntegrityValidation:
         assert exc_info.value.code == "VAL_HOUSE_ITEM_ORDER_MISMATCH"
 
     @pytest.mark.parametrize(
-        "baseline_order, code",
-        [
-            ("q_r_01q_i_01", "VAL_INVALID_TYPE"),  # string, not a list
-            (
-                ["q_r_01", "q_nope"] + [f"q_{c}_02" for c in "riasec"] + ["q_a_01", "q_s_01", "q_e_01", "q_c_01"],
-                "VAL_BASELINE_QUESTION_NOT_IN_BANK",
-            ),
-            (["q_r_01"] * 12, "VAL_DUPLICATE_BASELINE_QUESTION"),
-        ],
-        ids=["not_a_list", "unknown_id", "duplicates"],
-    )
-    def test_invalid_baseline_order_rejected(self, valid_v2_dict, baseline_order, code):
-        valid_v2_dict["selection_rules"]["payload"]["baseline_order"] = baseline_order
-        with pytest.raises(UnsupportedDefinitionError) as exc_info:
-            self._select(valid_v2_dict)
-        assert exc_info.value.code == code
-
-    @pytest.mark.parametrize(
         "key, value, code",
         [
             ("items_per_house", 0, "VAL_INVALID_COVERAGE_CONFIG"),
@@ -770,27 +685,6 @@ class TestDefinitionIntegrityValidation:
         with pytest.raises(UnsupportedDefinitionError) as exc_info:
             self._select(valid_v2_dict)
         assert exc_info.value.code == "VAL_DUPLICATE_OPTION_ID"
-
-    @pytest.mark.parametrize(
-        "order",
-        [
-            None,  # missing: must not silently fall back to houses order
-            [],
-            ["house_bogus", "house_i", "house_a", "house_s", "house_e", "house_c"],
-            ["house_r", "house_r", "house_a", "house_s", "house_e", "house_c"],
-            ["house_r", "house_i", "house_a", "house_s", "house_e"],
-        ],
-        ids=["missing", "empty", "unknown_house", "duplicate", "incomplete"],
-    )
-    def test_invalid_tie_order_rejected(self, valid_v2_dict, order):
-        payload = valid_v2_dict["tie_policy"]["payload"]
-        if order is None:
-            del payload["order"]
-        else:
-            payload["order"] = order
-        with pytest.raises(UnsupportedDefinitionError) as exc_info:
-            self._select(valid_v2_dict)
-        assert exc_info.value.code == "VAL_INVALID_TIE_ORDER"
 
     @pytest.mark.parametrize(
         "key, code",
@@ -870,14 +764,14 @@ class TestSelectorSchemaInvariants:
 
     @staticmethod
     def _dump(definition, answers=None):
-        return AdaptiveQuestionSelector(definition).select_next_question(answers or []).model_dump()
+        return SeededSelector(definition).select_next_question(answers or []).model_dump()
 
     @pytest.mark.parametrize(
         "mutate",
         [
             lambda d: d.update(status="completed"),  # completed but still carries a next question
             lambda d: d.update(next_question=None),
-            lambda d: d.update(next_question_id="q_i_01"),  # id disagrees with question object
+            lambda d: d.update(next_question_id="q_zz_99"),  # id disagrees with question object
             lambda d: d.update(stopping_reason="question_limit"),
             lambda d: d.update(tie_applied=True),
             lambda d: d["progress"].update(phase="adaptive"),  # disagrees with outer phase
@@ -885,8 +779,8 @@ class TestSelectorSchemaInvariants:
         ids=["completed_with_next", "next_without_question", "id_mismatch",
              "reason_while_running", "tie_while_running", "phase_mismatch"],
     )
-    def test_selection_result_rejects_contradictory_next_question_state(self, valid_v2_doc, mutate):
-        data = self._dump(valid_v2_doc)
+    def test_selection_result_rejects_contradictory_next_question_state(self, seeded_v2_doc, mutate):
+        data = self._dump(seeded_v2_doc)
         mutate(data)
         with pytest.raises(ValidationError):
             SelectionResult.model_validate(data)
@@ -914,13 +808,13 @@ class TestSelectorSchemaInvariants:
 class TestEarlyStopSoundness:
     """ADR-002 §7.10: a bounded_winner stop must survive every possible completion of the bank."""
 
-    def test_bounded_winner_survives_worst_case_completion(self, valid_v2_doc):
+    def test_bounded_winner_survives_worst_case_completion(self, seeded_v2_doc):
         rng = random.Random(20261018)
-        houses = [h["house_id"] for h in valid_v2_doc["houses"]]
+        houses = [h["house_id"] for h in seeded_v2_doc["houses"]]
         early_stops = 0
         for _ in range(300):
-            ratings = {q["question_id"]: rng.randint(1, 5) for q in valid_v2_doc["questions"]}
-            trace = _run_path(valid_v2_doc, lambda q, ratings=ratings: ratings[q.question_id])
+            ratings = {q["question_id"]: rng.randint(1, 5) for q in seeded_v2_doc["questions"]}
+            trace = _run_path(seeded_v2_doc, lambda q, ratings=ratings: ratings[q.question_id])
             final = trace[-1]
             assert final.progress.total <= 30
             if final.stopping_reason != StoppingReason.BOUNDED_WINNER:
@@ -942,25 +836,19 @@ class TestRemainingErrorCodes:
 
     def test_non_definition_payload_code(self):
         with pytest.raises(UnsupportedDefinitionError) as exc_info:
-            AdaptiveQuestionSelector().select_next_question(answers=[], definition="not-a-dict")
+            SeededSelector().select_next_question(answers=[], definition="not-a-dict")
         assert exc_info.value.code == "VAL_INVALID_TYPE"
 
     def test_malformed_definition_dict_code(self, valid_v2_dict):
         del valid_v2_dict["questions"]
         with pytest.raises(UnsupportedDefinitionError) as exc_info:
-            AdaptiveQuestionSelector(valid_v2_dict)
+            SeededSelector(valid_v2_dict)
         assert exc_info.value.code == "VAL_INVALID_FIELD"
 
     def test_no_definition_bound_code(self):
         with pytest.raises(UnsupportedDefinitionError) as exc_info:
-            AdaptiveQuestionSelector().select_next_question(answers=[])
+            SeededSelector().select_next_question(answers=[])
         assert exc_info.value.code == "VAL_MISSING_REQUIRED_FIELD"
-
-    def test_baseline_length_code(self, valid_v2_dict):
-        valid_v2_dict["selection_rules"]["payload"]["baseline_order"].pop()
-        with pytest.raises(UnsupportedDefinitionError) as exc_info:
-            AdaptiveQuestionSelector(valid_v2_dict).select_next_question([])
-        assert exc_info.value.code == "VAL_INVALID_BASELINE_COUNT"
 
     @pytest.mark.parametrize(
         "answer",
@@ -971,19 +859,19 @@ class TestRemainingErrorCodes:
         ],
         ids=["rating_out_of_range", "rating_as_string", "bad_id_pattern"],
     )
-    def test_invalid_answer_schema_code(self, valid_v2_doc, answer):
+    def test_invalid_answer_schema_code(self, seeded_v2_doc, answer):
         with pytest.raises(InvalidPrefixError) as exc_info:
-            AdaptiveQuestionSelector(valid_v2_doc).select_next_question([answer])
+            SeededSelector(seeded_v2_doc).select_next_question([answer])
         assert exc_info.value.code == "VAL_INVALID_FIELD"
 
-    def test_invalid_answer_type_code(self, valid_v2_doc):
+    def test_invalid_answer_type_code(self, seeded_v2_doc):
         with pytest.raises(InvalidPrefixError) as exc_info:
-            AdaptiveQuestionSelector(valid_v2_doc).select_next_question(["q_r_01"])
+            SeededSelector(seeded_v2_doc).select_next_question(["q_r_01"])
         assert exc_info.value.code == "VAL_INVALID_TYPE"
 
     def test_missing_choice_rating_code(self, valid_v2_dict):
         valid_v2_dict["questions"][0]["choices"][4]["rating"] = None
         answers = [{"question_id": "q_r_01", "option_id": "q_r_01_opt_5"}]
         with pytest.raises(MissingMappingError) as exc_info:
-            AdaptiveQuestionSelector(valid_v2_dict).select_next_question(answers)
+            SeededSelector(valid_v2_dict).select_next_question(answers)
         assert exc_info.value.code == "VAL_INVALID_RATING"

@@ -4,6 +4,7 @@ Authoritative implementation of:
 - ADR-002: §7.6 (Stopping condition with provable bounds)
 - ADR-002: §7.7 (Adaptive selector with widest bound gap)
 - ADR-002: §7.9 (Contract & Progress v2)
+- Seeded per-activity order (engine/services/ordering.py): baseline picks, adaptive items, house ties
 - Anti-repeat question selection invariant
 - Typed failure handling with exact error codes
 - Backward compatibility for Definition 1.0 (Fixed 6 questions)
@@ -32,6 +33,7 @@ from agent_runtime.engine.schemas.selector import (
     SelectionStatus,
     StoppingReason,
 )
+from agent_runtime.engine.services.ordering import rank_houses, seeded_order, shuffle_key
 from agent_runtime.evaluations.schemas.experience import (
     AssessmentDefinitionQuestion,
     ExperienceDefinitionDocument,
@@ -49,7 +51,7 @@ COVERAGE_KEY_ERROR_CODES = {"min_answers_per_house": EngineErrorCode.INVALID_MIN
 
 
 class AdaptiveQuestionSelector:
-    """Authoritative deterministic question selector for Student Discovery Agent."""
+    """Authoritative question selector, deterministic per activity seed."""
 
     def __init__(
         self,
@@ -85,6 +87,8 @@ class AdaptiveQuestionSelector:
         answers: Optional[List[Union[AnswerInput, Dict[str, Any]]]] = None,
         definition: Optional[Union[ExperienceDefinitionDocument, Dict[str, Any]]] = None,
         validate_sequence: bool = True,
+        *,
+        seed: Optional[str] = None,
     ) -> SelectionResult:
         """Authoritative entry point for adaptive question selection.
 
@@ -93,6 +97,8 @@ class AdaptiveQuestionSelector:
             definition: Experience definition (if not provided at instance creation).
             validate_sequence: If True, strictly verifies that previous answers match
                                the path emitted by the selector.
+            seed: Activity id that fixes this activity's question order and tie-breaks;
+                  required for Definition 2.0, ignored by 1.0.
 
         Returns:
             SelectionResult: Next question or completed assessment outcome.
@@ -129,11 +135,17 @@ class AdaptiveQuestionSelector:
 
         # Dispatch based on schema version
         if active_def.schema_version == "2.0":
+            if not isinstance(seed, str) or not seed:
+                raise EngineError(
+                    "Definition 2.0 selection requires a non-empty seed (the activity id)",
+                    code=EngineErrorCode.MISSING_REQUIRED_FIELD,
+                )
             return self._select_adaptive_v2(
                 active_def,
                 normalized_answers,
                 seen_question_ids,
                 validate_sequence=validate_sequence,
+                seed=seed,
             )
         else:
             return self._select_fixed_v1(
@@ -239,36 +251,6 @@ class AdaptiveQuestionSelector:
             raise UnsupportedDefinitionError(
                 f"baseline_total is fixed at {BASELINE_TOTAL} by ADR-002, got {baseline_total!r}",
                 code=EngineErrorCode.INVALID_COVERAGE_CONFIG,
-            )
-
-        tie_order = definition.tie_policy.payload.get("order")
-        if not isinstance(tie_order, list) or sorted(tie_order) != sorted(house_ids):
-            raise UnsupportedDefinitionError(
-                f"tie_policy.payload.order must be a permutation of {house_ids}, got {tie_order!r}",
-                code=EngineErrorCode.INVALID_TIE_ORDER,
-            )
-
-        baseline_order = definition.selection_rules.payload.get("baseline_order", [])
-        if not isinstance(baseline_order, list):
-            raise UnsupportedDefinitionError(
-                f"baseline_order must be a list of question IDs, got {type(baseline_order).__name__}",
-                code=EngineErrorCode.INVALID_TYPE,
-            )
-        if len(baseline_order) != BASELINE_TOTAL:
-            raise UnsupportedDefinitionError(
-                f"Definition 2.0 requires exactly {BASELINE_TOTAL} baseline items, found {len(baseline_order)}",
-                code=EngineErrorCode.INVALID_BASELINE_COUNT,
-            )
-        unknown_baseline = [qid for qid in baseline_order if qid not in question_ids]
-        if unknown_baseline:
-            raise UnsupportedDefinitionError(
-                f"baseline_order references questions not in the bank: {unknown_baseline}",
-                code=EngineErrorCode.BASELINE_QUESTION_NOT_IN_BANK,
-            )
-        if len(set(baseline_order)) != len(baseline_order):
-            raise UnsupportedDefinitionError(
-                f"baseline_order must list {BASELINE_TOTAL} distinct questions",
-                code=EngineErrorCode.DUPLICATE_BASELINE_QUESTION,
             )
 
         house_item_orders: Dict[str, List[int]] = {house_id: [] for house_id in house_ids}
@@ -416,14 +398,11 @@ class AdaptiveQuestionSelector:
         answers: List[AnswerInput],
         seen_question_ids: Set[str],
         validate_sequence: bool = True,
+        *,
+        seed: str,
     ) -> SelectionResult:
-        """Execute Definition 2.0 adaptive question selection."""
+        """Execute Definition 2.0 adaptive question selection for one activity seed."""
         decision_log: List[str] = []
-
-        # Definition structure already checked by _validate_definition.
-        baseline_order: List[str] = definition.selection_rules.payload["baseline_order"]
-
-        tie_order: List[str] = definition.tie_policy.payload["order"]
 
         coverage_payload = definition.coverage_rules.payload
         max_total: int = coverage_payload["max_total"]
@@ -434,7 +413,7 @@ class AdaptiveQuestionSelector:
 
         # Step 1: Sequence validation (if requested and answers > 0)
         if validate_sequence and len(answers) > 0:
-            self._verify_sequence_path_v2(definition, answers)
+            self._verify_sequence_path_v2(definition, answers, seed)
             decision_log.append("Answer prefix path validated against selector replay sequence.")
 
         # Step 2: Compute statistics for all 6 houses
@@ -444,14 +423,15 @@ class AdaptiveQuestionSelector:
 
         total_answers = len(answers)
 
-        # Step 3: Determine leading house w (mean highest, broken by tie_order)
-        leading_w = self._determine_leading_house(statistics, tie_order)
+        # Step 3: Determine leading house w (shared seeded ranking: mean, top ratings, seed)
+        ratings = self._ratings_by_house(definition, answers, question_map)
+        leading_w = rank_houses(list(statistics), ratings, seed)[0]
         decision_log.append(f"Current leading house: {leading_w}")
 
         # Step 4: Check Stopping Conditions
         # 4A. Question Limit reached (ADR-002: reason question_limit evaluated before bounded_winner at limit)
         if total_answers >= max_total:
-            winner, tie_applied = self._resolve_winner_at_limit(statistics, tie_order)
+            winner, tie_applied = self._resolve_winner_at_limit(statistics, ratings, seed)
             decision_log.append(
                 f"Reached maximum question limit ({max_total}). Primary house: {winner} (tie_applied={tie_applied})."
             )
@@ -512,9 +492,11 @@ class AdaptiveQuestionSelector:
                 )
 
         # Step 5: Selection of Next Question (not stopped)
-        # Phase 1: Baseline order (first 12 questions)
+        # Phase 1: Seeded baseline (first 12 questions)
         if total_answers < BASELINE_TOTAL:
-            unasked_baseline = [qid for qid in baseline_order if qid not in seen_question_ids]
+            unasked_baseline = [
+                qid for qid in self._baseline_sequence(definition, seed) if qid not in seen_question_ids
+            ]
             if not unasked_baseline:
                 raise BankExhaustedError(
                     f"All baseline questions have been answered, but baseline count is under {BASELINE_TOTAL}.",
@@ -522,7 +504,7 @@ class AdaptiveQuestionSelector:
                 )
             next_q_id = unasked_baseline[0]
             decision_log.append(
-                f"Baseline phase: selecting next unasked from baseline order: {next_q_id}"
+                f"Baseline phase: selecting next unasked from the seeded baseline: {next_q_id}"
             )
             return SelectionResult(
                 status=SelectionStatus.NEXT_QUESTION,
@@ -550,7 +532,7 @@ class AdaptiveQuestionSelector:
             statistics,
             seen_question_ids,
             leading_w,
-            tie_order,
+            seed,
             items_per_house,
             decision_log,
         )
@@ -583,8 +565,9 @@ class AdaptiveQuestionSelector:
         self,
         definition: ExperienceDefinitionDocument,
         answers: List[AnswerInput],
+        seed: str,
     ) -> None:
-        """Verify that answers prefix followed the exact sequence produced by the selector."""
+        """Verify that answers prefix followed the exact sequence produced by the selector for this seed."""
         for step in range(len(answers)):
             actual_q_id = answers[step].question_id
             prefix = answers[:step]
@@ -592,6 +575,7 @@ class AdaptiveQuestionSelector:
                 answers=prefix,
                 definition=definition,
                 validate_sequence=False,
+                seed=seed,
             )
             if step_res.status == SelectionStatus.COMPLETED:
                 raise InvalidPrefixError(
@@ -614,10 +598,7 @@ class AdaptiveQuestionSelector:
         items_per_house: int,
     ) -> Dict[str, HouseStatistics]:
         """Compute exact rational mean, lower and upper bounds for each house."""
-        house_answers: Dict[str, List[int]] = {h.house_id: [] for h in definition.houses}
-        for ans in answers:
-            q = question_map[ans.question_id]
-            house_answers[q.house_id].append(ans.rating)
+        house_answers = self._ratings_by_house(definition, answers, question_map)
 
         stats_map: Dict[str, HouseStatistics] = {}
         for h in definition.houses:
@@ -648,54 +629,44 @@ class AdaptiveQuestionSelector:
 
         return stats_map
 
-    def _determine_leading_house(
-        self,
-        statistics: Dict[str, HouseStatistics],
-        tie_order: List[str],
-    ) -> Optional[str]:
-        """Determine leading house w by mean, breaking ties using tie_order."""
-        active_houses = [
-            h_id for h_id, s in statistics.items() if s.count > 0 and s.mean is not None
+    @staticmethod
+    def _ratings_by_house(
+        definition: ExperienceDefinitionDocument,
+        answers: List[AnswerInput],
+        question_map: Dict[str, AssessmentDefinitionQuestion],
+    ) -> Dict[str, List[int]]:
+        ratings: Dict[str, List[int]] = {h.house_id: [] for h in definition.houses}
+        for ans in answers:
+            ratings[question_map[ans.question_id].house_id].append(ans.rating)
+        return ratings
+
+    @staticmethod
+    def _baseline_sequence(definition: ExperienceDefinitionDocument, seed: str) -> List[str]:
+        """Two seeded items per house, asked in two rounds; each round visits every house once."""
+        house_ids = [h.house_id for h in definition.houses]
+        per_house = BASELINE_TOTAL // len(house_ids)
+        picked = {
+            h: seeded_order(
+                seed, "baseline-item", [q.question_id for q in definition.questions if q.house_id == h]
+            )[:per_house]
+            for h in house_ids
+        }
+        return [
+            picked[h][round_index]
+            for round_index in range(per_house)
+            for h in seeded_order(seed, f"baseline-round-{round_index + 1}", house_ids)
         ]
-        if not active_houses:
-            return tie_order[0]
 
-        # Sort descending by exact mean fraction, ascending by tie_order index
-        def sort_key(h_id: str):
-            mean_val = statistics[h_id].mean.to_fraction()
-            tie_rank = tie_order.index(h_id)
-            return (-mean_val, tie_rank)
-
-        active_houses.sort(key=sort_key)
-        return active_houses[0]
-
+    @staticmethod
     def _resolve_winner_at_limit(
-        self,
         statistics: Dict[str, HouseStatistics],
-        tie_order: List[str],
+        ratings: Dict[str, List[int]],
+        seed: str,
     ) -> tuple[str, bool]:
-        """Find winning house at max questions limit and whether tie was applied."""
-        max_mean: Optional[Fraction] = None
-        for s in statistics.values():
-            if s.mean is not None:
-                m_frac = s.mean.to_fraction()
-                if max_mean is None or m_frac > max_mean:
-                    max_mean = m_frac
-
-        if max_mean is None:
-            return tie_order[0], False
-
-        tied_houses = [
-            h_id
-            for h_id, s in statistics.items()
-            if s.mean is not None and s.mean.to_fraction() == max_mean
-        ]
-
-        # Break tie using tie_order
-        tied_houses.sort(key=tie_order.index)
-        winner = tied_houses[0]
-        tie_applied = len(tied_houses) > 1
-        return winner, tie_applied
+        """Shared house ranking picks the winner; tie_applied when the top mean is shared."""
+        winner = rank_houses(list(statistics), ratings, seed)[0]
+        means = [s.mean.to_fraction() for s in statistics.values() if s.mean is not None]
+        return winner, bool(means) and means.count(max(means)) > 1
 
     def _pick_adaptive_next_question(
         self,
@@ -703,7 +674,7 @@ class AdaptiveQuestionSelector:
         statistics: Dict[str, HouseStatistics],
         seen_question_ids: Set[str],
         leading_w: str,
-        tie_order: List[str],
+        seed: str,
         items_per_house: int,
         decision_log: List[str],
     ) -> tuple[AssessmentDefinitionQuestion, List[str]]:
@@ -732,8 +703,8 @@ class AdaptiveQuestionSelector:
             tied_gap = [
                 h for h in candidate_houses if statistics[h].gap.to_fraction() == max_gap
             ]
-            # Tie breaker: fixed tie_order
-            tied_gap.sort(key=tie_order.index)
+            # Tie breaker: seeded key
+            tied_gap.sort(key=lambda h: shuffle_key(seed, "house", h))
             chosen_house = tied_gap[0]
             decision_log.append(
                 f"Selected house with widest gap ({max_gap}): {chosen_house} (tied: {tied_gap})"
@@ -750,13 +721,13 @@ class AdaptiveQuestionSelector:
                     "All houses have exhausted their question items, but stopping condition was not reached.",
                     code=EngineErrorCode.BANK_EXHAUSTED,
                 )
-            remaining_houses.sort(key=tie_order.index)
+            remaining_houses.sort(key=lambda h: shuffle_key(seed, "house", h))
             chosen_house = remaining_houses[0]
             decision_log.append(
                 f"Candidate set empty; fallback to house with remaining items: {chosen_house}"
             )
 
-        # In chosen house, select unasked item with smallest item_order
+        # In chosen house, select the unasked item with the lowest seeded key
         house_unasked = [
             q
             for q in definition.questions
@@ -768,7 +739,7 @@ class AdaptiveQuestionSelector:
                 f"House '{chosen_house}' has no unasked items despite count < {items_per_house}",
                 code=EngineErrorCode.HOUSE_ITEMS_INVARIANT_VIOLATION,
             )
-        house_unasked.sort(key=lambda q: q.item_order)
+        house_unasked.sort(key=lambda q: shuffle_key(seed, "adaptive-item", q.question_id))
         next_q = house_unasked[0]
 
         # Final anti-repeat invariant assertion
@@ -889,7 +860,9 @@ def select_next_question(
     definition: Union[ExperienceDefinitionDocument, Dict[str, Any]],
     answers: Optional[List[Union[AnswerInput, Dict[str, Any]]]] = None,
     validate_sequence: bool = True,
+    *,
+    seed: Optional[str] = None,
 ) -> SelectionResult:
     """Convenience functional wrapper for AdaptiveQuestionSelector."""
     selector = AdaptiveQuestionSelector(definition)
-    return selector.select_next_question(answers, validate_sequence=validate_sequence)
+    return selector.select_next_question(answers, validate_sequence=validate_sequence, seed=seed)
