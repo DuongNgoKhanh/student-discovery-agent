@@ -1,8 +1,9 @@
 import { cn } from '@/lib/utils/cn';
 
-export type StatusTone = 'success' | 'warning' | 'danger' | 'neutral';
+export type StatusTone = 'primary' | 'success' | 'warning' | 'danger' | 'neutral';
 
 const DOT: Record<StatusTone, string> = {
+  primary: 'bg-primary',
   success: 'bg-status-success',
   warning: 'bg-status-warning',
   danger: 'bg-status-danger',

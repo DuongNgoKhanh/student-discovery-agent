@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useFields, useSearchKnowledge } from '../hooks/use-knowledge';
-import { DEFAULT_SETTINGS, QUERY_MAX, buildSearchRequest, type SearchSettings, type SearchState } from './build-search-request';
+import { DEFAULT_SETTINGS, QUERY_MAX, buildSearchRequest, droppedConditions, type SearchSettings, type SearchState } from './build-search-request';
 import { EmptyState } from './shared/empty-state';
 import { errorMessage } from './shared/error-message';
 import { relativeTime } from './shared/format';
@@ -16,15 +16,20 @@ import { useSearchHistory } from './use-search-history';
 
 export function SearchTab({ kb }: { kb: string }) {
   const search = useSearchKnowledge();
-  const fields = useFields(kb).data ?? [];
+  const fieldsQuery = useFields(kb);
+  const fields = fieldsQuery.data ?? [];
+  // Without the field list every filter row would be dropped, so searching waits for it.
+  const fieldsReady = !!fieldsQuery.data;
   const history = useSearchHistory(kb);
   const [query, setQuery] = useState('');
   const [settings, setSettings] = useState<SearchSettings>(DEFAULT_SETTINGS);
   // The query the shown results answer, for highlighting and retry; the textarea may have moved on.
   const [ran, setRan] = useState<SearchState | null>(null);
 
+  const dropped = droppedConditions(settings, fields);
+
   const run = (state: SearchState) => {
-    if (!state.query.trim()) return;
+    if (!state.query.trim() || !fieldsReady) return;
     setRan(state);
     history.add(state);
     search.mutate({ kb, body: buildSearchRequest(state, fields) });
@@ -47,9 +52,12 @@ export function SearchTab({ kb }: { kb: string }) {
             }}
           />
           <ConditionChips settings={settings} fields={fields} onChange={setSettings} />
+          {fieldsReady && dropped > 0 && (
+            <p className="text-xs text-muted-foreground">{dropped} điều kiện chưa đầy đủ nên không được áp dụng.</p>
+          )}
           <div className="flex items-center justify-between gap-3">
             <span id="search-query-count" className="text-xs text-muted-foreground">{query.length}/{QUERY_MAX} · Ctrl+Enter để tìm</span>
-            <Button type="submit" disabled={!query.trim() || search.isPending}>
+            <Button type="submit" disabled={!query.trim() || search.isPending || !fieldsReady}>
               <Search className="h-4 w-4" aria-hidden />Tìm
             </Button>
           </div>
@@ -60,7 +68,7 @@ export function SearchTab({ kb }: { kb: string }) {
             <ul className="-mx-2 space-y-0.5">
               {history.entries.map(entry => (
                 <li key={entry.at}>
-                  <button type="button" disabled={search.isPending}
+                  <button type="button" disabled={search.isPending || !fieldsReady}
                     className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-13 hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                     onClick={() => { setQuery(entry.query); setSettings(entry.settings); run({ query: entry.query, settings: entry.settings }); }}>
                     <span className="min-w-0 flex-1 truncate">{entry.query}</span>

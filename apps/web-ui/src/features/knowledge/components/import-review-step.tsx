@@ -13,7 +13,7 @@ type Action = ImportPreviewRow['action'];
 
 const ACTIONS: { action: Action; label: string; tone: StatusTone }[] = [
   { action: 'create', label: 'tạo mới', tone: 'success' },
-  { action: 'update', label: 'cập nhật', tone: 'neutral' },
+  { action: 'update', label: 'cập nhật', tone: 'primary' },
   { action: 'unchanged', label: 'không đổi', tone: 'neutral' },
   { action: 'invalid', label: 'lỗi', tone: 'danger' },
 ];

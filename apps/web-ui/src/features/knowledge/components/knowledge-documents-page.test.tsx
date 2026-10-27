@@ -57,4 +57,17 @@ describe('KnowledgeDocumentsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xoá bộ lọc' }));
     expect(replace).toHaveBeenCalledWith('/admin/knowledge/kb1/documents', { scroll: false });
   });
+
+  it('filters queued and in-progress indexing as separate states', async () => {
+    mocked.listDocuments.mockResolvedValue({ items: [], next_cursor: null });
+    search = 'state=indexing';
+    const { unmount } = renderPage();
+    await waitFor(() => expect(mocked.listDocuments).toHaveBeenCalledWith('kb1', { status: 'active', index_status: 'pending', limit: 20 }));
+    expect(screen.getByRole('combobox')).toHaveTextContent('Chờ index');
+    unmount();
+    search = 'state=processing';
+    renderPage();
+    await waitFor(() => expect(mocked.listDocuments).toHaveBeenCalledWith('kb1', { status: 'active', index_status: 'indexing', limit: 20 }));
+    expect(screen.getByRole('combobox')).toHaveTextContent('Đang xử lý');
+  });
 });

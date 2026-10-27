@@ -16,8 +16,8 @@ export const isValueless = (operator: string) => operator === 'empty' || operato
 export interface FilterCondition { id: string; name: string; operator: string; value: string }
 
 export interface SearchSettings {
-  topK: number;
-  /** null = not sent, the server default applies. */
+  /** null = not sent, the server default applies (a cleared number input is null, never NaN). */
+  topK: number | null;
   scoreThreshold: number | null;
   semanticWeight: number | null;
   maxChunksPerDoc: number | null;
@@ -27,8 +27,9 @@ export interface SearchSettings {
 
 export interface SearchState { query: string; settings: SearchSettings }
 
+const DEFAULT_TOP_K = 4;
 export const DEFAULT_SETTINGS: SearchSettings = {
-  topK: 4, scoreThreshold: null, semanticWeight: null, maxChunksPerDoc: null, logicalOperator: 'and', conditions: [],
+  topK: DEFAULT_TOP_K, scoreThreshold: null, semanticWeight: null, maxChunksPerDoc: null, logicalOperator: 'and', conditions: [],
 };
 
 type Condition = NonNullable<SearchRequest['metadata_condition']>['conditions'][number];
@@ -49,11 +50,15 @@ export function toCondition(row: FilterCondition, fields: MetadataField[]): Cond
   return { name: field.name, comparison_operator: row.operator, value: text };
 }
 
+/** Filter rows that `buildSearchRequest` drops because they are incomplete or no longer match a filterable field. */
+export const droppedConditions = (settings: SearchSettings, fields: MetadataField[]) =>
+  settings.conditions.filter(row => toCondition(row, fields) === null).length;
+
 /** Omits unset optionals so the server keeps its defaults; drops incomplete filter rows. */
 export function buildSearchRequest({ query, settings }: SearchState, fields: MetadataField[]): SearchRequest {
   const body: SearchRequest = {
     query: query.trim().slice(0, QUERY_MAX),
-    top_k: Number.isFinite(settings.topK) ? clamp(Math.round(settings.topK), 1, 20) : DEFAULT_SETTINGS.topK,
+    top_k: settings.topK !== null && Number.isFinite(settings.topK) ? clamp(Math.round(settings.topK), 1, 20) : DEFAULT_TOP_K,
   };
   if (settings.scoreThreshold !== null) body.score_threshold = clamp(settings.scoreThreshold, 0, 1);
   if (settings.semanticWeight !== null) body.semantic_weight = clamp(settings.semanticWeight, 0, 1);

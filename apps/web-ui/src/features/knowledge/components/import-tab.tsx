@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
@@ -35,9 +35,11 @@ export function ImportTab({ kb }: { kb: string }) {
   const readSeq = useRef(0);
 
   const { mode, errors } = checkFiles(files);
-  const csvRows = mode === 'csv' && csv !== null ? csvRowCount(csv) : 0;
-  const csvErrors = mode !== 'csv' || csv === null ? []
-    : csvHeader(csv).length === 0 ? [`${files[0]!.name}: không có dòng tiêu đề.`]
+  // Parsing a large CSV is not free; do it once per file instead of on every render.
+  const parsed = useMemo(() => (csv === null ? null : { header: csvHeader(csv), sample: csvFirstRow(csv), rows: csvRowCount(csv) }), [csv]);
+  const csvRows = mode === 'csv' && parsed ? parsed.rows : 0;
+  const csvErrors = mode !== 'csv' || !parsed ? []
+    : parsed.header.length === 0 ? [`${files[0]!.name}: không có dòng tiêu đề.`]
       : csvRows > MAX_ROWS ? [`${files[0]!.name}: có ${csvRows} dòng dữ liệu, tối đa ${MAX_ROWS} dòng mỗi lần nhập.`] : [];
   const fileErrors = [...errors, ...csvErrors];
   const ready = mode === 'files' || (mode === 'csv' && csv !== null && csvErrors.length === 0);
@@ -74,11 +76,13 @@ export function ImportTab({ kb }: { kb: string }) {
     });
   }
 
-  // Auto-map once per CSV, on first entering the mapping step, so the metadata fields have loaded and later edits stay.
+  // Auto-map once per CSV, on first entering the mapping step (gated on the fields being loaded), so later edits stay.
   function goToMapping() {
-    if (mapping === null && csv !== null) setMapping(autoMapColumns(csvHeader(csv), mappingTargets(fields.data ?? [])));
+    if (!fields.data) return;
+    if (mapping === null && parsed) setMapping(autoMapColumns(parsed.header, mappingTargets(fields.data)));
     setStep(2);
   }
+  const waitingFields = mode === 'csv' && !fields.data;
 
   async function runPreview() {
     invalidatePreview();
@@ -133,15 +137,19 @@ export function ImportTab({ kb }: { kb: string }) {
         <>
           <ImportFileStep files={files} errors={fileErrors} onAdd={added => changeFiles([...files, ...added])} onRemove={index => changeFiles(files.filter((_, i) => i !== index))} />
           <ErrorText error={readError} />
+          {mode === 'csv' && <ErrorText error={fields.error} />}
           {footer(
-            <Button type="button" disabled={!ready} onClick={() => (mode === 'csv' ? goToMapping() : goToReview())}>Tiếp tục</Button>,
+            <>
+              {waitingFields && fields.isLoading && <span role="status" className="self-center text-13 text-muted-foreground">Đang tải metadata…</span>}
+              <Button type="button" disabled={!ready || waitingFields} onClick={() => (mode === 'csv' ? goToMapping() : goToReview())}>Tiếp tục</Button>
+            </>,
           )}
         </>
       )}
 
-      {step === 2 && csv !== null && (
+      {step === 2 && parsed && (
         <>
-          <ImportMappingStep header={csvHeader(csv)} sample={csvFirstRow(csv)} fields={fields.data ?? []} mapping={mapping ?? {}} onChange={changeMapping} />
+          <ImportMappingStep header={parsed.header} sample={parsed.sample} fields={fields.data ?? []} mapping={mapping ?? {}} onChange={changeMapping} />
           {footer(<>{back(1)}<Button type="button" onClick={goToReview}>Tiếp tục</Button></>)}
         </>
       )}

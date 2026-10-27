@@ -7,8 +7,9 @@ import type { DocumentFilters } from '../types';
 export const DOCUMENT_STATES = {
   all: { label: 'Tất cả', filters: {} },
   ready: { label: 'Sẵn sàng', filters: { status: 'active', index_status: 'ready' } },
-  // The API takes one index_status; a revision being claimed right now ('indexing') is not matched.
-  indexing: { label: 'Đang index', filters: { status: 'active', index_status: 'pending' } },
+  // The API takes one index_status, so queued and in-progress revisions are separate states; `indexing` keeps its URL value.
+  indexing: { label: 'Chờ index', filters: { status: 'active', index_status: 'pending' } },
+  processing: { label: 'Đang xử lý', filters: { status: 'active', index_status: 'indexing' } },
   error: { label: 'Lỗi', filters: { status: 'active', index_status: 'error' } },
   archived: { label: 'Đã tắt', filters: { status: 'archived' } },
 } as const satisfies Record<string, { label: string; filters: DocumentFilters }>;

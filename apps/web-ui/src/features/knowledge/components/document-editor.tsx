@@ -17,7 +17,7 @@ import { useDocument, useFields, usePutDocument } from '../hooks/use-knowledge';
 import type { DocumentDetail, MetadataField } from '../types';
 import { DocumentEditorInfo } from './document-editor-info';
 import {
-  BODY_MAX_BYTES, FORM_FIELDS, documentIdOf, editorSchema, formatKb, issueText, serverIssues, utf8Bytes,
+  BODY_MAX_BYTES, FORM_FIELDS, derivedId, documentIdOf, editorSchema, formatKb, issueText, serverIssues, utf8Bytes,
   type EditorForm, type EditorSchemaContext,
 } from './document-editor-form';
 import { ErrorText } from './error-text';
@@ -28,7 +28,6 @@ import { MetadataInputs, fieldLabel } from './metadata-inputs';
 import { ConfirmDialog } from './shared/confirm-dialog';
 import { CopyButton } from './shared/copy-button';
 import { errorMessage } from './shared/error-message';
-import { slugify } from './shared/format';
 import { useUnsavedGuard } from './use-unsaved-guard';
 
 const LABELS: Record<string, string> = { id: 'ID', title: 'Tiêu đề', source_url: 'Nguồn', body: 'Nội dung' };
@@ -105,7 +104,7 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
 
   const openIdInput = () => {
     if (customId) return;
-    form.setValue('id', slugify(form.getValues('title')));
+    form.setValue('id', derivedId(form.getValues('title')));
     setCustomId(true);
   };
 
@@ -153,7 +152,8 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
         // What was sent is now the saved state; the refetch of this revision must not reset over newer typing.
         baseRevision.current = result.revision;
         loadedKey.current = `${docId ?? ''}:${result.revision}`;
-        form.reset(values);
+        // keepValues: text typed while the request was in flight stays, and isDirty is recomputed against the saved values.
+        form.reset(values, { keepValues: true });
         toast.success(result.outcome === 'unchanged' ? 'Không có thay đổi' : `Đã lưu r${result.revision}`);
         if (!docId) router.replace(`/admin/knowledge/${kb}/documents/${doc}`);
       },
@@ -214,12 +214,12 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
   const fieldList = fields.data ?? [];
   const bytes = utf8Bytes(body ?? '');
   const summary = summaryShown > 0 ? [...errorLines(errors, fieldList), ...extraIssues] : [];
-  const autoId = slugify(title ?? '');
+  const autoId = derivedId(title ?? '');
   const describe = (name: string, extra?: string) => [errors[name as keyof EditorForm] ? errorId(name) : undefined, extra]
     .filter(Boolean).join(' ') || undefined;
 
   return (
-    <div onClickCapture={guard.onClickCapture}>
+    <div>
       {header}
       {conflict && (
         <div role="alert" className="sticky top-0 z-10 mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-status-warning/40 bg-warning-subtle px-4 py-3 text-sm text-warning-foreground">
@@ -331,7 +331,7 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
       </form>
 
       <ConfirmDialog
-        {...guard.confirm}
+        {...guard}
         title="Rời trang khi chưa lưu?" description="Nội dung bạn đang soạn sẽ mất."
         confirmLabel="Rời trang" cancelLabel="Ở lại" destructive
       />

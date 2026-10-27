@@ -177,4 +177,18 @@ describe('ImportTab', () => {
     await waitFor(() => expect(mocked.commitImport).toHaveBeenCalledTimes(2));
     expect(mocked.commitImport.mock.calls[1]![0].body.idempotency_key).not.toBe(mocked.commitImport.mock.calls[0]![0].body.idempotency_key);
   });
+
+  it('waits for the metadata fields before mapping a CSV, so auto-mapping still runs', async () => {
+    let loadFields: (fields: Awaited<ReturnType<typeof knowledgeApi.listFields>>) => void = () => {};
+    mocked.listFields.mockReturnValue(new Promise(resolve => { loadFields = resolve; }));
+    renderImport();
+    addFiles(new File(['id,TRUONG\n1,HUTECH'], 'one.csv'));
+    expect(await screen.findByText('Đang tải metadata…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tiếp tục' })).toBeDisabled();
+
+    loadFields([{ id: 'f1', name: 'truong', type: 'string', label: 'Trường', filterable: true, ordinal: 0 }]);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tiếp tục' })).toBeEnabled());
+    next();
+    expect(screen.getByLabelText(/^Trường/)).toHaveTextContent('TRUONG');
+  });
 });

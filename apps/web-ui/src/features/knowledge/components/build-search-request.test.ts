@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MetadataField } from '../types';
-import { DEFAULT_SETTINGS, OPERATORS, buildSearchRequest, type FilterCondition } from './build-search-request';
+import { DEFAULT_SETTINGS, OPERATORS, buildSearchRequest, droppedConditions, type FilterCondition } from './build-search-request';
 
 const field = (name: string, type: MetadataField['type'], filterable = true): MetadataField =>
   ({ id: `f-${name}`, name, type, label: name.toUpperCase(), filterable, ordinal: 0 });
@@ -17,6 +17,7 @@ describe('buildSearchRequest', () => {
     expect(buildSearchRequest({ query: 'q', settings }, fields))
       .toEqual({ query: 'q', top_k: 20, score_threshold: 0.35, semantic_weight: 0, max_chunks_per_doc: 2 });
     expect(buildSearchRequest({ query: 'q', settings: { ...DEFAULT_SETTINGS, topK: Number.NaN } }, fields).top_k).toBe(4);
+    expect(buildSearchRequest({ query: 'q', settings: { ...DEFAULT_SETTINGS, topK: null } }, fields).top_k).toBe(4);
   });
 
   it('converts number values, keeps valueless operators and drops incomplete rows', () => {
@@ -27,6 +28,7 @@ describe('buildSearchRequest', () => {
         row('school', 'contains', '  '), row('fee', '>', 'abc'), row('note', 'is', 'x'), row('missing', 'is', 'x'), row('tags', 'is', 'x'),
       ],
     };
+    expect(droppedConditions(settings, fields)).toBe(5);
     expect(buildSearchRequest({ query: 'q', settings }, fields).metadata_condition).toEqual({
       logical_operator: 'or',
       conditions: [

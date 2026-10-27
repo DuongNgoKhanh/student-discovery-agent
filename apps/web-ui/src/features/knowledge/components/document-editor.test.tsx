@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import Link from 'next/link';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from '@/components/ui/sonner';
@@ -137,5 +138,48 @@ describe('DocumentEditor', () => {
     expect(await screen.findByText('Rời trang khi chưa lưu?')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Rời trang' }));
     await waitFor(() => expect(push).toHaveBeenCalledWith('/admin/knowledge/kb1/documents'));
+  });
+
+  it('confirms before following a link outside the editor, such as the sidebar', async () => {
+    mocked.getDocument.mockResolvedValue(detail(1, 'ready'));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <nav><Link href="/admin/knowledge/kb1/settings">Cài đặt</Link></nav>
+        <DocumentEditor kb="kb1" docId="hutech" />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(await screen.findByDisplayValue('cũ'), { target: { value: 'mới' } });
+    fireEvent.click(screen.getByRole('link', { name: 'Cài đặt' }));
+    expect(await screen.findByText('Rời trang khi chưa lưu?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Rời trang' }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/admin/knowledge/kb1/settings'));
+  });
+
+  it('keeps text typed while a save is in flight and leaves it unsaved', async () => {
+    mocked.getDocument.mockResolvedValue(detail(1, 'ready'));
+    let finish: (value: { document_id: string; revision: number; outcome: 'updated' }) => void = () => {};
+    mocked.putDocument.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    renderEditor('hutech');
+    const textarea = await screen.findByDisplayValue('cũ');
+    fireEvent.change(textarea, { target: { value: 'mới' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+    await waitFor(() => expect(mocked.putDocument).toHaveBeenCalledTimes(1));
+    fireEvent.change(textarea, { target: { value: 'mới hơn' } });
+    finish({ document_id: 'hutech', revision: 2, outcome: 'updated' });
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Đã lưu r2'));
+    expect(textarea).toHaveValue('mới hơn');
+    expect(screen.getByText('Chưa lưu')).toBeInTheDocument();
+  });
+
+  it('steers the derived id off reserved routes and rejects a typed reserved id', async () => {
+    renderEditor(null);
+    fireEvent.change(await screen.findByLabelText('Tiêu đề'), { target: { value: 'New' } });
+    expect(screen.getByText('ID: new-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Đổi ID' }));
+    fireEvent.change(screen.getByLabelText('ID tài liệu'), { target: { value: 'import' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+    expect(await screen.findByText('ID: ID này dành riêng cho hệ thống, hãy chọn ID khác.')).toBeInTheDocument();
+    expect(mocked.putDocument).not.toHaveBeenCalled();
   });
 });

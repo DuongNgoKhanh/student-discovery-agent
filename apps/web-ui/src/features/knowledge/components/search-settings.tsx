@@ -17,6 +17,8 @@ import {
 import { kbHref } from './knowledge-base-shell';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
+/** A cleared or unparsable number input means "unset", never NaN. */
+const numberOrNull = (input: HTMLInputElement) => (Number.isNaN(input.valueAsNumber) ? null : input.valueAsNumber);
 
 export interface SearchSettingsPopoverProps {
   kb: string;
@@ -45,13 +47,13 @@ export function SearchSettingsPopover({ kb, settings, fields, onChange }: Search
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_96px] items-center gap-3">
           <Label htmlFor="search-top-k">Số kết quả</Label>
-          <Input id="search-top-k" type="number" min={1} max={20} value={settings.topK}
-            onChange={event => set({ topK: event.target.valueAsNumber })} />
+          <Input id="search-top-k" type="number" min={1} max={20} placeholder="Mặc định" value={settings.topK ?? ''}
+            onChange={event => set({ topK: numberOrNull(event.target) })} />
           <Label htmlFor="search-max-chunks">
             Tối đa đoạn/tài liệu <span className="font-normal text-muted-foreground">(tuỳ chọn)</span>
           </Label>
           <Input id="search-max-chunks" type="number" min={1} max={10} placeholder="Mặc định" value={settings.maxChunksPerDoc ?? ''}
-            onChange={event => set({ maxChunksPerDoc: event.target.value === '' ? null : event.target.valueAsNumber })} />
+            onChange={event => set({ maxChunksPerDoc: numberOrNull(event.target) })} />
         </div>
         <OptionalSlider
           id="search-threshold" label="Ngưỡng điểm" value={settings.scoreThreshold} fallback={0.5}

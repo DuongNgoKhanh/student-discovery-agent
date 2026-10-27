@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/lib/api/errors';
 import { knowledgeApi } from '../api/knowledge';
+import { DEFAULT_SETTINGS } from './build-search-request';
 import { KnowledgeTestingPage } from './knowledge-testing-page';
 
 vi.mock('../api/knowledge', () => ({ knowledgeApi: { search: vi.fn(), listFields: vi.fn() } }));
@@ -27,6 +28,7 @@ describe('KnowledgeTestingPage', () => {
     expect(screen.getByText('Nhập câu hỏi để xem agent sẽ đọc được gì')).toBeInTheDocument();
     const box = screen.getByLabelText('Câu hỏi');
     fireEvent.change(box, { target: { value: 'hoc phi' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tìm' })).toBeEnabled());
     fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
 
     await waitFor(() => expect(mocked.search).toHaveBeenCalledWith({ kb: 'kb1', body: { query: 'hoc phi', top_k: 4 } }));
@@ -50,9 +52,31 @@ describe('KnowledgeTestingPage', () => {
       .mockResolvedValueOnce({ degraded: false, records: [] });
     renderPage();
     fireEvent.change(screen.getByLabelText('Câu hỏi'), { target: { value: 'điểm chuẩn' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tìm' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Tìm' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Thử lại' }));
     expect(await screen.findByText('Không có đoạn nào vượt ngưỡng.')).toBeInTheDocument();
     expect(mocked.search).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits for the fields before searching and says which conditions are not applied', async () => {
+    let loadFields: (value: typeof fields) => void = () => {};
+    mocked.listFields.mockReturnValue(new Promise(resolve => { loadFields = resolve; }));
+    mocked.search.mockResolvedValue({ degraded: false, records: [] });
+    const settings = { ...DEFAULT_SETTINGS, conditions: [
+      { id: 'a', name: 'school', operator: 'is', value: 'HUTECH' }, { id: 'b', name: 'school', operator: 'is', value: ' ' },
+    ] };
+    window.localStorage.setItem('knowledge.search-history.kb1', JSON.stringify([{ query: 'q', settings, at: '2026-10-27T00:00:00Z' }]));
+    renderPage();
+    fireEvent.change(screen.getByLabelText('Câu hỏi'), { target: { value: 'q' } });
+    expect(screen.getByRole('button', { name: 'Tìm' })).toBeDisabled();
+
+    loadFields(fields);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tìm' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: /^q/ }));
+    expect(await screen.findByText('1 điều kiện chưa đầy đủ nên không được áp dụng.')).toBeInTheDocument();
+    await waitFor(() => expect(mocked.search).toHaveBeenCalledWith({ kb: 'kb1', body: {
+      query: 'q', top_k: 4, metadata_condition: { logical_operator: 'and', conditions: [{ name: 'school', comparison_operator: 'is', value: 'HUTECH' }] },
+    } }));
   });
 });

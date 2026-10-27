@@ -33,8 +33,17 @@ export interface EditorSchemaContext {
   customId: boolean;
 }
 
+/** IDs that collide with editor routes (`documents/new` is create mode, `documents/import` is the import page). */
+export const RESERVED_IDS: readonly string[] = ['new', 'import'];
+
+/** The ID derived from a title, steered off reserved IDs ("New" becomes `new-1`). */
+export function derivedId(title: string): string {
+  const slug = slugify(title);
+  return RESERVED_IDS.includes(slug) ? `${slug}-1` : slug;
+}
+
 export const documentIdOf = (values: Pick<EditorForm, 'id' | 'title'>, customId: boolean) =>
-  customId ? values.id.trim() : slugify(values.title);
+  customId ? values.id.trim() : derivedId(values.title);
 
 export function editorSchema({ fields, isNew, customId }: EditorSchemaContext) {
   return z.object({
@@ -49,8 +58,11 @@ export function editorSchema({ fields, isNew, customId }: EditorSchemaContext) {
     metadata: z.record(z.string()),
   }).superRefine((values, ctx) => {
     // With a blank title the title error says enough; a derived ID only matters once there is a title.
-    if (isNew && (customId || /\S/.test(values.title)) && !DOCUMENT_ID.test(documentIdOf(values, customId))) {
+    const id = documentIdOf(values, customId);
+    if (isNew && (customId || /\S/.test(values.title)) && !DOCUMENT_ID.test(id)) {
       ctx.addIssue({ code: 'custom', path: ['id'], message: 'ID gồm chữ thường a-z, số, "-" hoặc "_", tối đa 64 ký tự.' });
+    } else if (isNew && RESERVED_IDS.includes(id)) {
+      ctx.addIssue({ code: 'custom', path: ['id'], message: 'ID này dành riêng cho hệ thống, hãy chọn ID khác.' });
     }
     for (const [name, message] of Object.entries(fromFormValues(fields, values.metadata).issues)) {
       ctx.addIssue({ code: 'custom', path: ['metadata', name], message: `Giá trị ${message}.` });
