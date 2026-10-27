@@ -77,6 +77,9 @@ button,input,textarea,select{font:inherit}
 .card{background:var(--white);border:1px solid var(--bd);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
 .card .meta{font-family:var(--mono);font-size:.68rem;color:var(--muted);display:flex;justify-content:space-between;gap:8px;margin-bottom:6px}
 .card h4{margin:0 0 10px;color:var(--dark);font-size:.98rem;line-height:1.4}
+.card table.kv{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:8px}
+.card table.kv th{text-align:left;color:var(--muted);font-weight:500;padding:4px 8px 4px 0;width:38%;vertical-align:top}
+.card table.kv td{padding:4px 0}
 .opts{display:flex;flex-direction:column;gap:6px}
 .opt{cursor:pointer;text-align:left;border:1.5px solid var(--bd);background:var(--light);border-radius:9px;padding:8px 12px;color:var(--dark);font-weight:500}
 .opt:hover:not(:disabled){border-color:var(--blue);background:var(--tint)}
@@ -136,6 +139,7 @@ dialog h3{margin:0 0 10px;color:var(--dark)}
       <p class="eyebrow">Block client hỗ trợ</p>
       <div class="checks">
         <label><input type="checkbox" id="capMarkdown" checked> markdown v1</label>
+        <label><input type="checkbox" id="capKnowledge" checked> knowledge_card v1</label>
         <label><input type="checkbox" id="capSuggestions" checked> suggestions v1</label>
       </div>
       <p class="hint" style="margin-top:6px">Bỏ chọn để xem server hạ cấp về text v1. Áp dụng cho hội thoại mới.</p>
@@ -250,6 +254,7 @@ async function api(method, path, body) {
 function capabilities() {
   const blocks = [["text", [1]], ["assessment_question", [2]], ["assessment_clarification", [2]], ["personality_card", [1]]];
   if ($("capMarkdown").checked) blocks.push(["markdown", [1]]);
+  if ($("capKnowledge").checked) blocks.push(["knowledge_card", [1]]);
   if ($("capSuggestions").checked) blocks.push(["suggestions", [1]]);
   return blocks.map(([type, schema_versions]) => ({ type, schema_versions }));
 }
@@ -492,6 +497,15 @@ function renderBlock(block, entry, isLatestQuestion) {
         <div class="grid"><div><b>Điểm mạnh</b>${list(d.strengths)}</div><div><b>Xu hướng</b>${list(d.tendencies)}</div><div><b>Nhóm ngành</b>${list(d.career_groups)}</div></div>`;
       const b = document.createElement("button"); b.className = "btn small"; b.textContent = "Xem share card";
       b.onclick = () => showShareCard(block.result_id); el.append(b);
+      break;
+    }
+    case "knowledge_card": {
+      el.className = "card knowledge";
+      const rows = block.fields.map(f => `<tr><th>${escapeHtml(f.label)}</th><td>${escapeHtml(f.value)}</td></tr>`).join("");
+      const source = block.source_url
+        ? `<a href="${escapeHtml(block.source_url)}" target="_blank" rel="noopener noreferrer">Nguồn</a>` : "";
+      el.innerHTML = `<div class="meta"><span>Thông tin · ${escapeHtml(block.document_id)} · rev ${escapeHtml(block.revision)}</span><span>${escapeHtml(block.updated_at.slice(0, 10))}</span></div>
+        <h4>${escapeHtml(block.title)}</h4><table class="kv">${rows}</table>${source}`;
       break;
     }
     default: el.className = "notice warn"; el.textContent = `Block chưa hỗ trợ: ${block.type}`;

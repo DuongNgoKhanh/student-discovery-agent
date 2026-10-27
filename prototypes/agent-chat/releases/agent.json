@@ -17,7 +17,12 @@
     {"name": "assessment.current_question", "version": 1},
     {"name": "assessment.propose_answer", "version": 1},
     {"name": "result.explain", "version": 1},
-    {"name": "ui.suggest_replies", "version": 1}
+    {"name": "ui.suggest_replies", "version": 1},
+    {"name": "knowledge.search", "version": 1, "params": {
+      "knowledge_base_id": "kb_ihrd_demo", "auto_filter_fields": ["houses", "province", "major"]}},
+    {"name": "knowledge.show", "version": 1, "params": {"display": [
+      {"field": "major", "label": "Ngành"}, {"field": "province", "label": "Tỉnh/thành"},
+      {"field": "tuition_text", "label": "Học phí"}, {"field": "admission_note", "label": "Ghi chú tuyển sinh"}]}}
   ],
   "guardrails": {"enabled": false, "blocked_topics": ["chính trị", "nội dung người lớn"],
                  "refusal_text": "Mình chỉ hỗ trợ các chủ đề học tập và hướng nghiệp nhé."},
