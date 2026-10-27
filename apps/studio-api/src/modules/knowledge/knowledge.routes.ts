@@ -6,11 +6,13 @@ import { requireAdmin } from '@/modules/auth/auth.service';
 import { readExperienceJsonBody } from '@/modules/experiences/body';
 import {
   createFieldSchema, createKnowledgeBaseSchema, documentIdSchema, fieldNameSchema, importCommitSchema, importPreviewSchema,
-  kbIdSchema, listDocumentsQuerySchema, patchFieldSchema, patchKnowledgeBaseSchema, putDocumentSchema, statusChangeSchema,
+  kbIdSchema, listDocumentsQuerySchema, patchFieldSchema, patchKnowledgeBaseSchema, putDocumentSchema, searchSchema,
+  statusChangeSchema,
 } from '@/modules/knowledge/knowledge.schemas';
 import {
-  changeDocumentStatus, createField, createKnowledgeBase, deleteField, getDocument, getKnowledgeBase, listDocuments,
+  agentParams, changeDocumentStatus, createField, createKnowledgeBase, deleteField, getDocument, getKnowledgeBase, listDocuments,
   listFields, listKnowledgeBases, patchField, patchKnowledgeBase, retryDocumentRevision, saveDocument,
+  searchKnowledgeBase,
 } from '@/modules/knowledge/knowledge.service';
 import { commitImport, previewImport } from '@/modules/knowledge/import.service';
 
@@ -133,6 +135,18 @@ export const handleCommitImport = withHandler<KbParams>(async (req, ctx, route) 
   return success(await commitImport(kbId, body, actor.sub), ctx);
 });
 
+export const handleSearch = withHandler<KbParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  const kbId = kbIdSchema.parse(route.params.kb_id);
+  const body = searchSchema.parse(await readExperienceJsonBody(req, { maxBytes: SMALL_BODY }));
+  return success(await searchKnowledgeBase(kbId, body, ctx), ctx);
+});
+
+export const handleAgentParams = withHandler<KbParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  return success(await agentParams(kbIdSchema.parse(route.params.kb_id)), ctx);
+});
+
 export function registerKnowledgeRoutes(app: Hono): void {
   app.get(KB_BASE, honoHandler(handleListKnowledgeBases));
   app.post(KB_BASE, honoHandler(handleCreateKnowledgeBase));
@@ -150,4 +164,6 @@ export function registerKnowledgeRoutes(app: Hono): void {
   app.post(`${KB_BASE}/:kb_id/documents/:document_id/revisions/:revision/retry`, honoHandler(handleRetryRevision));
   app.post(`${KB_BASE}/:kb_id/imports/preview`, honoHandler(handlePreviewImport));
   app.post(`${KB_BASE}/:kb_id/imports`, honoHandler(handleCommitImport));
+  app.post(`${KB_BASE}/:kb_id/search`, honoHandler(handleSearch));
+  app.get(`${KB_BASE}/:kb_id/agent-params`, honoHandler(handleAgentParams));
 }

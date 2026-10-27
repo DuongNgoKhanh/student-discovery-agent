@@ -101,3 +101,19 @@ export const importCommitSchema = z.object({
 
 export type ImportPreviewInput = z.infer<typeof importPreviewSchema>;
 export type ImportCommitInput = z.infer<typeof importCommitSchema>;
+
+export const searchSchema = z.object({
+  query: z.string().max(300).refine(value => /\S/.test(value), 'Query must not be blank'),
+  top_k: z.number().int().min(1).max(20).default(4),
+  score_threshold: z.number().min(0).max(1).optional(),
+  semantic_weight: z.number().min(0).max(1).optional(),
+  max_chunks_per_doc: z.number().int().min(1).max(10).optional(),
+  metadata_condition: z.object({
+    logical_operator: z.enum(['and', 'or']).optional(),
+    conditions: z.array(z.object({
+      name: z.string().min(1), comparison_operator: z.string().min(1).max(16), value: z.unknown().optional(),
+    }).strict()).min(1).max(10),
+  }).strict().optional(),
+}).strict();
+
+export type SearchInput = z.infer<typeof searchSchema>;

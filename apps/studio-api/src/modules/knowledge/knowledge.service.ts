@@ -4,7 +4,7 @@ import { inKnowledgeTransaction, withKnowledgeClient, type Queryable } from '@/i
 import { decodeCursor, encodeCursor } from '@/modules/experiences/cursor';
 import type {
   CreateFieldInput, CreateKnowledgeBaseInput, DocumentContent, ListDocumentsQuery, PatchFieldInput,
-  PatchKnowledgeBaseInput,
+  PatchKnowledgeBaseInput, SearchInput,
 } from '@/modules/knowledge/knowledge.schemas';
 import {
   countDocumentsUsingField, deleteField as deleteFieldRow, findDocument, findKnowledgeBase, findRevisionId,
@@ -15,6 +15,7 @@ import {
 import { newId } from '@/modules/knowledge/ids';
 import { invalidMetadata, MetadataValidationError, namedMetadata } from '@/modules/knowledge/metadata';
 import { slugify } from '@/modules/knowledge/slug';
+import { retrieveKnowledge } from '@/modules/knowledge/runtime-client';
 import { putDocument, type PutOutcome } from '@/modules/knowledge/writer';
 
 export interface KnowledgeBaseDTO {
@@ -252,5 +253,24 @@ export async function retryDocumentRevision(kbId: string, documentId: string, re
       });
     }
     return documentDetail(client, kbId, documentId);
+  });
+}
+
+export async function searchKnowledgeBase(kbId: string, input: SearchInput, ctx: { requestId: string; traceId: string }) {
+  const { query, metadata_condition, ...setting } = input;
+  const retrieval_setting = Object.fromEntries(Object.entries(setting).filter(([, value]) => value !== undefined));
+  return retrieveKnowledge({ knowledge_id: kbId, query, retrieval_setting, ...(metadata_condition ? { metadata_condition } : {}) }, ctx);
+}
+
+export async function agentParams(kbId: string) {
+  return withKnowledgeClient(async client => {
+    await requireKnowledgeBase(client, kbId);
+    const fields = await listFieldRows(client, kbId);
+    return {
+      'knowledge.search': {
+        knowledge_base_id: kbId, top_k: 4, auto_filter_fields: fields.filter(field => field.filterable).map(field => field.name),
+      },
+      'knowledge.show': { display: fields.map(field => ({ field: field.name, label: field.label || field.name })) },
+    };
   });
 }
