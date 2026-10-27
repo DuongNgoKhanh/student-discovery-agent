@@ -2,8 +2,11 @@
 import re
 from collections.abc import Callable, Iterable
 
+from pydantic import ValidationError
+
 from agent_runtime.sessions.schemas.activity import (
     CapabilitySnapshot,
+    KnowledgeCardBlock,
     MarkdownBlock,
     SuggestionsBlock,
     TextBlock,
@@ -43,10 +46,22 @@ def _degrade_suggestions(block: SuggestionsBlock) -> TextBlock:
     return _text(block.block_id, "Gợi ý: " + " · ".join(item.label for item in block.items))
 
 
+def _degrade_knowledge_card(block: KnowledgeCardBlock) -> TypedBlock:
+    lines = [f"**{block.title}**", *(f"- {item.label}: {item.value}" for item in block.fields)]
+    if block.source_url:
+        lines.append(f"[Nguồn]({block.source_url})")
+    content = "\n".join(lines)
+    try:
+        return MarkdownBlock(block_id=block.block_id, type="markdown", schema_version=1, content=content)
+    except ValidationError:  # markup in a stored value or an over-long card: the plain rendering stays exact
+        return _text(block.block_id, markdown_to_text(content))
+
+
 # Text v1 is mandatory at conversation create, so every chain ends in a renderable block.
 _DEGRADE: dict[str, Callable[[TypedBlock], TypedBlock]] = {
     "markdown": _degrade_markdown,
     "suggestions": _degrade_suggestions,
+    "knowledge_card": _degrade_knowledge_card,
 }
 # Stored canonically whatever the capability; projected to a supported fallback on output.
 DEGRADABLE_TYPES = frozenset(_DEGRADE)

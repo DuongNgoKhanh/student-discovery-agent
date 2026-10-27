@@ -72,7 +72,7 @@ Tên `Experience` được dùng chung cho các endpoint, schema metadata/draft/
 | [schemas/common.yaml](openapi/schemas/common.yaml) | Envelope, metadata, lỗi, reusable responses và ví dụ conflict. |
 | [schemas/activity.yaml](openapi/schemas/activity.yaml) | Activity state, câu hỏi, đáp án, clarification và result reference. |
 | [schemas/chat.yaml](openapi/schemas/chat.yaml) | Conversation state, turn/interaction input và turn output. |
-| [schemas/typed-blocks.yaml](openapi/schemas/typed-blocks.yaml) | Typed blocks và dữ liệu PersonalityCard. |
+| [schemas/typed-blocks.yaml](openapi/schemas/typed-blocks.yaml) | Typed blocks, dữ liệu PersonalityCard và KnowledgeCard. |
 
 Schema chỉ dùng bởi một nhóm nằm trong `components.schemas` của nhóm đó. Schema được dùng bởi
 nhóm khác sẽ được tham chiếu bằng `$ref` tương đối; mỗi định nghĩa có một nơi để sửa.

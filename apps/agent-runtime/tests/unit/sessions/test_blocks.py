@@ -6,6 +6,7 @@ from agent_runtime.sessions.schemas.activity import (
     CapabilitySnapshot,
     MarkdownBlock,
     SuggestionsBlock,
+    SupportedBlock,
     TypedBlock,
 )
 from agent_runtime.sessions.services.blocks import DEGRADABLE_TYPES, markdown_to_text, project_blocks
@@ -114,4 +115,38 @@ def test_markdown_to_text_degrades_link_with_leading_space():
 
 
 def test_degradable_types_are_the_content_blocks():
-    assert DEGRADABLE_TYPES == {"markdown", "suggestions"}
+    assert DEGRADABLE_TYPES == {"markdown", "suggestions", "knowledge_card"}
+
+
+CARD = {"block_id": "c1", "type": "knowledge_card", "schema_version": 1, "title": "Trường A",
+        "fields": [{"label": "Học phí", "value": "25.000.000"}, {"label": "Tỉnh", "value": "Hà Nội"}],
+        "source_url": "https://ihrd.vn/a", "document_id": "doc_a", "revision": 2,
+        "updated_at": "2026-10-27T03:00:00Z"}
+TEXT_AND_MARKDOWN = CapabilitySnapshot(supported_blocks=[SupportedBlock(type="text", schema_versions=(1,)),
+                                                         SupportedBlock(type="markdown", schema_versions=(1,))])
+
+
+def test_knowledge_card_degrades_to_markdown_then_text():
+    card = _BLOCK.validate_python(CARD)
+    (md,) = project_blocks((card,), TEXT_AND_MARKDOWN)
+    assert md.type == "markdown" and md.block_id == "c1"
+    assert md.content == "**Trường A**\n- Học phí: 25.000.000\n- Tỉnh: Hà Nội\n[Nguồn](https://ihrd.vn/a)"
+    (text,) = project_blocks((card,), CapabilitySnapshot())
+    assert text.content == "Trường A\n• Học phí: 25.000.000\n• Tỉnh: Hà Nội\nNguồn (https://ihrd.vn/a)"
+    full = CapabilitySnapshot(supported_blocks=[SupportedBlock(type="text", schema_versions=(1,)),
+                                                SupportedBlock(type="knowledge_card", schema_versions=(1,))])
+    assert project_blocks((card,), full) == (card,)
+
+
+def test_knowledge_card_with_markup_degrades_straight_to_text():
+    card = _BLOCK.validate_python({**CARD, "fields": [{"label": "Ghi chú", "value": "<b>xét học bạ</b>"}],
+                                   "source_url": None})
+    (block,) = project_blocks((card,), TEXT_AND_MARKDOWN)
+    assert (block.type, block.content) == ("text", "Trường A\n• Ghi chú: <b>xét học bạ</b>")
+
+
+@pytest.mark.parametrize("change", [{"fields": []}, {"source_url": "http://ihrd.vn/a"},
+                                    {"fields": [{"label": "x", "value": " "}]}, {"revision": 0}])
+def test_knowledge_card_rejects_bad_shapes(change):
+    with pytest.raises(ValidationError):
+        _BLOCK.validate_python({**CARD, **change})

@@ -99,6 +99,16 @@ describe('session lifecycle public and internal contracts', () => {
     expect(create({ idempotency_key: 'key', accepted_activity_profiles: ['future.v99'] })).toBe(true);
     expect(create({ idempotency_key: 'key', accepted_activity_profiles: [99] })).toBe(false);
   });
+  it('accepts server-built knowledge cards', () => {
+    const validate = validator('schemas/typed-blocks.yaml', 'TypedBlock');
+    const card = { block_id: 'b1', type: 'knowledge_card', schema_version: 1, title: 'Trường A',
+      fields: [{ label: 'Học phí', value: '25.000.000' }], source_url: 'https://ihrd.vn/a',
+      document_id: 'doc_a', revision: 2, updated_at: '2026-10-27T03:00:00Z' };
+    expect(validate(card), JSON.stringify(validate.errors)).toBe(true);
+    expect(validate({ ...card, source_url: undefined })).toBe(true);
+    expect(validate({ ...card, fields: [] })).toBe(false);
+    expect(validate({ ...card, schema_version: 2 })).toBe(false);
+  });
   it('supports adaptive question and clarification blocks v2', () => {
     const validate = validator('schemas/typed-blocks.yaml', 'TypedBlock');
     for (const [type, extra] of [
