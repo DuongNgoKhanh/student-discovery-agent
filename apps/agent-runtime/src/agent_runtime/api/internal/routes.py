@@ -1,4 +1,4 @@
-"""Nine synchronous operations; FastAPI dispatches all service/DB work to its pool."""
+"""Ten synchronous operations; FastAPI dispatches all service/DB work to its pool."""
 import re
 
 from fastapi import APIRouter, Request
@@ -6,6 +6,8 @@ from pydantic import ValidationError
 from starlette.responses import StreamingResponse
 
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
+from agent_runtime.knowledge.filters import FilterError
+from agent_runtime.knowledge.schemas import KnowledgeUnavailable, RetrievalRequest
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import ServiceResponse
 from agent_runtime.sessions.schemas.conversation import CreateConversationInput, EndConversationInput
@@ -135,3 +137,18 @@ def read_share_card(request: Request, result_id: str):
     response = _service(request, "results").read_share_card(request.state.caller, _id(result_id),
         expected_result_revision=_integer(query.get("expected_result_revision")))
     return success(response, *request.state.meta)
+
+
+@router.post("/knowledge/retrieval", operation_id="internalRetrieveKnowledge")
+def retrieve_knowledge(request: Request):
+    _query(request, ())
+    data = _input(request, RetrievalRequest)
+    try:
+        result = _service(request, "knowledge").retrieve(data)
+    except FilterError:
+        raise RuntimeSessionError(422, "INVALID_INPUT") from None
+    if isinstance(result, KnowledgeUnavailable):
+        if result.reason == "not_found":
+            raise RuntimeSessionError(404, "RESOURCE_NOT_FOUND")
+        raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"})
+    return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)

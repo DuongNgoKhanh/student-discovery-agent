@@ -1,0 +1,31 @@
+{
+  "request": {
+    "knowledge_id": "kb_ihrd_demo",
+    "query": "trường nào hợp với hệ S ở Đà Nẵng",
+    "retrieval_setting": {"top_k": 3, "score_threshold": 0.2, "semantic_weight": 0.7},
+    "metadata_condition": {
+      "logical_operator": "and",
+      "conditions": [
+        {"name": "houses", "comparison_operator": "contains", "value": "house_s"},
+        {"name": "province", "comparison_operator": "is", "value": "Đà Nẵng"}
+      ]
+    }
+  },
+  "response_data": {
+    "records": [
+      {
+        "content": "Giới thiệu\nNgành công tác xã hội đào tạo kỹ năng hỗ trợ cộng đồng.",
+        "score": 0.71,
+        "title": "Trường Minh Họa B — Công tác xã hội",
+        "metadata": {
+          "houses": ["house_s"],
+          "province": "Đà Nẵng",
+          "document_id": "ctxh",
+          "revision": 1,
+          "updated_at": "2026-10-27T03:00:00Z"
+        }
+      }
+    ],
+    "degraded": false
+  }
+}
