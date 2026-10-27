@@ -6,6 +6,7 @@ max_chunks_per_doc per document, top_k overall. v1 scores every chunk of the kno
 fine at thousands of chunks.
 """
 import logging
+from collections.abc import Sequence
 from datetime import UTC
 
 import psycopg
@@ -16,7 +17,14 @@ from agent_runtime.knowledge.embedding import EmbeddingPort, EmbeddingUnavailabl
 from agent_runtime.knowledge.filters import FilterError, compile_filter
 from agent_runtime.knowledge.metadata import named_metadata
 from agent_runtime.knowledge.repository import load_fields
-from agent_runtime.knowledge.schemas import KnowledgeUnavailable, Record, RetrievalRequest, RetrievalResult
+from agent_runtime.knowledge.schemas import (
+    KnowledgeUnavailable,
+    MetadataCondition,
+    MetadataField,
+    Record,
+    RetrievalRequest,
+    RetrievalResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +59,9 @@ class PgKnowledge:
         self._embedding = embedding
         self._timeout_ms = int(timeout_ms)
 
-    def retrieve(self, request: RetrievalRequest) -> RetrievalResult | KnowledgeUnavailable:
+    def retrieve(self, request: RetrievalRequest, *, required: MetadataCondition | None = None
+                 ) -> RetrievalResult | KnowledgeUnavailable:
+        """``required`` is the binding's own condition, ANDed with the caller's; a bad one is a misconfiguration."""
         vector = self._embed_query(request.query)
         setting = request.retrieval_setting
         try:
@@ -62,11 +72,15 @@ class PgKnowledge:
                 if model is None:
                     return KnowledgeUnavailable("not_found")
                 fields = load_fields(session, request.knowledge_id)
+                try:
+                    pinned = compile_filter(required, fields, prefix="rf")
+                except FilterError:
+                    return KnowledgeUnavailable("invalid_binding")
                 predicate = compile_filter(request.metadata_condition, fields)
                 semantic = not isinstance(vector, EmbeddingUnavailable) and model == self._embedding.model
-                rows = session.execute(text(_SEARCH.format(predicate=predicate.sql)), {
-                    **predicate.params, "query": request.query, "kb": request.knowledge_id, "model": model,
-                    "vector": vector_literal(vector) if semantic else None,
+                rows = session.execute(text(_SEARCH.format(predicate=f"{pinned.sql} AND {predicate.sql}")), {
+                    **pinned.params, **predicate.params, "query": request.query, "kb": request.knowledge_id,
+                    "model": model, "vector": vector_literal(vector) if semantic else None,
                     "weight": setting.semantic_weight if semantic else 0.0,
                     "threshold": setting.score_threshold, "top_k": setting.top_k,
                     "per_doc": setting.max_chunks_per_doc}).mappings().all()
@@ -78,6 +92,25 @@ class PgKnowledge:
         except (DisconnectionError, InterfaceError, TimeoutError):
             return KnowledgeUnavailable("dependency_down")
         return RetrievalResult(records=tuple(self._record(row, fields) for row in rows), degraded=not semantic)
+
+    def fields(self, kb_ids: Sequence[str]) -> dict[str, tuple[MetadataField, ...]]:
+        """Metadata fields per knowledge base in one read; an unreachable database yields none (tools still run)."""
+        if not kb_ids:
+            return {}
+        try:
+            with self._uow.begin() as session:
+                session.execute(text(f"SET LOCAL statement_timeout = {self._timeout_ms}"))
+                rows = session.execute(text(
+                    "SELECT kb_id, id, name, type, filterable, label FROM knowledge.metadata_fields "
+                    "WHERE kb_id = ANY(:kbs) ORDER BY kb_id, ordinal, name"), {"kbs": list(kb_ids)}).mappings().all()
+        except (OperationalError, DisconnectionError, InterfaceError, TimeoutError):
+            logger.warning("knowledge fields unavailable")
+            return {}
+        found: dict[str, list[MetadataField]] = {}
+        for row in rows:
+            found.setdefault(row["kb_id"], []).append(MetadataField.model_validate(
+                {key: row[key] for key in ("id", "name", "type", "filterable", "label")}))
+        return {kb_id: tuple(items) for kb_id, items in found.items()}
 
     def _embed_query(self, query: str):
         if self._embedding is None:

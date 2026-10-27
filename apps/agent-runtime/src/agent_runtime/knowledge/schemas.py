@@ -64,4 +64,4 @@ class RetrievalResult(ContractModel):
 
 @dataclass(frozen=True)
 class KnowledgeUnavailable:
-    reason: Literal["not_found", "timeout", "dependency_down"]
+    reason: Literal["not_found", "timeout", "dependency_down", "invalid_binding"]

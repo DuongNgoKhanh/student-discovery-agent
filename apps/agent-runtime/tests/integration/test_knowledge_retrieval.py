@@ -4,7 +4,7 @@ from sqlalchemy import text
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork
 from agent_runtime.knowledge.filters import FilterError
 from agent_runtime.knowledge.retrieval import PgKnowledge
-from agent_runtime.knowledge.schemas import KnowledgeUnavailable, RetrievalRequest
+from agent_runtime.knowledge.schemas import KnowledgeUnavailable, MetadataCondition, RetrievalRequest
 from tests.helpers.knowledge import knowledge_rig, role_engine
 
 pytestmark = pytest.mark.integration
@@ -163,3 +163,33 @@ def test_keyword_score_rewards_covering_the_question_not_repeating_words(rig):
     # The list repeats "tốt nghiệp THPT" but never mentions tuition; the THPT section covers every word.
     assert top.content.startswith("Quản trị kinh doanh — Đã tốt nghiệp THPT")
     assert 0 < top.score <= 1
+
+
+OPEN = {"retrieval_setting": {"top_k": 4, "score_threshold": 0, "semantic_weight": 0}}
+DA_NANG = MetadataCondition.model_validate(
+    {"conditions": [{"name": "province", "comparison_operator": "is", "value": "Đà Nẵng"}]})
+
+
+def test_required_condition_is_anded_with_the_callers_filter(rig):
+    def search(required, **extra):
+        return rig.knowledge.retrieve(RetrievalRequest.model_validate(
+            {"knowledge_id": "kb1", "query": "ngành học phí"} | OPEN | extra), required=required)
+
+    assert {record.metadata["document_id"] for record in search(None).records} == {"cntt", "ctxh"}
+    assert {record.metadata["document_id"] for record in search(DA_NANG).records} == {"ctxh"}
+    both = search(DA_NANG, metadata_condition={"conditions": [
+        {"name": "houses", "comparison_operator": "contains", "value": "house_i"}]})
+    assert both.records == ()
+
+
+def test_a_bad_required_condition_is_a_binding_problem_not_a_caller_error(rig):
+    bad = MetadataCondition.model_validate({"conditions": [{"name": "nope", "comparison_operator": "is", "value": "x"}]})
+    result = rig.knowledge.retrieve(RetrievalRequest.model_validate({"knowledge_id": "kb1", "query": "ngành"}),
+                                    required=bad)
+    assert result == KnowledgeUnavailable("invalid_binding")
+
+
+def test_fields_are_read_for_several_knowledge_bases_at_once(rig):
+    fields = rig.knowledge.fields(["kb1", "missing"])
+    assert [field.name for field in fields["kb1"]] == ["houses", "province"]
+    assert "missing" not in fields and rig.knowledge.fields([]) == {}
