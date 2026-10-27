@@ -1,7 +1,11 @@
+import threading
+import time
+
 import pytest
 from sqlalchemy import text
 
 from agent_runtime.knowledge.fake import FakeEmbedding
+from agent_runtime.knowledge.indexer import IndexReport
 from tests.helpers.knowledge import knowledge_rig
 
 pytestmark = pytest.mark.integration
@@ -109,3 +113,43 @@ def test_a_knowledge_base_on_another_model_fails_loudly(test_database):
         assert rig.indexer.run_once().failed == 1
     finally:
         rig.dispose()
+
+
+def test_a_late_older_revision_waiting_on_the_document_lock_does_not_replace_a_newer_one(rig):
+    rig.writer.put_document("kb1", "doc1", title="T", body="# A\nbản 1")
+    rig.writer.put_document("kb1", "doc1", title="T", body="# A\nbản 2")
+    first, second = rig.indexer.claim(), rig.indexer.claim()
+    outcome = {}
+    with rig.engine.connect() as other:
+        # Another worker is mid-activation of revision 2: it holds the document lock with the switch uncommitted.
+        other.execute(text("SELECT 1 FROM knowledge.documents WHERE id = 'doc1' FOR UPDATE"))
+        other.execute(text("INSERT INTO knowledge.chunks (revision_id, ordinal, heading_path, text, chunk_hash) "
+                           "SELECT id, 0, '{}', 'bản 2', 'sha256:' || repeat('a', 64) FROM knowledge.document_revisions WHERE id = :id"),
+                      {"id": second.revision_id})
+        other.execute(text("UPDATE knowledge.documents SET active_revision_id = :id WHERE id = 'doc1'"),
+                      {"id": second.revision_id})
+        other.execute(text("UPDATE knowledge.document_revisions SET index_status = 'ready', claimed_at = NULL "
+                           "WHERE id = :id"), {"id": second.revision_id})
+        worker = threading.Thread(target=lambda: outcome.update(report=rig.indexer.index(first)))
+        worker.start()
+        time.sleep(1)  # let the older revision block on the document lock
+        other.commit()
+        worker.join(timeout=30)
+    assert state(rig) == (2, [(1, "ready"), (2, "ready")], [(2, "bản 2")])
+    assert outcome["report"].failed == 0
+
+
+def test_a_job_that_lost_its_claim_cannot_activate_or_fail_the_new_owner(rig):
+    rig.writer.put_document("kb1", "doc1", title="T", body="# A\nx")
+    stale = rig.indexer.claim()
+    with rig.engine.begin() as connection:
+        connection.execute(text("UPDATE knowledge.document_revisions SET claimed_at = clock_timestamp() "
+                                "- interval '1 hour' WHERE id = :id"), {"id": stale.revision_id})
+    assert rig.indexer.reclaim_stale() == 1
+    owner = rig.indexer.claim()
+    assert owner.revision_id == stale.revision_id and owner.claimed_at != stale.claimed_at
+    assert rig.indexer.index(stale) == IndexReport()
+    rig.indexer._fail(stale, "late failure")
+    assert state(rig) == (None, [(1, "indexing")], [])
+    assert rig.indexer.index(owner).indexed == 1
+    assert state(rig) == (1, [(1, "ready")], [(1, "x")])

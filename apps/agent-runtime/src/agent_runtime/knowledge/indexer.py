@@ -4,6 +4,7 @@ An older revision never replaces a newer active one, and a failed revision leave
 """
 import logging
 from dataclasses import dataclass, fields
+from datetime import datetime
 
 from sqlalchemy import text
 
@@ -20,7 +21,7 @@ _CLAIM = text("""
     SET index_status = 'indexing', claimed_at = clock_timestamp(), error = NULL
     FROM next, knowledge.documents d, knowledge.knowledge_bases kb
     WHERE r.id = next.id AND d.id = r.document_id AND kb.id = d.kb_id
-    RETURNING r.id AS revision_id, r.document_id, r.revision, d.kb_id, kb.embedding_model, r.title, r.body
+    RETURNING r.id AS revision_id, r.document_id, r.revision, d.kb_id, kb.embedding_model, r.title, r.body, r.claimed_at
 """)
 
 
@@ -33,6 +34,7 @@ class IndexJob:
     embedding_model: str
     title: str
     body: str
+    claimed_at: datetime
 
 
 @dataclass(frozen=True)
@@ -95,20 +97,27 @@ class IndexerService:
             self._fail(job, f"embedding {vectors.reason}")
             return IndexReport(failed=1)
         with self._uow.begin() as session:
-            claimed = session.execute(text(
-                "SELECT r.index_status, d.active_revision_id, a.revision AS active_revision "
+            locked = session.execute(text(
+                "SELECT r.index_status, r.claimed_at, d.active_revision_id "
                 "FROM knowledge.document_revisions r JOIN knowledge.documents d ON d.id = r.document_id "
-                "LEFT JOIN knowledge.document_revisions a ON a.id = d.active_revision_id "
                 "WHERE r.id = :id FOR UPDATE OF r, d"), {"id": job.revision_id}).one()
-            if claimed.index_status != "indexing":  # reclaimed and taken over by another worker
+            if locked.index_status != "indexing" or locked.claimed_at != job.claimed_at:
+                # The claim was reclaimed (and possibly re-claimed by another worker); this job no longer owns it.
+                logger.info("knowledge index dropped for revision %s: claim no longer owned", job.revision_id)
                 return IndexReport()
+            # Separate statement: under READ COMMITTED it takes a fresh snapshot after the lock wait, so a
+            # revision activated by another worker meanwhile is seen (a join in the locking query is not).
+            active_revision = (session.execute(text(
+                "SELECT revision FROM knowledge.document_revisions WHERE id = :id"),
+                {"id": locked.active_revision_id}).scalar()
+                if locked.active_revision_id is not None else None)
             if missing:
                 session.execute(text(
                     "INSERT INTO knowledge.embeddings (chunk_hash, embedding_model, embedding) "
                     "VALUES (:hash, :model, CAST(:vector AS vector)) ON CONFLICT DO NOTHING"),
                     [{"hash": draft.chunk_hash, "model": job.embedding_model, "vector": vector_literal(vector)}
                      for draft, vector in zip(missing, vectors, strict=True)])
-            if claimed.active_revision is None or job.revision >= claimed.active_revision:
+            if active_revision is None or job.revision >= active_revision:
                 session.execute(text("DELETE FROM knowledge.chunks WHERE revision_id IN "
                                      "(SELECT id FROM knowledge.document_revisions WHERE document_id = :document)"),
                                 {"document": job.document_id})
@@ -128,7 +137,8 @@ class IndexerService:
         with self._uow.begin() as session:
             session.execute(text(
                 "UPDATE knowledge.document_revisions SET index_status = 'error', error = :error, claimed_at = NULL "
-                "WHERE id = :id AND index_status = 'indexing'"), {"error": message[:500], "id": job.revision_id})
+                "WHERE id = :id AND index_status = 'indexing' AND claimed_at = :claimed_at"),
+                {"error": message[:500], "id": job.revision_id, "claimed_at": job.claimed_at})
 
     def reclaim_stale(self) -> int:
         with self._uow.begin() as session:
