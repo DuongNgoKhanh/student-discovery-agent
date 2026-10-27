@@ -53,4 +53,28 @@ describe('DocumentEditor', () => {
     expect(await screen.findByText(/đã bị sửa ở nơi khác/)).toBeInTheDocument();
     expect(mocked.putDocument).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps typed text when the same revision is refetched with a new index status', async () => {
+    const detail = (index_status: 'pending' | 'ready') => ({
+      id: 'hutech', kb_id: 'kb1', status: 'active' as const, revision: 1, updated_at: '2026-10-27T00:00:00Z', active: null,
+      latest: { revision: 1, title: 'HUTECH', body: 'cũ', source_url: null, metadata: {}, index_status, error: null, created_at: '2026-10-27T00:00:00Z' },
+    });
+    mocked.getDocument.mockResolvedValueOnce(detail('pending')).mockResolvedValue(detail('ready'));
+    renderEditor('hutech');
+    fireEvent.change(await screen.findByDisplayValue('cũ'), { target: { value: 'đang gõ dở' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Làm mới' }));
+    await waitFor(() => expect(mocked.getDocument).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('Sẵn sàng')).toBeInTheDocument());
+    expect(screen.getByLabelText('Nội dung (Markdown)')).toHaveValue('đang gõ dở');
+  });
+
+  it('asks for another id when creating over an existing document', async () => {
+    mocked.putDocument.mockRejectedValue(new ApiError({ code: 'CONFLICT_REVISION', message: 'Document revision conflict', httpStatus: 409 }));
+    renderEditor(null);
+    fireEvent.change(await screen.findByLabelText('Document ID'), { target: { value: 'hutech' } });
+    fireEvent.change(screen.getByLabelText('Tiêu đề'), { target: { value: 'HUTECH' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+    expect(await screen.findByText('Document ID đã tồn tại, hãy chọn ID khác.')).toBeInTheDocument();
+    expect(screen.queryByText(/Tải bản mới/)).not.toBeInTheDocument();
+  });
 });

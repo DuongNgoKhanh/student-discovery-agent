@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { ApiError } from '@/lib/api/errors';
 import {
   useArchiveDocument, useDocument, useFields, usePutDocument, useRestoreDocument, useRetryRevision,
 } from '../hooks/use-knowledge';
+import type { DocumentDetail, MetadataField } from '../types';
 import { ErrorText } from './error-text';
 import { IndexStatusBadge } from './index-status-badge';
 import { fromFormValues, toFormValues } from './metadata-form';
@@ -28,15 +29,31 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
   const form = useForm<EditorForm>({ defaultValues: { id: '', title: '', body: '', source_url: '', metadata: {} } });
 
   const latest = document.data?.latest;
+  const resetForm = (fieldList: MetadataField[], source: DocumentDetail['latest'] | undefined) => form.reset({
+    id: docId ?? '', title: source?.title ?? '', body: source?.body ?? '', source_url: source?.source_url ?? '',
+    metadata: toFormValues(fieldList, source?.metadata ?? {}),
+  });
+
+  // Reset only when a different document/revision arrives, so refetches never discard typed text.
+  const loadedKey = useRef<string | null>(null);
   useEffect(() => {
     if (!fields.data || (docId && !latest)) return;
-    form.reset({
-      id: docId ?? '', title: latest?.title ?? '', body: latest?.body ?? '', source_url: latest?.source_url ?? '',
-      metadata: toFormValues(fields.data, latest?.metadata ?? {}),
-    });
+    const key = `${docId ?? ''}:${latest?.revision ?? ''}`;
+    if (loadedKey.current === key) return;
+    loadedKey.current = key;
+    resetForm(fields.data, latest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resetForm only closes over docId and form
   }, [fields.data, latest, docId, form]);
 
-  const conflict = save.error instanceof ApiError && save.error.httpStatus === 409 && save.error.code === 'CONFLICT_REVISION';
+  const isConflict = save.error instanceof ApiError && save.error.httpStatus === 409;
+  const conflict = isConflict && !!docId;
+  const idTaken = isConflict && !docId;
+
+  const reloadLatest = async () => {
+    save.reset();
+    const result = await document.refetch();
+    if (fields.data && result.data) resetForm(fields.data, result.data.latest);
+  };
 
   // mutate, not mutateAsync: API errors render through save.error instead of escaping as rejections.
   const submit = form.handleSubmit(values => {
@@ -87,12 +104,14 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
           ? (
             <div role="alert" className="text-sm text-red-600">
               Tài liệu đã bị sửa ở nơi khác. Nội dung của bạn chưa được lưu.{' '}
-              <button type="button" className="underline" onClick={() => { save.reset(); void document.refetch(); }}>
+              <button type="button" className="underline" onClick={() => void reloadLatest()}>
                 Tải bản mới (bỏ nội dung đang soạn)
               </button>
             </div>
           )
-          : <ErrorText error={save.error} />}
+          : idTaken
+            ? <div role="alert" className="text-sm text-red-600">Document ID đã tồn tại, hãy chọn ID khác.</div>
+            : <ErrorText error={save.error} />}
         {save.data && <p className="text-sm text-green-700">Đã lưu: revision {save.data.revision} ({save.data.outcome}).</p>}
         <Button type="submit" disabled={save.isPending}>Lưu</Button>
       </form>
