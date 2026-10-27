@@ -28,7 +28,7 @@ from agent_runtime.engine.schemas.scoring import (
 )
 from agent_runtime.engine.schemas.selector import StoppingReason
 from agent_runtime.sessions.schemas.activity import PersonalityCardBlock
-from agent_runtime.sessions.schemas.result import ShareCard
+from agent_runtime.sessions.schemas.result import HouseIdentity, ShareCard
 
 DEFINITION = sample_experience_definition(seed=7, return_dict=True)
 HOUSES = {house["house_id"]: house for house in DEFINITION["houses"]}
@@ -124,6 +124,7 @@ def test_share_card_allowlist_for_all_6_houses(house_id):
     assert share.house.mascot_ref == house["mascot_ref"]
     assert share.template_ref == SUMMARY_V1_TEMPLATE_REF
     assert share.branding.model_dump() == SUMMARY_V1_BRANDING
+    assert share.house == project_personality_card(house=house, display_name="x", is_demo=False).house
     assert share.result_id == "res_abc"
     assert share.result_revision == 2
     assert share.activity_id == "act_xyz"
@@ -156,6 +157,39 @@ def test_share_is_a_closed_allowlist_with_projection_owned_constants():
         SUMMARY_V1_BRANDING,
     )
     assert (share.result_id, share.result_revision, share.activity_id) == ("res_1", 1, "act_1")
+
+
+def test_projection_constants_are_pinned_to_summary_v1():
+    """Editing these in place would silently change summary.v1; a new projection version is required."""
+    assert SUMMARY_V1_TEMPLATE_REF == "share_summary_v1"
+    assert SUMMARY_V1_BRANDING == {"brand_ref": "ihrd", "label": "IHRD"}
+    assert SUMMARY_V1_DEMO_LABEL == "Minh họa — chưa thẩm định"
+
+
+def test_summary_share_mirrors_card_identity_and_stripped_name():
+    card, share = project_summary_v1(
+        house=HOUSES["house_e"], display_name="  Ngân  ", is_demo=True,
+        result_id="res_1", result_revision=1, activity_id="act_1",
+    )
+    assert card.display_name == share.display_name == "Ngân"
+    assert share.house == card.house
+
+
+def test_share_card_accepts_projected_house_identity():
+    identity = HouseIdentity(house_id="house_c", name="Nhà C", theme_ref="theme_c", mascot_ref="mascot_c")
+    share = project_share_card(
+        house=identity, display_name="Ngân", is_demo=False, result_id="res_1", result_revision=1, activity_id="act_1"
+    )
+    assert share.house == identity
+
+
+def test_share_card_rejects_metadata_that_cannot_make_a_card():
+    house = {**HOUSES["house_r"], "strengths": ["   "]}
+    with pytest.raises(MissingMappingError) as exc_info:
+        project_share_card(
+            house=house, display_name="Ngân", is_demo=False, result_id="res_1", result_revision=1, activity_id="act_1"
+        )
+    assert exc_info.value.code == EngineErrorCode.INVALID_HOUSE_REF
 
 
 def test_share_card_forbids_extra_or_leaked_internal_scores():
@@ -224,24 +258,6 @@ def test_project_from_scoring_result_for_all_6_houses(winning_house_id):
     assert share.display_name == "Võ Thanh Duy"
 
 
-def test_unified_project_summary_v1_with_scoring_and_definition():
-    """Tests that project_summary_v1 dispatches seamlessly when passed scoring + definition."""
-    scoring = _make_dummy_scoring(primary_house_id="house_s", is_complete=True)
-    card, share = project_summary_v1(
-        scoring=scoring,
-        definition=DEFINITION,
-        display_name="Đỗ Hoàng Long",
-        is_demo=False,
-        result_id="res_long",
-        result_revision=3,
-        activity_id="act_long",
-    )
-    assert card.house.house_id == "house_s"
-    assert card.display_name == "Đỗ Hoàng Long"
-    assert share.is_demo is False
-    assert share.demo_label is None
-
-
 def test_project_from_scoring_rejects_incomplete_result():
     """Confirms project_summary_from_result rejects scoring if is_complete is False."""
     incomplete_scoring = _make_dummy_scoring(primary_house_id="house_r", is_complete=False)
@@ -258,12 +274,13 @@ def test_project_from_scoring_rejects_incomplete_result():
 
 
 def test_project_from_scoring_rejects_missing_primary_house():
-    """Confirms rejection when scoring has no primary winning house."""
-    scoring_dict = _make_dummy_scoring(primary_house_id="house_r").model_dump()
-    scoring_dict["primary_house_id"] = None
+    """Legacy (v1) definitions complete without a winning House: no card can be made."""
+    legacy = AssessmentScoringResult(
+        schema_version="1.0", is_complete=True, stopping_reason=StoppingReason.FIXED_COVERAGE, total_answers=18
+    )
     with pytest.raises(UnsupportedDefinitionError, match="Scoring result contains no primary winning house"):
         project_summary_from_result(
-            scoring=scoring_dict,
+            scoring=legacy,
             definition=DEFINITION,
             display_name="Huy Bùi",
             is_demo=True,
@@ -271,6 +288,43 @@ def test_project_from_scoring_rejects_missing_primary_house():
             result_revision=1,
             activity_id="act_no_win",
         )
+
+
+def _from_result(scoring, definition=DEFINITION):
+    return project_summary_from_result(
+        scoring=scoring, definition=definition, display_name="Huy Bùi", is_demo=False,
+        result_id="res_1", result_revision=1, activity_id="act_1",
+    )
+
+
+def test_project_from_scoring_accepts_mapping_form():
+    card, share = _from_result(_make_dummy_scoring("house_c").model_dump())
+    assert card.house.house_id == share.house.house_id == "house_c"
+
+
+def test_project_from_scoring_mapping_form_rejects_incomplete_result():
+    with pytest.raises(EngineError, match="incomplete scoring result"):
+        _from_result(_make_dummy_scoring("house_c", is_complete=False).model_dump())
+
+
+@pytest.mark.parametrize("scoring", [
+    {**_make_dummy_scoring("house_r").model_dump(), "is_complete": "maybe"},
+    {**_make_dummy_scoring("house_r").model_dump(), "primary_house_id": None},
+    {"is_complete": True, "primary_house_id": "house_r"},
+    ["house_r"],
+    None,
+])
+def test_project_from_scoring_rejects_malformed_scoring(scoring):
+    with pytest.raises(EngineError) as exc_info:
+        _from_result(scoring)
+    assert exc_info.value.code == EngineErrorCode.INVALID_FIELD
+
+
+@pytest.mark.parametrize("definition", [{}, {"houses": None}, {"houses": 5}, None])
+def test_project_from_scoring_rejects_definition_without_houses(definition):
+    with pytest.raises(MissingMappingError) as exc_info:
+        _from_result(_make_dummy_scoring("house_r"), definition=definition)
+    assert exc_info.value.code == EngineErrorCode.INVALID_HOUSE_REF
 
 
 def test_project_from_scoring_rejects_house_not_in_definition():
@@ -329,10 +383,11 @@ def test_display_name_whitespace_normalization(raw_name, expected_name):
 
 
 @pytest.mark.parametrize("invalid_name", ["", "   ", "\t\n  ", 12345, None])
-def test_invalid_display_name_raises_value_error(invalid_name):
-    """Confirms blank or non-string display names raise ValueError."""
-    with pytest.raises(ValueError):
+def test_invalid_display_name_raises_engine_error(invalid_name):
+    """Blank or non-string names fail as an engine error, which TurnHandler maps (never a bare ValueError)."""
+    with pytest.raises(EngineError) as exc_info:
         project_personality_card(house=HOUSES["house_r"], display_name=invalid_name, is_demo=False)
+    assert exc_info.value.code == EngineErrorCode.INVALID_FIELD
 
 
 # ==============================================================================
@@ -360,6 +415,11 @@ def test_invalid_display_name_raises_value_error(invalid_name):
     lambda h: h.update(theme_ref=""),
     lambda h: h.update(mascot_ref=""),
     lambda h: h.update(strengths=123),
+    # Accepted by AssessmentHouseMetadata but not by the card contract (blank name, ':' outside OpaqueId).
+    lambda h: h.update(name="   "),
+    lambda h: h.update(theme_ref="theme:r"),
+    lambda h: h.update(mascot_ref="mascot:r"),
+    lambda h: h.update(house_id="house:r"),
 ])
 def test_missing_or_malformed_metadata_raises_missing_mapping_error(field_tamper):
     """Confirms any missing, empty, or malformed metadata fields raise MissingMappingError."""
@@ -369,14 +429,3 @@ def test_missing_or_malformed_metadata_raises_missing_mapping_error(field_tamper
         project_personality_card(house=house_copy, display_name="Trần Nam", is_demo=True)
     assert exc_info.value.code == EngineErrorCode.INVALID_HOUSE_REF
 
-
-def test_project_summary_v1_without_arguments_fails():
-    """Confirms project_summary_v1 raises MissingMappingError if neither house nor scoring is given."""
-    with pytest.raises(MissingMappingError):
-        project_summary_v1(
-            display_name="Nam",
-            is_demo=True,
-            result_id="res_err",
-            result_revision=1,
-            activity_id="act_err",
-        )
