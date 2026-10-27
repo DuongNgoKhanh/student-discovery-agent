@@ -42,11 +42,28 @@ def test_unaccented_query_finds_the_matching_document(rig):
     assert 0 < top.score <= 1
 
 
+def test_keyword_only_unaccented_query_matches_accented_text(rig):
+    result = ask(rig, "hoc phi", retrieval_setting={"top_k": 4, "score_threshold": 0, "semantic_weight": 0})
+    assert result.records[0].metadata["document_id"] == "cntt" and result.records[0].score > 0
+    rig.embedding.fail_queries = True
+    degraded = ask(rig, "hoc phi")
+    assert degraded.degraded and degraded.records[0].metadata["document_id"] == "cntt"
+    assert degraded.records[0].score > 0
+
+
 def test_metadata_filter_and_top_k(rig):
     result = ask(rig, "ngành học", metadata_condition={"conditions": [
         {"name": "houses", "comparison_operator": "contains", "value": "house_s"}]},
         retrieval_setting={"top_k": 1, "score_threshold": 0, "semantic_weight": 0.7})
     assert [record.metadata["document_id"] for record in result.records] == ["ctxh"]
+
+
+def test_top_k_limits_unfiltered_results(rig):
+    setting = {"top_k": 4, "score_threshold": 0, "semantic_weight": 0.7}
+    both = ask(rig, "ngành", retrieval_setting=setting)
+    assert {r.metadata["document_id"] for r in both.records} == {"cntt", "ctxh"}
+    one = ask(rig, "ngành", retrieval_setting=setting | {"top_k": 1})
+    assert len(one.records) == 1
 
 
 def test_only_the_active_revision_is_served_and_archive_is_immediate(rig):
@@ -64,6 +81,10 @@ def test_query_embedding_failure_degrades_to_keywords(rig):
     rig.embedding.fail_queries = True
     result = ask(rig, "công tác xã hội")
     assert result.degraded and result.records[0].metadata["document_id"] == "ctxh"
+    keyword_only = ask(rig, "công tác xã hội",
+                       retrieval_setting={"top_k": 4, "score_threshold": 0, "semantic_weight": 0})
+    # Degraded must use weight 0 (pure keyword), not the default 0.7 scaling the keyword part by 0.3.
+    assert result.records[0].score == keyword_only.records[0].score
 
 
 def test_unknown_knowledge_base_and_bad_filters(rig):
