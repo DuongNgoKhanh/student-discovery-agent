@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ZodError } from 'zod';
 import { failure } from '@/http/response';
-import { getStorageEnv, parseAuthEnv, parseProductEnv, parseStorageEnv } from '@/config/env';
+import { getStorageEnv, parseAuthEnv, parseKnowledgeEnv, parseProductEnv, parseStorageEnv } from '@/config/env';
 
 describe('parseProductEnv', () => {
   const ok = { DATABASE_URL: 'postgres://u:p@h:5432/d', SECRET_KEY: 's3cret' };
@@ -83,3 +83,20 @@ describe('lazy getters', () => {
 
 it.each(['14', '61'])('rejects unsafe access TTL %s', (value) => { expect(() => parseAuthEnv({ SECRET_KEY: 's', ACCESS_TOKEN_EXPIRE_MINUTES: value })).toThrow(); });
 it.each(['10079', '43201'])('rejects unsafe refresh TTL %s', (value) => { expect(() => parseAuthEnv({ SECRET_KEY: 's', REFRESH_TOKEN_EXPIRE_MINUTES: value })).toThrow(); });
+
+describe('knowledge env', () => {
+  it('defaults the embedding model list and signing kid', () => {
+    const env = parseKnowledgeEnv({});
+    expect(env.KNOWLEDGE_DATABASE_URL).toBeUndefined();
+    expect(env.KNOWLEDGE_EMBEDDING_MODELS).toEqual(['gemini-embedding-2']);
+    expect(env.STUDIO_RUNTIME_SIGNING_KID).toBe('studio');
+  });
+  it('splits the model list and treats blanks as unset', () => {
+    const env = parseKnowledgeEnv({ KNOWLEDGE_EMBEDDING_MODELS: ' fake-embedding , gemini-embedding-2 ', RUNTIME_INTERNAL_URL: '' });
+    expect(env.KNOWLEDGE_EMBEDDING_MODELS).toEqual(['fake-embedding', 'gemini-embedding-2']);
+    expect(env.RUNTIME_INTERNAL_URL).toBeUndefined();
+  });
+  it('rejects a malformed runtime URL', () => {
+    expect(() => parseKnowledgeEnv({ RUNTIME_INTERNAL_URL: 'not a url' })).toThrow();
+  });
+});

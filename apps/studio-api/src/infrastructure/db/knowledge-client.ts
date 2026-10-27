@@ -1,0 +1,75 @@
+import { Pool, type PoolClient } from 'pg';
+import { getKnowledgeEnv } from '@/config/env';
+import { ProductError } from '@/http/errors';
+
+export type Queryable = Pick<PoolClient, 'query'>;
+
+const globalHandle = globalThis as unknown as { __sdaKnowledgePool?: { url: string; pool: Pool } };
+
+function unavailable(): ProductError {
+  return new ProductError(503, 'SYS_UNAVAILABLE', 'Knowledge storage is unavailable', true, { kind: 'dependency_down' });
+}
+
+// Connection-level failures only; constraint or permission errors are real bugs and stay 500.
+const UNAVAILABLE_CODES = new Set(['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'ETIMEDOUT', '57P01', '57P02', '57P03', '53300']);
+
+function mapDatabaseError(error: unknown): unknown {
+  if (error instanceof ProductError) return error;
+  const code = (error as { code?: unknown })?.code;
+  if (typeof code === 'string' && (UNAVAILABLE_CODES.has(code) || code.startsWith('08'))) return unavailable();
+  return error;
+}
+
+/** Pool for the `kb_studio` role, which may write content columns of schema `knowledge` and nothing else. */
+export function getKnowledgePool(): Pool {
+  const url = getKnowledgeEnv().KNOWLEDGE_DATABASE_URL;
+  if (!url) throw new ProductError(503, 'SYS_UNAVAILABLE', 'Knowledge storage is not configured', false, { kind: 'not_configured' });
+  const current = globalHandle.__sdaKnowledgePool;
+  if (current?.url === url) return current.pool;
+  if (current) void current.pool.end().catch(() => {});
+  const pool = new Pool({ connectionString: url, max: 5, statement_timeout: 10_000 });
+  pool.on('error', (error: Error) => {
+    console.error('[knowledge-db] idle connection lost', error.message);
+  });
+  globalHandle.__sdaKnowledgePool = { url, pool };
+  return pool;
+}
+
+export async function closeKnowledgePool(): Promise<void> {
+  const current = globalHandle.__sdaKnowledgePool;
+  globalHandle.__sdaKnowledgePool = undefined;
+  await current?.pool.end();
+}
+
+async function connect(): Promise<PoolClient> {
+  try {
+    return await getKnowledgePool().connect();
+  } catch (error) {
+    throw error instanceof ProductError ? error : unavailable();
+  }
+}
+
+export async function withKnowledgeClient<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await connect();
+  try {
+    return await fn(client);
+  } catch (error) {
+    throw mapDatabaseError(error);
+  } finally {
+    client.release();
+  }
+}
+
+export async function inKnowledgeTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  return withKnowledgeClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const result = await fn(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    }
+  });
+}

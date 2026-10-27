@@ -60,6 +60,11 @@
         "ACTIVE_RELEASE_CONFLICT"
       ]
     },
+    "CONFLICT_ALREADY_EXISTS": {
+      "description": "A resource with the same identifier already exists.",
+      "ui_action": "Choose a different identifier or open the existing resource.",
+      "aliases": []
+    },
     "CONFLICT_EMAIL_EXISTS": {
       "description": "Conflict email exists.",
       "ui_action": "Choose another email or sign in to the existing account.",
@@ -73,6 +78,16 @@
       "aliases": [
         "IDEMPOTENCY_KEY_COLLISION"
       ]
+    },
+    "CONFLICT_INVALID_STATE": {
+      "description": "The resource is not in a state that allows this action.",
+      "ui_action": "Reload the resource and check its current state before retrying.",
+      "aliases": []
+    },
+    "CONFLICT_RESOURCE_IN_USE": {
+      "description": "The resource is still referenced and cannot be removed.",
+      "ui_action": "Remove the references listed in details first.",
+      "aliases": []
     },
     "CONFLICT_RESPONSE_NOT_CANCELLABLE": {
       "description": "The response already completed or failed and can no longer be cancelled.",
