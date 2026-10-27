@@ -1,6 +1,9 @@
-"""Hybrid retrieval over each document's active revision: cosine similarity blended with keyword rank.
+"""Hybrid retrieval over each document's active revision: cosine similarity blended with keyword coverage.
 
-v1 scores every chunk of the knowledge base (no HNSW), which is fine at thousands of chunks.
+Keyword score = share of the question's distinct (unaccented) words found in the chunk, heading included, so a
+chunk that repeats one term cannot outrank one that answers the whole question. Results are chunks: at most
+max_chunks_per_doc per document, top_k overall. v1 scores every chunk of the knowledge base (no HNSW), which is
+fine at thousands of chunks.
 """
 import logging
 from datetime import UTC
@@ -19,24 +22,26 @@ logger = logging.getLogger(__name__)
 
 _SEARCH = """
     WITH q AS (
-        SELECT CAST(replace(plainto_tsquery('simple', knowledge.immutable_unaccent(:query))::text, ' & ', ' | ')
-                    AS tsquery) AS tsq,
+        SELECT tsvector_to_array(to_tsvector('simple', knowledge.immutable_unaccent(:query))) AS words,
                CAST(:vector AS vector) AS vec
     ), scored AS (
         SELECT d.id AS document_id, r.revision, r.title, r.source_url, r.metadata, r.created_at,
-               c.heading_path, c.text,
+               c.ordinal, c.heading_path, c.text,
                :weight * CASE WHEN q.vec IS NULL OR e.embedding IS NULL THEN 0
                               ELSE GREATEST(0, 1 - (e.embedding <=> q.vec)) END
-               + (1 - :weight) * (ts_rank_cd(c.tsv, q.tsq) / (ts_rank_cd(c.tsv, q.tsq) + 1)) AS score
+               + (1 - :weight) * CAST(cardinality(ARRAY(
+                     SELECT unnest(tsvector_to_array(c.tsv)) INTERSECT SELECT unnest(q.words))) AS float)
+                 / GREATEST(cardinality(q.words), 1) AS score
         FROM q, knowledge.documents d
         JOIN knowledge.document_revisions r ON r.id = d.active_revision_id
         JOIN knowledge.chunks c ON c.revision_id = r.id
         LEFT JOIN knowledge.embeddings e ON e.chunk_hash = c.chunk_hash AND e.embedding_model = :model
         WHERE d.kb_id = :kb AND d.status = 'active' AND {predicate}
-    ), best AS (
-        SELECT DISTINCT ON (document_id) * FROM scored ORDER BY document_id, score DESC
+    ), ranked AS (
+        SELECT *, row_number() OVER (PARTITION BY document_id ORDER BY score DESC, ordinal) AS place FROM scored
     )
-    SELECT * FROM best WHERE score > 0 AND score >= :threshold ORDER BY score DESC, document_id LIMIT :top_k
+    SELECT * FROM ranked WHERE place <= :per_doc AND score > 0 AND score >= :threshold
+    ORDER BY score DESC, document_id, ordinal LIMIT :top_k
 """
 
 
@@ -63,7 +68,8 @@ class PgKnowledge:
                     **predicate.params, "query": request.query, "kb": request.knowledge_id, "model": model,
                     "vector": vector_literal(vector) if semantic else None,
                     "weight": setting.semantic_weight if semantic else 0.0,
-                    "threshold": setting.score_threshold, "top_k": setting.top_k}).mappings().all()
+                    "threshold": setting.score_threshold, "top_k": setting.top_k,
+                    "per_doc": setting.max_chunks_per_doc}).mappings().all()
         except OperationalError as error:
             reason = "timeout" if isinstance(error.orig, psycopg.errors.QueryCanceled) else "dependency_down"
             return KnowledgeUnavailable(reason)
@@ -85,7 +91,7 @@ class PgKnowledge:
     @staticmethod
     def _record(row, fields) -> Record:
         metadata = named_metadata(fields, row["metadata"]) | {
-            "document_id": row["document_id"], "revision": row["revision"],
+            "document_id": row["document_id"], "revision": row["revision"], "chunk": row["ordinal"],
             "updated_at": row["created_at"].astimezone(UTC).isoformat().replace("+00:00", "Z")}
         if row["source_url"]:
             metadata["source_url"] = row["source_url"]

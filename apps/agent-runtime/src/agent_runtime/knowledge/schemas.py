@@ -37,9 +37,10 @@ class MetadataCondition(ContractModel):
 
 
 class RetrievalSetting(ContractModel):
-    top_k: Annotated[int, Field(strict=True, ge=1, le=20)] = 4
+    top_k: Annotated[int, Field(strict=True, ge=1, le=20)] = 4  # chunks, not documents
     score_threshold: Annotated[float, Field(ge=0, le=1)] = 0.0
     semantic_weight: Annotated[float, Field(ge=0, le=1)] = 0.7
+    max_chunks_per_doc: Annotated[int, Field(strict=True, ge=1, le=10)] = 3
 
 
 class RetrievalRequest(ContractModel):

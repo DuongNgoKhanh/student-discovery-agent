@@ -292,9 +292,11 @@ paths:
         - Knowledge
       summary: Tìm kiếm trong knowledge base (hình dạng External Knowledge API của Dify)
       description: >-
-        Tìm kết hợp vector + full-text trên revision đang active của từng document, lọc theo metadata
-        (chỉ field filterable). Mỗi document trả tối đa một record. degraded=true khi không embed được câu hỏi
-        (chỉ dùng điểm từ khoá). Ví dụ đầy đủ ở contracts/fixtures/knowledge-retrieval.json.
+        Tìm kết hợp vector + từ khoá trên revision đang active của từng document, lọc theo metadata
+        (chỉ field filterable). Mỗi record là một chunk; top_k đếm theo chunk, mỗi document tối đa
+        max_chunks_per_doc chunk. Điểm từ khoá là tỉ lệ từ (không dấu) của câu hỏi có trong chunk, kể cả heading.
+        degraded=true khi không embed được câu hỏi (chỉ dùng điểm từ khoá).
+        Ví dụ đầy đủ ở contracts/fixtures/knowledge-retrieval.json.
       requestBody:
         required: true
         content:
@@ -313,6 +315,7 @@ paths:
                     top_k: {type: integer, minimum: 1, maximum: 20, default: 4}
                     score_threshold: {type: number, minimum: 0, maximum: 1, default: 0}
                     semantic_weight: {type: number, minimum: 0, maximum: 1, default: 0.7}
+                    max_chunks_per_doc: {type: integer, minimum: 1, maximum: 10, default: 3}
                 metadata_condition:
                   type: object
                   additionalProperties: false

@@ -123,3 +123,43 @@ def test_stored_data_that_cannot_be_cast_is_a_filter_error(rig):
     with pytest.raises(FilterError):
         ask(rig, "hoc phi", metadata_condition={"logical_operator": "and", "conditions": [
             {"name": "when", "comparison_operator": "after", "value": "2026-01-01"}]})
+
+
+TUITION = """# Danh sách ngành
+- Quản trị kinh doanh: Đã tốt nghiệp THPT, Đã tốt nghiệp Trung cấp
+- Kế toán: Đã tốt nghiệp THPT, Đã tốt nghiệp Trung cấp
+- Marketing: Đã tốt nghiệp THPT, Đã tốt nghiệp Trung cấp
+
+# Quản trị kinh doanh — Đã tốt nghiệp THPT
+- Học phí: 500.000 đ/tín chỉ
+
+# Quản trị kinh doanh — Đã tốt nghiệp Trung cấp
+- Học phí: 500.000 đ/tín chỉ
+
+# Quản trị kinh doanh — Đã tốt nghiệp Cao đẳng
+- Học phí: 500.000 đ/tín chỉ
+"""
+KEYWORDS_ONLY = {"top_k": 10, "score_threshold": 0, "semantic_weight": 0}
+
+
+def index_tuition(rig):
+    rig.writer.put_document("kb1", "tuition", title="Trường C", body=TUITION)
+    rig.indexer.run_once()
+
+
+def test_a_document_returns_several_chunks_up_to_the_per_document_limit(rig):
+    index_tuition(rig)
+    result = ask(rig, "học phí quản trị kinh doanh", retrieval_setting=KEYWORDS_ONLY | {"max_chunks_per_doc": 2})
+    tuition = [record for record in result.records if record.metadata["document_id"] == "tuition"]
+    assert len(tuition) == 2
+    assert len({record.metadata["chunk"] for record in tuition}) == 2
+    assert len(ask(rig, "học phí quản trị kinh doanh", retrieval_setting=KEYWORDS_ONLY | {
+        "max_chunks_per_doc": 3, "top_k": 2}).records) == 2  # top_k counts chunks, not documents
+
+
+def test_keyword_score_rewards_covering_the_question_not_repeating_words(rig):
+    index_tuition(rig)
+    top = ask(rig, "hoc phi quan tri kinh doanh da tot nghiep THPT", retrieval_setting=KEYWORDS_ONLY).records[0]
+    # The list repeats "tốt nghiệp THPT" but never mentions tuition; the THPT section covers every word.
+    assert top.content.startswith("Quản trị kinh doanh — Đã tốt nghiệp THPT")
+    assert 0 < top.score <= 1
