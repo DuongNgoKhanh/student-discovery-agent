@@ -39,5 +39,5 @@ export const useArchiveDocument = () => useKnowledgeWrite(knowledgeApi.archiveDo
 export const useRestoreDocument = () => useKnowledgeWrite(knowledgeApi.restoreDocument);
 export const useRetryRevision = () => useKnowledgeWrite(knowledgeApi.retryRevision);
 export const useCommitImport = () => useKnowledgeWrite(knowledgeApi.commitImport);
-export const usePreviewImport = () => useMutation({ mutationFn: knowledgeApi.previewImport });
-export const useSearchKnowledge = () => useMutation({ mutationFn: knowledgeApi.search });
+export const usePreviewImport = () => useMutation({ mutationFn: (vars: Parameters<typeof knowledgeApi.previewImport>[0]) => knowledgeApi.previewImport(vars) });
+export const useSearchKnowledge = () => useMutation({ mutationFn: (vars: Parameters<typeof knowledgeApi.search>[0]) => knowledgeApi.search(vars) });

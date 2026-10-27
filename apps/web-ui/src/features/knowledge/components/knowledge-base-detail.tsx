@@ -7,6 +7,8 @@ import { AgentTab } from './agent-tab';
 import { DocumentsTab } from './documents-tab';
 import { ErrorText } from './error-text';
 import { FieldsTab } from './fields-tab';
+import { ImportTab } from './import-tab';
+import { SearchTab } from './search-tab';
 
 const TABS = [
   ['documents', 'Documents'], ['fields', 'Fields'], ['import', 'Import'], ['search', 'Thử tìm kiếm'], ['agent', 'Dùng cho agent'],
@@ -31,6 +33,8 @@ export function KnowledgeBaseDetail({ kb }: { kb: string }) {
       </div>
       {tab === 'documents' && <DocumentsTab kb={kb} />}
       {tab === 'fields' && <FieldsTab kb={kb} />}
+      {tab === 'import' && <ImportTab kb={kb} />}
+      {tab === 'search' && <SearchTab kb={kb} />}
       {tab === 'agent' && <AgentTab kb={kb} />}
     </>
   );
