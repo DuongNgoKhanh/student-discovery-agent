@@ -2,15 +2,19 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { PageHeader } from '@/components/shared/page-header';
-import { DocumentEditor } from '@/features/knowledge';
+import { ArrowLeft } from 'lucide-react';
+import { DocumentEditor, PageTitle, kbHref } from '@/features/knowledge';
 
 export default function KnowledgeDocumentPage() {
-  const { kb, doc } = useParams<{ kb: string; doc: string }>();
-  const docId = doc === 'new' ? null : decodeURIComponent(doc);
+  const params = useParams<{ kb: string; doc: string }>();
+  const kb = decodeURIComponent(params.kb);
+  const docId = params.doc === 'new' ? null : decodeURIComponent(params.doc);
   return (
     <>
-      <PageHeader title={docId ?? 'Document mới'} action={<Link className="underline text-sm" href={`/admin/knowledge/${kb}`}>← Quay lại</Link>} />
+      <Link href={kbHref(kb, 'documents')} className="mb-2 inline-flex items-center gap-1 text-13 text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="h-4 w-4" aria-hidden />Tài liệu
+      </Link>
+      <PageTitle title={docId ?? 'Tài liệu mới'} />
       <DocumentEditor kb={kb} docId={docId} />
     </>
   );

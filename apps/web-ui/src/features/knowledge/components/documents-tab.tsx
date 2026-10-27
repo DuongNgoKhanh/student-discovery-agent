@@ -7,11 +7,10 @@ import { ErrorText } from './error-text';
 import { IndexStatusBadge } from './index-status-badge';
 
 export function DocumentsTab({ kb }: { kb: string }) {
-  const { data, isLoading, error, refetch, isFetching } = useDocuments(kb);
+  const { data, isLoading, error, refetch, isFetching } = useDocuments(kb, { limit: 100 }, { pollWhilePending: true });
   return (
     <div className="space-y-3">
       <div className="flex gap-2">
-        <Button asChild><Link href={`/admin/knowledge/${kb}/documents/new`}>Tạo document</Link></Button>
         <Button variant="outline" onClick={() => void refetch()} disabled={isFetching}>Làm mới</Button>
       </div>
       {isLoading && <p>Đang tải...</p>}
@@ -19,7 +18,7 @@ export function DocumentsTab({ kb }: { kb: string }) {
       <table className="w-full text-sm">
         <thead><tr className="text-left"><th>Tiêu đề</th><th>ID</th><th>Index</th><th>Agent dùng</th><th>Trạng thái</th><th>Cập nhật</th></tr></thead>
         <tbody>
-          {data?.map(doc => (
+          {data?.items.map(doc => (
             <tr key={doc.id} className="border-t">
               <td><Link className="underline" href={`/admin/knowledge/${kb}/documents/${doc.id}`}>{doc.title}</Link></td>
               <td>{doc.id}</td>
@@ -31,7 +30,7 @@ export function DocumentsTab({ kb }: { kb: string }) {
           ))}
         </tbody>
       </table>
-      {data?.length === 0 && <p>Chưa có document nào.</p>}
+      {data?.items.length === 0 && <p>Chưa có document nào.</p>}
     </div>
   );
 }

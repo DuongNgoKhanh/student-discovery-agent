@@ -1,4 +1,4 @@
-import { unwrap } from './response';
+import { unwrapWithMeta } from './response';
 
 const BASE = '/api/v1';
 
@@ -35,7 +35,7 @@ async function renewSession(): Promise<boolean> {
  * Unwraps the envelope. `path` is the part after /api/v1, e.g. 'me', 'admin/users?page=1'.
  * On AUTH_TOKEN_EXPIRED for an authenticated request: refresh once, then retry once with the same body.
  */
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function requestWithMeta<T, M>(method: string, path: string, body?: unknown) {
   const serialized = body !== undefined ? JSON.stringify(body) : undefined;
   const send = () =>
     fetch(`${BASE}/${path}`, {
@@ -53,11 +53,16 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (expired && (await refreshSession())) {
     res = await send();
   }
-  return unwrap<T>(res);
+  return unwrapWithMeta<T, M>(res);
 }
+
+const request = async <T>(method: string, path: string, body?: unknown): Promise<T> =>
+  (await requestWithMeta<T, unknown>(method, path, body)).data;
 
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
+  /** GET that also returns the envelope `meta` (pagination). */
+  getWithMeta: <T, M = unknown>(path: string) => requestWithMeta<T, M>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
