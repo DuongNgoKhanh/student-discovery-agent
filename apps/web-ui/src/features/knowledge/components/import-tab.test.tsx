@@ -40,4 +40,43 @@ describe('ImportTab', () => {
     expect(body.idempotency_key).toMatch(/^[A-Za-z0-9][A-Za-z0-9._-]*$/);
     expect(await screen.findByText(/Tạo 1/)).toBeInTheDocument();
   });
+
+  it('drops the old preview when the selected file changes', async () => {
+    mocked.previewImport.mockResolvedValue({ rows: [
+      { row: 1, source: 'a.md', document_id: 'a', action: 'create', expected_revision: 0, errors: [], payload },
+    ] });
+    render(<QueryClientProvider client={new QueryClient()}><ImportTab kb="kb1" /></QueryClientProvider>);
+
+    const input = screen.getByLabelText('File Markdown/TXT');
+    fireEvent.change(input, { target: { files: [new File(['# A'], 'a.md')] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+    expect(await screen.findByRole('button', { name: 'Ghi 1 dòng' })).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { files: [new File(['# B'], 'b.md')] } });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Ghi 1 dòng' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('forgets the column mapping when a different CSV is loaded', async () => {
+    mocked.previewImport.mockResolvedValue({ rows: [] });
+    render(<QueryClientProvider client={new QueryClient()}><ImportTab kb="kb1" /></QueryClientProvider>);
+    fireEvent.click(screen.getByLabelText('CSV'));
+
+    const first = 'id,title,body\n1,A,B';
+    fireEvent.change(screen.getByLabelText('File CSV'), { target: { files: [new File([first], 'one.csv')] } });
+    fireEvent.change(await screen.findByLabelText('document_id'), { target: { value: 'id' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+    await waitFor(() => expect(mocked.previewImport).toHaveBeenCalledWith({
+      kb: 'kb1', body: { kind: 'csv', content: first, mapping: { document_id: 'id', metadata: {} } },
+    }));
+
+    const second = 'ma,ten\n1,A';
+    fireEvent.change(screen.getByLabelText('File CSV'), { target: { files: [new File([second], 'two.csv')] } });
+    await waitFor(() => expect(screen.getByLabelText('document_id')).toHaveValue(''));
+    expect(screen.getByLabelText('document_id')).toHaveDisplayValue('(không map)');
+    fireEvent.change(screen.getByLabelText('title'), { target: { value: 'ten' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Xem trước' }));
+    await waitFor(() => expect(mocked.previewImport).toHaveBeenCalledTimes(2));
+    expect(mocked.previewImport.mock.calls[1]![0].body).toEqual({ kind: 'csv', content: second, mapping: { title: 'ten', metadata: {} } });
+  });
 });
