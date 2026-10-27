@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Knowledge Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
+<style>
+/* Prototype nội bộ, chỉ chạy local. Màu theo agent-chat lab (nhận diện IHRD). */
+:root{
+  --blue:#123493; --red:#e9282b; --green:#047857; --green-bg:#ecfdf5; --amber:#8a5a09; --amber-bg:#fffaf0;
+  --dark:#101828; --text:#344054; --muted:#667085; --light:#f6f9ff; --bd:#dfe8f8; --white:#fff; --tint:#eef3ff;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--light);color:var(--text);font:14px/1.5 "Be Vietnam Pro",system-ui,sans-serif}
+button,input,textarea,select{font:inherit}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 18px;background:var(--white);border-bottom:1px solid var(--bd)}
+header h1{font-size:1rem;margin:0;color:var(--dark)}
+.app{display:grid;grid-template-columns:minmax(300px,1fr) minmax(380px,1.3fr) minmax(320px,1fr);height:calc(100vh - 58px)}
+@media (max-width:1100px){.app{grid-template-columns:1fr;height:auto}}
+section{overflow:auto;padding:14px 16px;border-right:1px solid var(--bd)}
+section:last-child{border-right:0;background:var(--white)}
+h2{font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:4px 0 10px}
+.btn{cursor:pointer;border-radius:7px;padding:6px 11px;font-size:.78rem;font-weight:700;background:var(--white);color:var(--blue);border:2px solid rgba(18,52,147,.3)}
+.btn:hover:not(:disabled){background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn.danger{color:var(--red);border-color:rgba(233,40,43,.35)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{font-family:var(--mono);font-size:.7rem;padding:2px 8px;border-radius:99px;background:var(--tint);color:var(--blue);white-space:nowrap}
+.pill.ok{background:var(--green-bg);color:var(--green)}.pill.warn{background:var(--amber-bg);color:var(--amber)}
+.pill.err{background:#fef2f2;color:var(--red)}.pill.off{background:#f2f4f7;color:var(--muted)}
+.card{background:var(--white);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;margin-bottom:8px}
+.doc{cursor:pointer}.doc:hover,.doc.sel{border-color:var(--blue)}
+.doc b{color:var(--dark);font-size:.86rem}
+.small{font-size:.75rem;color:var(--muted)}
+.mono{font-family:var(--mono);font-size:.74rem}
+label{display:flex;flex-direction:column;gap:3px;font-size:.74rem;color:var(--muted);margin-bottom:8px}
+input,select,textarea{border:1px solid var(--bd);border-radius:7px;padding:6px 8px;color:var(--dark);background:var(--white);min-width:0}
+textarea{min-height:120px;font-family:var(--mono);font-size:.76rem;resize:vertical}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.cond{display:grid;grid-template-columns:1fr 1fr 1.3fr auto;gap:6px;margin-bottom:6px}
+.result .content{white-space:pre-wrap;color:var(--dark);margin:6px 0}
+.log{border-bottom:1px solid var(--bd);padding:7px 0}
+.log summary{cursor:pointer;display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:.74rem}
+.log pre{white-space:pre-wrap;word-break:break-word;font-size:.7rem;background:var(--light);padding:8px;border-radius:6px;max-height:280px;overflow:auto}
+.status-2{color:var(--green)}.status-4{color:var(--amber)}.status-5{color:var(--red)}
+.empty{color:var(--muted);font-size:.8rem;padding:10px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Knowledge Lab</h1>
+  <span id="mode" class="pill">…</span>
+  <span id="kb" class="small"></span>
+  <span class="row" style="margin-left:auto">
+    <button class="btn" id="seed">Nạp demo</button>
+    <button class="btn primary" id="index">Chạy indexer</button>
+    <button class="btn" id="retry">Retry lỗi</button>
+    <button class="btn" id="refresh">Làm mới</button>
+  </span>
+</header>
+<div class="app">
+  <section>
+    <h2>Documents</h2>
+    <div id="docs"></div>
+    <h2 style="margin-top:16px">Thêm / sửa document</h2>
+    <form id="docForm">
+      <label>document_id<input name="document_id" required pattern="[A-Za-z0-9][A-Za-z0-9._-]*" placeholder="demo_school_d"></label>
+      <label>title<input name="title" required></label>
+      <label>source_url<input name="source_url" placeholder="https://…"></label>
+      <label>body (markdown)<textarea name="body" placeholder="# Giới thiệu&#10;…"></textarea></label>
+      <div id="metaFields"></div>
+      <div class="row"><button class="btn primary" type="submit">Lưu (tạo revision)</button>
+        <button class="btn" type="button" id="newDoc">Document mới</button>
+        <button class="btn danger" type="button" id="archive">Archive</button></div>
+    </form>
+  </section>
+  <section>
+    <h2>Tìm kiếm</h2>
+    <label>Đường gọi
+      <select id="route">
+        <option value="/rt/knowledge/retrieval">Endpoint runtime thật (ký như Product BFF)</option>
+        <option value="/lab/search">In-process trong lab (embedding của lab)</option>
+      </select></label>
+    <label>knowledge_id<input id="kbId" value="kb_ihrd_demo"></label>
+    <label>query<input id="query" value="học phí công nghệ thông tin"></label>
+    <div class="grid3">
+      <label>top_k<input id="topK" type="number" min="1" max="20" value="4"></label>
+      <label>score_threshold<input id="threshold" type="number" min="0" max="1" step="0.05" value="0"></label>
+      <label>semantic_weight<input id="weight" type="number" min="0" max="1" step="0.1" value="0.7"></label>
+    </div>
+    <div class="row" style="margin-bottom:6px"><span class="small">Điều kiện lọc</span>
+      <select id="logical"><option>and</option><option>or</option></select>
+      <button class="btn" type="button" id="addCond">+ điều kiện</button></div>
+    <div id="conds"></div>
+    <div class="row" style="margin:8px 0 14px"><button class="btn primary" id="search">Tìm</button>
+      <span class="small">Thử: gõ không dấu, lọc houses contains house_s, field không tồn tại (422), knowledge_id sai (404).</span></div>
+    <div id="results"></div>
+  </section>
+  <section>
+    <h2>Log request</h2>
+    <div class="row" style="margin-bottom:8px"><button class="btn" id="clearLog">Xoá log</button></div>
+    <div id="log"></div>
+  </section>
+</div>
+<script>
+const OPERATORS = {
+  string: ["is", "is not", "contains", "not contains", "start with", "end with", "empty", "not empty"],
+  number: ["=", "≠", ">", "<", "≥", "≤", "empty", "not empty"],
+  time: ["is", "before", "after", "empty", "not empty"],
+  string_list: ["contains", "not contains", "empty", "not empty"],
+};
+const VALUELESS = new Set(["empty", "not empty"]);
+let STATE = {fields: [], documents: []}, selected = null;
+const $ = (id) => document.getElementById(id);
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+
+async function call(method, path, body) {
+  const started = performance.now();
+  let status = 0, data = null;
+  try {
+    const response = await fetch(path, {method, headers: body ? {"Content-Type": "application/json"} : {},
+                                        body: body ? JSON.stringify(body) : undefined});
+    status = response.status;
+    const raw = await response.text();
+    try { data = JSON.parse(raw); } catch { data = raw; }
+  } catch (error) { data = {error: String(error)}; }
+  log(method, path, status, Math.round(performance.now() - started), body, data);
+  return {status, data};
+}
+
+function log(method, path, status, ms, request, response) {
+  if (path === "/lab/state") return;  // refreshed after every action; keep the log readable
+  const item = document.createElement("details");
+  item.className = "log";
+  item.innerHTML = `<summary><b class="status-${String(status)[0]}">${status || "ERR"}</b>${esc(method)} ${esc(path)}<span class="small">${ms} ms</span></summary>` +
+    (request ? `<div class="small">request</div><pre>${esc(JSON.stringify(request, null, 2))}</pre>` : "") +
+    `<div class="small">response</div><pre>${esc(typeof response === "string" ? response : JSON.stringify(response, null, 2))}</pre>`;
+  $("log").prepend(item);
+}
+
+function statusPill(doc) {
+  if (doc.status === "archived") return `<span class="pill off">archived</span>`;
+  const cls = {ready: "ok", pending: "warn", indexing: "warn", error: "err"}[doc.index_status] || "";
+  return `<span class="pill ${cls}">${esc(doc.index_status)}</span>`;
+}
+
+function renderDocs() {
+  const docs = STATE.documents;
+  $("docs").innerHTML = docs.length ? docs.map((doc) => `
+    <div class="card doc ${doc.id === selected ? "sel" : ""}" data-id="${esc(doc.id)}">
+      <div class="row">${statusPill(doc)}<span class="pill">active r${doc.active_revision ?? "–"} / latest r${doc.latest_revision}</span></div>
+      <b>${esc(doc.title)}</b><div class="small mono">${esc(doc.id)}</div>
+      ${doc.error ? `<div class="small" style="color:var(--red)">${esc(doc.error)}</div>` : ""}
+    </div>`).join("") : `<div class="empty">Chưa có document. Bấm "Nạp demo".</div>`;
+  document.querySelectorAll(".doc").forEach((el) => el.onclick = () => editDoc(el.dataset.id));
+}
+
+function renderMetaFields(values = {}) {
+  $("metaFields").innerHTML = STATE.fields.map((field) => {
+    const value = values[field.name];
+    const shown = Array.isArray(value) ? value.join(", ") : (value ?? "");
+    const hint = field.type === "string_list" ? " (cách nhau bằng dấu phẩy)" : field.type === "time" ? " (YYYY-MM-DD)" : "";
+    return `<label>${esc(field.label || field.name)} · <span class="mono">${esc(field.name)}: ${field.type}${field.filterable ? ", filterable" : ""}</span>${hint}
+      <input data-field="${esc(field.name)}" data-type="${field.type}" value="${esc(shown)}"></label>`;
+  }).join("");
+}
+
+function editDoc(id) {
+  const doc = STATE.documents.find((item) => item.id === id);
+  selected = id;
+  const form = $("docForm");
+  form.document_id.value = doc.id; form.title.value = doc.title || ""; form.source_url.value = doc.source_url || "";
+  form.body.value = doc.body || "";
+  renderMetaFields(doc.metadata);
+  renderDocs();
+}
+
+function readMetadata() {
+  const metadata = {};
+  document.querySelectorAll("#metaFields input").forEach((input) => {
+    const raw = input.value.trim();
+    if (!raw) return;
+    const type = input.dataset.type;
+    metadata[input.dataset.field] = type === "number" ? Number(raw)
+      : type === "string_list" ? raw.split(",").map((item) => item.trim()).filter(Boolean) : raw;
+  });
+  return metadata;
+}
+
+function addCondition(preset = {}) {
+  const row = document.createElement("div");
+  row.className = "cond";
+  const fieldOptions = STATE.fields.map((field) => `<option value="${esc(field.name)}">${esc(field.name)}${field.filterable ? "" : " (không filterable)"}</option>`).join("");
+  row.innerHTML = `<select class="f">${fieldOptions}<option value="khong_ton_tai">khong_ton_tai (test 422)</option></select>
+    <select class="op"></select><input class="v" placeholder="giá trị"><button class="btn danger" type="button">×</button>`;
+  const fieldSelect = row.querySelector(".f"), opSelect = row.querySelector(".op"), valueInput = row.querySelector(".v");
+  const syncOps = () => {
+    const type = STATE.fields.find((field) => field.name === fieldSelect.value)?.type || "string";
+    opSelect.innerHTML = OPERATORS[type].map((op) => `<option>${esc(op)}</option>`).join("");
+    row.dataset.type = type;
+  };
+  fieldSelect.onchange = syncOps;
+  opSelect.onchange = () => valueInput.disabled = VALUELESS.has(opSelect.value);
+  row.querySelector("button").onclick = () => row.remove();
+  if (preset.name) fieldSelect.value = preset.name;
+  syncOps();
+  if (preset.op) opSelect.value = preset.op;
+  if (preset.value) valueInput.value = preset.value;
+  $("conds").append(row);
+}
+
+function readConditions() {
+  const conditions = [...document.querySelectorAll("#conds .cond")].map((row) => {
+    const op = row.querySelector(".op").value, raw = row.querySelector(".v").value.trim();
+    const condition = {name: row.querySelector(".f").value, comparison_operator: op};
+    if (!VALUELESS.has(op)) condition.value = row.dataset.type === "number" ? Number(raw) : raw;
+    return condition;
+  });
+  return conditions.length ? {logical_operator: $("logical").value, conditions} : undefined;
+}
+
+function renderResults(status, data) {
+  if (status !== 200) {
+    const error = data?.error?.code ? `${data.error.code}: ${data.error.message}` : JSON.stringify(data?.error ?? data);
+    $("results").innerHTML = `<div class="card" style="border-color:var(--red)"><b>HTTP ${status}</b><div class="mono">${esc(error)}</div></div>`;
+    return;
+  }
+  const result = data.data ?? data;  // the runtime wraps it in an envelope, the lab path does not
+  const records = result.records || [];
+  $("results").innerHTML = `<div class="row" style="margin-bottom:8px"><span class="pill">${records.length} record</span>
+    ${result.degraded ? `<span class="pill warn">degraded: chỉ tìm theo từ khoá</span>` : `<span class="pill ok">vector + từ khoá</span>`}</div>` +
+    (records.length ? records.map((record) => `<div class="card result">
+      <div class="row"><span class="pill ok">score ${record.score}</span><b>${esc(record.title)}</b></div>
+      <div class="content">${esc(record.content)}</div>
+      <div class="small mono">${esc(JSON.stringify(record.metadata))}</div></div>`).join("")
+     : `<div class="empty">Không có kết quả vượt ngưỡng.</div>`);
+}
+
+async function refresh() {
+  const {status, data} = await call("GET", "/lab/state");
+  if (status !== 200) { $("mode").textContent = "lab lỗi"; $("mode").className = "pill err"; return; }
+  STATE = data;
+  $("mode").textContent = `embedding ${data.mode}: ${data.lab_embedding_model}`;
+  $("mode").className = `pill ${data.mode === "gemini" ? "ok" : "warn"}`;
+  $("kb").textContent = data.knowledge_base
+    ? `${data.knowledge_base.name} · model ${data.knowledge_base.embedding_model} · ${data.active_chunks} chunk active`
+    : "Chưa có knowledge base";
+  renderDocs();
+  if (!selected) renderMetaFields();
+  if (!$("conds").children.length && data.fields.length) addCondition({name: "houses", op: "contains", value: "house_s"});
+}
+
+$("seed").onclick = async () => { await call("POST", "/lab/seed", {}); refresh(); };
+$("index").onclick = async () => { await call("POST", "/lab/index", {}); refresh(); };
+$("retry").onclick = async () => { await call("POST", "/lab/retry", {}); refresh(); };
+$("refresh").onclick = refresh;
+$("clearLog").onclick = () => $("log").innerHTML = "";
+$("addCond").onclick = () => addCondition();
+$("newDoc").onclick = () => { selected = null; $("docForm").reset(); renderMetaFields(); renderDocs(); };
+$("archive").onclick = async () => {
+  const id = $("docForm").document_id.value.trim();
+  if (id) { await call("POST", "/lab/archive", {document_id: id}); refresh(); }
+};
+$("docForm").onsubmit = async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const {status} = await call("POST", "/lab/documents", {document_id: form.document_id.value.trim(), title: form.title.value,
+    body: form.body.value, source_url: form.source_url.value.trim(), metadata: readMetadata()});
+  if (status === 200) selected = form.document_id.value.trim();
+  refresh();
+};
+$("search").onclick = async () => {
+  const body = {knowledge_id: $("kbId").value.trim(), query: $("query").value,
+    retrieval_setting: {top_k: Number($("topK").value), score_threshold: Number($("threshold").value),
+                        semantic_weight: Number($("weight").value)}};
+  const condition = readConditions();
+  if (condition) body.metadata_condition = condition;
+  const {status, data} = await call("POST", $("route").value, body);
+  renderResults(status, data);
+};
+$("query").onkeydown = (event) => { if (event.key === "Enter") $("search").click(); };
+refresh();
+</script>
+</body>
+</html>
