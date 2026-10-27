@@ -5,11 +5,14 @@ from dataclasses import replace
 from time import monotonic_ns
 from typing import Literal
 
+from agent_runtime.agent.catalog import NO_CONTEXT, KnowledgeSearchParams, KnowledgeShowParams, ToolContext
+from agent_runtime.agent.knowledge_tools import KnowledgePort, KnowledgeTools
 from agent_runtime.agent.loop import TextDelta, run_agent_turn
 from agent_runtime.agent.model import ModelPort, UnconfiguredModel
 from agent_runtime.infrastructure.auth.caller import VerifiedCaller
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import ServiceResponse
+from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.schemas.responses import TurnResponse
 from agent_runtime.sessions.schemas.turn import ConversationTurnInput, MessageTurnInput
 from agent_runtime.sessions.services.message_turns import (
@@ -56,12 +59,13 @@ def describe_response(subject: tuple[Begun, TurnResponse]) -> dict:
 
 class TurnService:
     def __init__(self, store: TurnStore, handler: TurnHandler, *, models: Callable[[str], ModelPort] | None = None,
-                 responses: ResponseService | None = None, trace_sink=None, clock=time.monotonic):
+                 responses: ResponseService | None = None, knowledge: KnowledgePort | None = None, trace_sink=None, clock=time.monotonic):
         self.store = store
         self.handler = handler
         self.models = models or (lambda provider: UnconfiguredModel())
         # Cancel polling reads the same rows the store writes.
         self.responses = responses or ResponseService(store.uow, clock=store.access.clock)
+        self.knowledge = knowledge
         self.trace_sink = trace_sink
         self._clock = clock
 
@@ -115,6 +119,18 @@ class TurnService:
             return self.responses.is_finished(caller, response_id)
         return check
 
+    def _knowledge(self, agent: AgentSnapshotV1) -> tuple[ToolContext, KnowledgeTools | None]:
+        """Fields are read once per turn, outside any session transaction; search and show share one KnowledgeTools."""
+        search = agent.tool("knowledge.search")
+        if search is None:
+            return NO_CONTEXT, None
+        params = KnowledgeSearchParams.model_validate(search.params)
+        show = agent.tool("knowledge.show")
+        fields = self.knowledge.fields([params.knowledge_base_id]) if self.knowledge else {}
+        tools = KnowledgeTools(self.knowledge, params, KnowledgeShowParams.model_validate(show.params) if show else None,
+                               fields.get(params.knowledge_base_id, ()), allowed_domains=agent.links.allowed_domains)
+        return ToolContext(knowledge_fields=fields), tools
+
     def _run(self, caller: VerifiedCaller, begun: Begun, on_event) -> TurnResponse:
         request, snapshot = begun.request, begun.snapshot
         if not isinstance(request, MessageTurnInput):
@@ -127,11 +143,15 @@ class TurnService:
         if on_event is not None:
             def emit(event):
                 on_event(("delta", event.text) if isinstance(event, TextDelta) else ("tool_call", event.name))
-        turn = run_agent_turn(agent, model, SnapshotToolExecutor(snapshot), agent_context(snapshot),
-                              chat_history(snapshot.history), request.content.text, on_event=emit,
+        deadline = self._clock() + agent.limits.turn_timeout_ms / 1000  # field reads count against the turn budget
+        tool_context, knowledge = self._knowledge(agent)
+        executor = SnapshotToolExecutor(snapshot, knowledge)
+        turn = run_agent_turn(agent, model, executor, agent_context(snapshot), chat_history(snapshot.history),
+                              request.content.text, on_event=emit,
                               should_stop=self._should_stop(caller, begun.response.id),
-                              deadline=self._clock() + agent.limits.turn_timeout_ms / 1000, clock=self._clock)
+                              deadline=deadline, clock=self._clock, tool_context=tool_context)
         if turn.cancelled:
             raise TurnCancelled()
-        plan = plan_message_turn(snapshot, turn, request, handler=self.handler, persistence=self.store.persistence)
+        plan = plan_message_turn(snapshot, turn, request, handler=self.handler, persistence=self.store.persistence,
+                                 cards=executor.cards())
         return self.store.commit_message(caller, begun, plan)
