@@ -4,10 +4,11 @@ import json
 from datetime import date
 from pathlib import Path
 
-from agent_runtime.agent.catalog import ProposeAnswerArguments, SetNameArguments
+from agent_runtime.agent.catalog import ProposeAnswerArguments, SetNameArguments, ToolContext
 from agent_runtime.agent.loop import TextDelta, ToolCallStarted, offered_tools, run_agent_turn
 from agent_runtime.agent.model import FakeModel, ModelReply, ModelUnavailable, ToolCall, ToolResultMessage, UserMessage
 from agent_runtime.agent.prompt import AgentContext
+from agent_runtime.knowledge.schemas import MetadataField
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -155,6 +156,24 @@ def test_offered_tools_carry_catalog_schemas_and_binding_details():
     assert start.parameters["required"] == ["experience_id"]
     suggest = tools["ui.suggest_replies"].definition.parameters
     assert suggest["properties"]["items"]["items"]["required"] == ["label", "message_text"]
+
+
+def test_knowledge_search_schema_is_built_from_the_turn_context():
+    context = ToolContext(knowledge_fields={"kb_ihrd_demo": (
+        MetadataField(id="f1", name="houses", type="string_list", filterable=True),)})
+    search = offered_tools(SNAPSHOT, context)["knowledge.search"].definition
+    conditions = search.parameters["properties"]["filter"]["properties"]["conditions"]["items"]["properties"]
+    assert conditions["name"]["enum"] == ["houses", "province", "major"]
+    assert "houses (string_list:" in search.description
+
+
+def test_knowledge_errors_go_back_to_the_model_not_to_the_fallback_template():
+    executor = Executor(**{"knowledge.search": {"error": "knowledge_unavailable"}})
+    model = FakeModel(ModelReply(text="", tool_calls=(call("knowledge.search", {"query": "học phí"}),)),
+                      ModelReply(text="Mình chưa tra cứu được lúc này."))
+    result = turn(model, executor)
+    assert model.calls[1][0][-1].content == {"error": "knowledge_unavailable"}
+    assert result.fallback is None and result.blocks[0].content == "Mình chưa tra cứu được lúc này."
 
 
 def test_events_stream_text_and_announce_tool_calls():

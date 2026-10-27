@@ -12,7 +12,13 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from agent_runtime.agent.catalog import TOOL_DECLARATIONS, SuggestRepliesArguments, ToolDeclaration, json_schema
+from agent_runtime.agent.catalog import (
+    NO_CONTEXT,
+    TOOL_DECLARATIONS,
+    SuggestRepliesArguments,
+    ToolContext,
+    ToolDeclaration,
+)
 from agent_runtime.agent.model import (
     AssistantMessage,
     ChatMessage,
@@ -77,13 +83,13 @@ class _Offered:
     definition: ToolDefinition
 
 
-def offered_tools(snapshot: AgentSnapshotV1) -> dict[str, _Offered]:
+def offered_tools(snapshot: AgentSnapshotV1, context: ToolContext = NO_CONTEXT) -> dict[str, _Offered]:
     offered = {}
     for binding in snapshot.tools:
         declaration = TOOL_DECLARATIONS[(binding.name, binding.version)]
         offered[binding.name] = _Offered(declaration, ToolDefinition(
-            name=binding.name, description=declaration.describe(binding.params, binding.description),
-            parameters=json_schema(declaration.arguments_model)))
+            name=binding.name, description=declaration.describe(binding.params, binding.description, context),
+            parameters=declaration.parameters(binding.params, context)))
     return offered
 
 
@@ -119,7 +125,8 @@ def run_agent_turn(snapshot: AgentSnapshotV1, model: ModelPort, executor: ToolEx
                    on_event: Callable[[AgentEvent], None] | None = None,
                    should_stop: Callable[[], bool] | None = None,
                    deadline: float | None = None,
-                   clock: Callable[[], float] = time.monotonic) -> AgentTurn:
+                   clock: Callable[[], float] = time.monotonic,
+                   tool_context: ToolContext = NO_CONTEXT) -> AgentTurn:
     emit = on_event or (lambda event: None)
     stop = should_stop or (lambda: False)
 
@@ -131,7 +138,7 @@ def run_agent_turn(snapshot: AgentSnapshotV1, model: ModelPort, executor: ToolEx
     if snapshot.model is None:
         return _fallback(snapshot, "not_configured", new_id, 0, usage)
     limits, domains = snapshot.limits, snapshot.links.allowed_domains
-    offered = offered_tools(snapshot)
+    offered = offered_tools(snapshot, tool_context)
     recent = list(history)[-limits.history_messages:] if limits.history_messages else []
     messages: list[ChatMessage] = [*system_messages(snapshot, context), *recent,
                                    UserMessage(user_text[:limits.max_input_chars])]

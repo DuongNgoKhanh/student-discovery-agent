@@ -157,6 +157,8 @@ class AgentSnapshotV1(ContractModel):
             raise ValueError("assessment.start experiences must use allowed activity profiles")
         if self.model and worst_case_ms(self.model.timeout_ms, self.model.max_retries) > self.limits.turn_timeout_ms:
             raise ValueError("model timeouts and retry backoff must fit within limits.turn_timeout_ms")
+        if self.tool("knowledge.show") and not self.tool("knowledge.search"):
+            raise ValueError("knowledge.show requires knowledge.search")
         return self
 
 

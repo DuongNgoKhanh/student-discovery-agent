@@ -95,7 +95,7 @@
               version: {type: integer, minimum: 1}
               params: {type: object}
               description: {type: string, minLength: 1, maxLength: 1000, pattern: '\S'}
-          description: Mỗi name@version phải có trong tool catalog của runtime; params kiểm theo schema của tool. Mỗi name chỉ bind một lần; experiences của assessment.start phải dùng algorithm_profile nằm trong allowed_activity_profiles.
+          description: Mỗi name@version phải có trong tool catalog của runtime; params kiểm theo schema của tool. Mỗi name chỉ bind một lần; experiences của assessment.start phải dùng algorithm_profile nằm trong allowed_activity_profiles. knowledge.show chỉ bind được khi đã bind knowledge.search; auto_filter_fields không trùng.
         guardrails:
           type: object
           additionalProperties: false
