@@ -52,6 +52,12 @@ export function SearchTab({ kb }: { kb: string }) {
             }}
           />
           <ConditionChips settings={settings} fields={fields} onChange={setSettings} />
+          {fieldsQuery.error && (
+            <p role="alert" className="text-xs text-destructive">
+              Không tải được metadata nên chưa tìm được: {errorMessage(fieldsQuery.error)}{' '}
+              <button type="button" className="underline" onClick={() => void fieldsQuery.refetch()}>Thử lại</button>
+            </p>
+          )}
           {fieldsReady && dropped > 0 && (
             <p className="text-xs text-muted-foreground">{dropped} điều kiện chưa đầy đủ nên không được áp dụng.</p>
           )}
