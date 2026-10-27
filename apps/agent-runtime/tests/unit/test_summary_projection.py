@@ -16,7 +16,6 @@ from agent_runtime.engine.projection import (
     SUMMARY_V1_BRANDING,
     SUMMARY_V1_DEMO_LABEL,
     SUMMARY_V1_TEMPLATE_REF,
-    project_card_block,
     project_personality_card,
     project_share_card,
     project_summary_from_result,
@@ -27,7 +26,6 @@ from agent_runtime.engine.schemas.scoring import (
     HouseScoreDetail,
 )
 from agent_runtime.engine.schemas.selector import StoppingReason
-from agent_runtime.sessions.schemas.activity import PersonalityCardBlock
 from agent_runtime.sessions.schemas.result import HouseIdentity, ShareCard
 
 DEFINITION = sample_experience_definition(seed=7, return_dict=True)
@@ -341,30 +339,6 @@ def test_project_from_scoring_rejects_house_not_in_definition():
             activity_id="act_for",
         )
     assert exc_info.value.code == EngineErrorCode.INVALID_HOUSE_REF
-
-
-# ==============================================================================
-# 5. Typed Content Block Projection (PersonalityCardBlock)
-# ==============================================================================
-
-def test_project_card_block_generates_valid_typed_block():
-    """Confirms PersonalityCardBlock wraps PersonalityCardData with contract compliance."""
-    card = project_personality_card(house=HOUSES["house_i"], display_name="Bùi Ngọc", is_demo=True)
-    block = project_card_block(
-        card=card,
-        activity_id="act_card_blk",
-        result_id="res_card_blk",
-        result_revision=1,
-        block_id="blk_custom_id_123",
-    )
-    assert isinstance(block, PersonalityCardBlock)
-    assert block.block_id == "blk_custom_id_123"
-    assert block.type == "personality_card"
-    assert block.schema_version == 1
-    assert block.activity_id == "act_card_blk"
-    assert block.result_id == "res_card_blk"
-    assert block.result_revision == 1
-    assert block.data == card
 
 
 # ==============================================================================

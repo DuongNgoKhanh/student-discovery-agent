@@ -18,7 +18,6 @@ from agent_runtime.engine.error_codes import EngineErrorCode
 from agent_runtime.engine.exceptions import EngineError, MissingMappingError, UnsupportedDefinitionError
 from agent_runtime.engine.schemas.scoring import AssessmentScoringResult
 from agent_runtime.evaluations.schemas.experience import AssessmentHouseMetadata
-from agent_runtime.sessions.schemas.activity import PersonalityCardBlock
 from agent_runtime.sessions.schemas.result import HouseIdentity, PersonalityCardData, ShareCard
 
 SUMMARY_V1_TEMPLATE_REF = "share_summary_v1"
@@ -169,30 +168,6 @@ def project_summary_from_result(
         result_id=result_id,
         result_revision=result_revision,
         activity_id=activity_id,
-    )
-
-
-def project_card_block(
-    *,
-    card: PersonalityCardData,
-    block_id: str,
-    activity_id: str,
-    result_id: str,
-    result_revision: int,
-) -> PersonalityCardBlock:
-    """Wrap a projected card in its typed personality_card block; the caller owns block_id.
-
-    Raises:
-        ValidationError: If an id or result_revision breaks the block contract.
-    """
-    return PersonalityCardBlock(
-        block_id=block_id,
-        type="personality_card",
-        schema_version=1,
-        activity_id=activity_id,
-        result_id=result_id,
-        result_revision=result_revision,
-        data=card,
     )
 
 
