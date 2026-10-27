@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { Plus, X, MessageSquare, ChevronsRight, User } from 'lucide-react';
+import { Plus, X, MessageSquare, ChevronsRight } from 'lucide-react';
 
 export interface ChatThreadItem {
   id: string;
@@ -111,8 +111,17 @@ export function ChatSidebar({
             </div>
 
             <div className="mt-auto flex w-full flex-col items-center gap-3 border-t border-slate-200 pt-3 dark:border-line/50">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-slate-600 dark:border-line dark:bg-edge dark:text-fog">
-                <User className="h-4 w-4" />
+              <div
+                className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 dark:border-line dark:bg-edge"
+                title={userName}
+              >
+                <Image
+                  src="/user-avatar.png"
+                  alt={userName}
+                  width={32}
+                  height={32}
+                  className="h-full w-full object-cover"
+                />
               </div>
             </div>
           </div>
@@ -224,8 +233,14 @@ export function ChatSidebar({
             {/* User Profile */}
             <div className="shrink-0 border-t border-slate-200 p-3 dark:border-line/50">
               <div className="group flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-slate-50 dark:hover:bg-edge/40">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-emerald-50 text-emerald-600 dark:border-line dark:bg-edge dark:text-emerald-400">
-                  <User className="h-4 w-4" />
+                <div className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 dark:border-line dark:bg-edge">
+                  <Image
+                    src="/user-avatar.png"
+                    alt={userName}
+                    width={32}
+                    height={32}
+                    className="h-full w-full object-cover"
+                  />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-xs font-semibold text-slate-900 dark:text-white">

@@ -17,8 +17,8 @@ import {
 import type { RenderableBlock } from '../schemas/blocks';
 import type { CreatedConversation, TurnResult } from '../schemas/conversation';
 import { ActivityControls, type SendFn } from './activity-controls';
-import { BlockRenderer } from './block-renderer';
 import { ChatHeader } from './chat-header';
+import { ChatMessageItem } from './chat-message-item';
 import { ChatSidebar, type ChatThreadItem } from './chat-sidebar';
 import { ErrorPanel, LoadingPanel, NotConfiguredPanel } from './status-panels';
 
@@ -169,7 +169,7 @@ export function ChatShell() {
         onToggleDesktopSidebar={() => setIsDesktopSidebarOpen((prev) => !prev)}
       />
 
-      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200/50 bg-white shadow-2xl dark:border-white/5 dark:bg-panel">
+      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200/50 bg-[#f8f9fb] shadow-2xl dark:border-white/5 dark:bg-panel">
         <ChatHeader
           title="Trò chuyện hướng nghiệp"
           subtitle="Đang hoạt động"
@@ -237,21 +237,21 @@ export function ChatShell() {
             </div>
           ) : (
             <div className="mx-auto w-full max-w-2xl md:max-w-3xl">
-              <ol aria-label="Hội thoại" className="flex flex-col gap-4">
-                {entries.map((entry) => (
-                  <li
-                    key={entry.id}
-                    className={entry.role === 'user' ? 'max-w-[85%] self-end' : 'max-w-full'}
-                  >
-                    {entry.role === 'user' ? (
-                      <div className="shadow-xs break-words rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm text-white dark:bg-emerald-500">
-                        {entry.text}
-                      </div>
-                    ) : entry.block ? (
-                      <BlockRenderer block={entry.block} />
-                    ) : null}
-                  </li>
-                ))}
+              <ol aria-label="Hội thoại" className="flex flex-col gap-6">
+                {entries.map((entry, index) => {
+                  const isConsecutiveBot =
+                    entry.role === 'bot' && index > 0 && entries[index - 1]?.role === 'bot';
+                  return (
+                    <li key={entry.id} className="w-full">
+                      <ChatMessageItem
+                        role={entry.role}
+                        text={entry.text}
+                        block={entry.block}
+                        showAvatar={!isConsecutiveBot}
+                      />
+                    </li>
+                  );
+                })}
               </ol>
             </div>
           )}
