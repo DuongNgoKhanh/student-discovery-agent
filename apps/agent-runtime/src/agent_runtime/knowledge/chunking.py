@@ -7,7 +7,7 @@ from chonkie import RecursiveChunker
 from agent_runtime.knowledge.hashing import chunk_hash
 
 CHUNK_SIZE = 1200  # characters; far below gemini-embedding-2's 8192-token input limit
-_HEADING = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t#]*$")
+_HEADING = re.compile(r"^(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$")
 _FENCE = re.compile(r"^\s*(```|~~~)")
 
 

@@ -26,6 +26,7 @@ class KnowledgeWriter:
         self._new_id = new_id
 
     def create_knowledge_base(self, kb_id: str, name: str, embedding_model: str, description: str = "") -> None:
+        # On conflict only name/description change: embedding_model stays, because stored embeddings belong to it.
         with self._uow.begin() as session:
             session.execute(text(
                 "INSERT INTO knowledge.knowledge_bases (id, name, description, embedding_model) "

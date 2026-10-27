@@ -2,17 +2,20 @@
 
 v1 scores every chunk of the knowledge base (no HNSW), which is fine at thousands of chunks.
 """
+import logging
 from datetime import UTC
 
 import psycopg
 from sqlalchemy import text
-from sqlalchemy.exc import DisconnectionError, InterfaceError, OperationalError, TimeoutError
+from sqlalchemy.exc import DataError, DisconnectionError, InterfaceError, OperationalError, TimeoutError
 
 from agent_runtime.knowledge.embedding import EmbeddingPort, EmbeddingUnavailable, vector_literal
-from agent_runtime.knowledge.filters import compile_filter
+from agent_runtime.knowledge.filters import FilterError, compile_filter
 from agent_runtime.knowledge.metadata import named_metadata
 from agent_runtime.knowledge.repository import load_fields
 from agent_runtime.knowledge.schemas import KnowledgeUnavailable, Record, RetrievalRequest, RetrievalResult
+
+logger = logging.getLogger(__name__)
 
 _SEARCH = """
     WITH q AS (
@@ -44,8 +47,7 @@ class PgKnowledge:
         self._timeout_ms = int(timeout_ms)
 
     def retrieve(self, request: RetrievalRequest) -> RetrievalResult | KnowledgeUnavailable:
-        vector = self._embedding.embed_query(request.query) if self._embedding else EmbeddingUnavailable(
-            "not_configured")
+        vector = self._embed_query(request.query)
         setting = request.retrieval_setting
         try:
             with self._uow.begin() as session:
@@ -65,9 +67,20 @@ class PgKnowledge:
         except OperationalError as error:
             reason = "timeout" if isinstance(error.orig, psycopg.errors.QueryCanceled) else "dependency_down"
             return KnowledgeUnavailable(reason)
+        except DataError as error:  # stored metadata that cannot be cast by the filter
+            raise FilterError("metadata condition does not match stored values") from error
         except (DisconnectionError, InterfaceError, TimeoutError):
             return KnowledgeUnavailable("dependency_down")
         return RetrievalResult(records=tuple(self._record(row, fields) for row in rows), degraded=not semantic)
+
+    def _embed_query(self, query: str):
+        if self._embedding is None:
+            return EmbeddingUnavailable("not_configured")
+        try:
+            return self._embedding.embed_query(query)
+        except Exception as error:  # any provider failure must degrade to keyword search
+            logger.warning("knowledge query embedding failed: %s", type(error).__name__)
+            return EmbeddingUnavailable("provider_error")
 
     @staticmethod
     def _record(row, fields) -> Record:

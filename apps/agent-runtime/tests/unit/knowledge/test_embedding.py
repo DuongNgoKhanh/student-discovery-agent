@@ -83,3 +83,11 @@ def test_build_embedding_port_passes_query_path_overrides_through():
     default = build_embedding_port(settings)
     tuned = build_embedding_port(settings, timeout_ms=1500, max_retries=0)
     assert (default._max_retries, tuned._max_retries, tuned.model) == (2, 0, "m-test")
+
+
+def test_api_error_without_a_code_is_a_retryable_provider_error():
+    error = errors.APIError(500, {})
+    error.code = None
+    embedding, models = adapter(error, error, error, max_retries=2)
+    assert embedding.embed_query("x") == EmbeddingUnavailable("provider_error")
+    assert len(models.calls) == 3

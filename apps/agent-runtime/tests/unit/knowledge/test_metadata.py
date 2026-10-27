@@ -23,7 +23,7 @@ def test_metadata_is_stored_by_field_id_and_read_back_by_name():
 
 @pytest.mark.parametrize("values", [
     {"unknown": "x"}, {"province": 1}, {"fee": True}, {"fee": float("nan")}, {"fee": "1"},
-    {"updated": "yesterday"}, {"houses": "house_s"}, {"houses": [1]}, {"province": "x" * 2001},
+    {"updated": "yesterday"}, {"updated": "2026-W09-1"}, {"updated": "20260301"}, {"houses": "house_s"}, {"houses": [1]}, {"province": "x" * 2001},
 ])
 def test_invalid_metadata_is_rejected(values):
     with pytest.raises(MetadataError):
@@ -54,3 +54,9 @@ def test_retrieval_request_bounds():
 def test_condition_value_rejects_booleans():
     with pytest.raises(ValidationError):
         MetadataCondition.model_validate({"conditions": [{"name": "fee", "comparison_operator": "=", "value": True}]})
+
+
+def test_is_time_is_strict_extended_iso():
+    from agent_runtime.knowledge.metadata import is_time
+    assert not is_time("2026-W09-1") and not is_time("20260301")
+    assert is_time("2026-03-01") and is_time("2026-03-01T08:00:00Z")

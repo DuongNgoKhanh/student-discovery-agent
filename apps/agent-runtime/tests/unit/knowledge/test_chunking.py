@@ -48,3 +48,8 @@ def test_hashes_are_stable_and_change_only_where_content_changes():
 
 def test_empty_body_has_no_chunks():
     assert chunk_document("T", "  \n# Chỉ heading\n") == []
+
+
+def test_heading_keeps_a_trailing_hash_that_belongs_to_the_title():
+    sections = split_sections("# Lập trình C#\nNội dung.\n\n## Đóng ##\nKhác.")
+    assert [section.heading_path for section in sections] == ["Lập trình C#", "Lập trình C# > Đóng"]

@@ -1,5 +1,6 @@
 """Name-keyed metadata in, field-id-keyed storage out, so renaming a field never touches revisions."""
 import math
+import re
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from typing import Any
@@ -15,8 +16,12 @@ class MetadataError(ValueError):
     pass
 
 
+_TIME_SHAPE = re.compile(r"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})?)?$")
+
+
 def is_time(value: Any) -> bool:
-    if not isinstance(value, str):
+    """Extended ISO only: Python also parses forms (``2026-W09-1``, ``20260301``) that Postgres cannot cast."""
+    if not isinstance(value, str) or not _TIME_SHAPE.match(value):
         return False
     for parse in (date.fromisoformat, datetime.fromisoformat):
         try:

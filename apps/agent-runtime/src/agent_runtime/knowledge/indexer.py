@@ -153,6 +153,14 @@ class IndexerService:
                 "DELETE FROM knowledge.chunks c USING knowledge.document_revisions r, knowledge.documents d "
                 "WHERE c.revision_id = r.id AND r.document_id = d.id AND d.status = 'archived'")).rowcount
 
+    def retry_errors(self, kb_id: str | None = None) -> int:
+        """Send failed active-document revisions back to the queue (optionally for one knowledge base)."""
+        with self._uow.begin() as session:
+            return session.execute(text(
+                "UPDATE knowledge.document_revisions SET index_status = 'pending', claimed_at = NULL, error = NULL "
+                "WHERE index_status = 'error' AND id IN (SELECT latest_revision_id FROM knowledge.documents "
+                "WHERE status = 'active' AND (CAST(:kb AS text) IS NULL OR kb_id = :kb))"), {"kb": kb_id}).rowcount
+
     def requeue_knowledge_base(self, kb_id: str) -> int:
         """Re-embed every active revision, e.g. after the knowledge base's embedding model changes."""
         with self._uow.begin() as session:

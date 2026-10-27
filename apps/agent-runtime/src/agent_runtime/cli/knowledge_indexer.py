@@ -9,6 +9,7 @@ from sqlalchemy.engine import make_url
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
 from agent_runtime.knowledge.indexer import IndexerService, IndexReport
 
+logger = logging.getLogger(__name__)
 POLL_SECONDS = 5  # NOTIFY is lost while no worker listens; pending rows are the real queue
 
 
@@ -27,12 +28,14 @@ def drain(service: IndexerService, batch_size: int) -> IndexReport:
 
 
 def _embedding(fake: bool):
+    """None when a real embedding is required but no API key is configured."""
     if fake:
         from agent_runtime.knowledge.fake import FakeEmbedding
         return FakeEmbedding()
     from agent_runtime.config.settings import Settings
     from agent_runtime.infrastructure.llm.gemini_embedding import build_embedding_port
-    return build_embedding_port(Settings())
+    settings = Settings()
+    return build_embedding_port(settings) if settings.GOOGLE_API_KEY else None
 
 
 def main(argv=None) -> int:
@@ -40,6 +43,8 @@ def main(argv=None) -> int:
     parser.add_argument("--once", action="store_true", help="Drain the queue and exit")
     parser.add_argument("--batch-size", type=int, choices=range(1, 101), default=20)
     parser.add_argument("--requeue", metavar="KB_ID", help="Re-embed every active revision of a knowledge base")
+    parser.add_argument("--retry-errors", nargs="?", const="", metavar="KB_ID",
+                        help="Send failed revisions back to the queue (all knowledge bases, or one)")
     parser.add_argument("--fake-embedding", action="store_true", help="Offline demo embedding (never production)")
     args = parser.parse_args(argv)
     logging.basicConfig(format="%(message)s")
@@ -47,9 +52,17 @@ def main(argv=None) -> int:
     if not url:
         print("KNOWLEDGE_INDEXER_CONFIGURATION_REQUIRED")
         return 2
-    engine = build_engine(url)
-    service = IndexerService(RuntimeUnitOfWork(engine), _embedding(args.fake_embedding))
+    engine = None
     try:
+        embedding = _embedding(args.fake_embedding)
+        if embedding is None:
+            print("KNOWLEDGE_INDEXER_CONFIGURATION_REQUIRED")
+            return 2
+        engine = build_engine(url)
+        service = IndexerService(RuntimeUnitOfWork(engine), embedding)
+        if args.retry_errors is not None:
+            print(f"retried={service.retry_errors(args.retry_errors or None)}")
+            return 0
         if args.requeue:
             print(f"requeued={service.requeue_knowledge_base(args.requeue)}")
             return 0
@@ -67,11 +80,13 @@ def main(argv=None) -> int:
                     pass
     except KeyboardInterrupt:
         return 0
-    except Exception:
+    except Exception as error:
+        logger.error("knowledge indexer failed: %s", type(error).__name__)  # never the message or URL
         print("KNOWLEDGE_INDEXER_FAILURE")
         return 1
     finally:
-        engine.dispose()
+        if engine is not None:
+            engine.dispose()
 
 
 if __name__ == "__main__":

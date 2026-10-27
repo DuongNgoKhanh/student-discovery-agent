@@ -115,7 +115,8 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         from agent_runtime.infrastructure.llm.gemini_embedding import build_embedding_port
         from agent_runtime.infrastructure.llm.model_registry import build_model_port
         from agent_runtime.knowledge.retrieval import PgKnowledge
-        # Query path: ~1.5 s budget, no retries; a failed embed degrades to keyword search.
+        # Query path: no retries; a failed embed degrades to keyword search. The embedding timeout and the
+        # SQL statement timeout run in sequence, so the worst case is their sum, not one shared budget.
         knowledge = PgKnowledge(uow, build_embedding_port(
             settings, timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS, max_retries=0),
             timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS)

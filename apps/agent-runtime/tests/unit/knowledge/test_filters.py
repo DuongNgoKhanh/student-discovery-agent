@@ -48,6 +48,7 @@ def test_empty_operators_take_no_value():
     ("fee", "=", "30"),              # string for a number
     ("houses", "contains", ["a"]),   # list for a list element
     ("updated", "before", "soon"),   # not an ISO time
+    ("updated", "before", "2026-W09-1"),  # ISO week form Postgres cannot cast
     ("province", "is", None),        # missing value
 ])
 def test_invalid_conditions_raise(item):

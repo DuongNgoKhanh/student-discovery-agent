@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy import text
 
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork
 from agent_runtime.knowledge.filters import FilterError
@@ -98,3 +99,27 @@ def test_unknown_knowledge_base_and_bad_filters(rig):
 def test_threshold_drops_weak_matches(rig):
     assert ask(rig, "ký túc xá", retrieval_setting={"top_k": 4, "score_threshold": 0.9,
                                                     "semantic_weight": 0.7}).records == ()
+
+
+def test_unexpected_embedding_errors_degrade_to_keyword_search(rig):
+    class Exploding:
+        model = "fake-embedding"
+
+        def embed_query(self, text):
+            raise RuntimeError("boom")
+
+    rig.knowledge._embedding = Exploding()
+    result = ask(rig, "hoc phi")
+    assert result.degraded and result.records[0].metadata["document_id"] == "cntt"
+
+
+def test_stored_data_that_cannot_be_cast_is_a_filter_error(rig):
+    rig.writer.put_field("kb1", "when", "string", filterable=True)
+    rig.writer.put_document("kb1", "bad", title="Bad", body="# Học phí\nHọc phí lạ.", metadata={"when": "garbage"})
+    rig.indexer.run_once()
+    with rig.engine.begin() as connection:  # simulates drift the write path would never produce
+        connection.execute(text("SET LOCAL session_replication_role = replica"))  # skip the immutability trigger
+        connection.execute(text("UPDATE knowledge.metadata_fields SET type = 'time' WHERE name = 'when'"))
+    with pytest.raises(FilterError):
+        ask(rig, "hoc phi", metadata_condition={"logical_operator": "and", "conditions": [
+            {"name": "when", "comparison_operator": "after", "value": "2026-01-01"}]})

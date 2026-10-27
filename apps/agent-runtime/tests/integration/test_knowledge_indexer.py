@@ -153,3 +153,16 @@ def test_a_job_that_lost_its_claim_cannot_activate_or_fail_the_new_owner(rig):
     assert state(rig) == (None, [(1, "indexing")], [])
     assert rig.indexer.index(owner).indexed == 1
     assert state(rig) == (1, [(1, "ready")], [(1, "x")])
+
+
+def test_failed_revisions_can_be_retried(rig):
+    rig.writer.put_document("kb1", "doc1", title="T", body=BODY)
+    rig.embedding.fail_documents = True
+    assert rig.indexer.run_once().failed == 1
+    assert state(rig)[:2] == (None, [(1, "error")])
+    assert rig.indexer.run_once().indexed == 0  # errors are not picked up again by themselves
+    rig.embedding.fail_documents = False
+    assert rig.indexer.retry_errors("other") == 0
+    assert rig.indexer.retry_errors() == 1
+    assert rig.indexer.run_once().indexed == 1
+    assert state(rig)[:2] == (1, [(1, "ready")])

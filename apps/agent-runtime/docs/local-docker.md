@@ -76,6 +76,17 @@ RUNTIME_KNOWLEDGE_SEED_DATABASE_URL=... python -m agent_runtime.cli.knowledge_se
 RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL=... python -m agent_runtime.cli.knowledge_indexer --once
 ```
 
+Lưu ý vận hành:
+
+- Service `knowledge-indexer` trong compose cần `GOOGLE_API_KEY`; không có key thì nó thoát ngay
+  (`KNOWLEDGE_INDEXER_CONFIGURATION_REQUIRED`).
+- KB seed với `--embedding-model fake-embedding` phải được index bằng `--fake-embedding`: tắt worker compose
+  (hoặc đừng chạy nó) và chạy `knowledge_indexer --once --fake-embedding`.
+- Revision bị lỗi (`index_status='error'`) không tự chạy lại. Đưa về hàng đợi bằng
+  `python -m agent_runtime.cli.knowledge_indexer --retry-errors [KB_ID]` (in `retried=N`), rồi chạy indexer.
+- `CREATE EXTENSION vector` cần superuser hoặc extension do ops tạo sẵn; quyền cho role indexer/runtime được cấp
+  qua `grant_knowledge_roles` (bước của operator, không tự động).
+
 Thử tìm kiếm qua `POST /api/v1/internal/knowledge/retrieval` (contract trong
 `contracts/openapi/internal/runtime-api.yaml`, ví dụ trong `contracts/fixtures/knowledge-retrieval.json`).
 Service `knowledge-indexer` trong `docker-compose.yaml` chạy worker liên tục, thức dậy bằng `LISTEN knowledge_index`.

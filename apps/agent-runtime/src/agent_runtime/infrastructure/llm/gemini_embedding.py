@@ -53,7 +53,7 @@ class GeminiEmbedding:
                 response = self._client.models.embed_content(model=self.model, contents=texts, config=config)
             except errors.APIError as error:
                 reason = "rate_limited" if error.code == 429 else "provider_error"
-                retryable = error.code == 429 or error.code >= 500
+                retryable = error.code is None or error.code == 429 or error.code >= 500
             except httpx.TimeoutException:
                 reason, retryable = "timeout", True
             except httpx.HTTPError:
