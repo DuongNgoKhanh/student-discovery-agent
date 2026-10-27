@@ -26,3 +26,12 @@ def test_indexer_refuses_to_start_without_an_api_key(monkeypatch, capsys):
     monkeypatch.setenv("GOOGLE_API_KEY", "")
     assert knowledge_indexer.main(["--once"]) == 2
     assert capsys.readouterr().out.strip() == "KNOWLEDGE_INDEXER_CONFIGURATION_REQUIRED"
+
+
+def test_provision_requires_a_migration_url(monkeypatch, capsys):
+    from agent_runtime.cli import knowledge_provision
+    monkeypatch.delenv("RUNTIME_MIGRATION_DATABASE_URL", raising=False)
+    with pytest.raises(SystemExit) as exit_info:
+        knowledge_provision.main(["--runtime-role", "r", "--indexer-role", "i", "--studio-role", "s"])
+    assert exit_info.value.code == 2
+    assert "RUNTIME_MIGRATION_DATABASE_URL" in capsys.readouterr().err

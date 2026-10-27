@@ -94,6 +94,24 @@ KNOWLEDGE_DDL = """
     END $$;
     CREATE TRIGGER revision_queued AFTER INSERT OR UPDATE OF index_status ON knowledge.document_revisions
         FOR EACH ROW WHEN (NEW.index_status = 'pending') EXECUTE FUNCTION knowledge.notify_index();
+    CREATE TABLE knowledge.imports (
+        id text PRIMARY KEY,
+        kb_id text NOT NULL REFERENCES knowledge.knowledge_bases(id) ON DELETE CASCADE,
+        idempotency_key text NOT NULL CHECK (length(idempotency_key) BETWEEN 1 AND 256),
+        request_hash text NOT NULL CHECK (request_hash ~ '^sha256:[a-f0-9]{64}$'),
+        report jsonb NOT NULL CHECK (jsonb_typeof(report) = 'object'),
+        created_by text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+        UNIQUE (kb_id, idempotency_key)
+    );
+    CREATE FUNCTION knowledge.retry_revision(revision_id text) RETURNS boolean
+        LANGUAGE plpgsql SECURITY DEFINER SET search_path = knowledge, pg_temp AS $$
+    BEGIN
+        UPDATE knowledge.document_revisions SET index_status = 'pending', error = NULL, claimed_at = NULL
+            WHERE id = revision_id AND index_status = 'error';
+        RETURN FOUND;
+    END $$;
+    REVOKE ALL ON FUNCTION knowledge.retry_revision(text) FROM PUBLIC;
 """
 
 
