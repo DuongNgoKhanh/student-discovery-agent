@@ -3,3 +3,5 @@ export * from './types';
 export { knowledgeApi } from './api/knowledge';
 export * from './hooks/use-knowledge';
 export { KnowledgeBaseList } from './components/knowledge-base-list';
+export { KnowledgeBaseDetail } from './components/knowledge-base-detail';
+export { DocumentEditor } from './components/document-editor';
