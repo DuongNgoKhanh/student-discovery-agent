@@ -97,14 +97,16 @@ class TurnService:
     def finish(self, caller: VerifiedCaller, begun: Begun,
                on_event: Callable[[StreamEvent], None] | None = None) -> TurnResponse:
         """Never raises after begin: every outcome is a terminal Response, traced exactly once."""
-        response = self._settle(caller, begun, on_event)
+        observed: dict = {}  # agent metadata of this turn; validated apart so a bad item never drops the identifiers
+        response = self._settle(caller, begun, on_event, observed)
+        metadata = describe_metadata(describe_response, (begun, response)) | describe_metadata(dict, observed)
         emit_trace(self.trace_sink, TRACE_ACTION, "failure" if response.status == "failed" else "success",
-                   describe_metadata(describe_response, (begun, response)), begun.started_ns)
+                   metadata, begun.started_ns)
         return response
 
-    def _settle(self, caller: VerifiedCaller, begun: Begun, on_event) -> TurnResponse:
+    def _settle(self, caller: VerifiedCaller, begun: Begun, on_event, observed: dict) -> TurnResponse:
         try:
-            return self._run(caller, begun, on_event)
+            return self._run(caller, begun, on_event, observed)
         except TurnCancelled:
             return self.responses.read_model(caller, begun.response.id)
         except RuntimeSessionError as error:
@@ -146,13 +148,15 @@ class TurnService:
                                allowed_domains=agent.links.allowed_domains)
         return ToolContext(knowledge_fields=fields), tools
 
-    def _run(self, caller: VerifiedCaller, begun: Begun, on_event) -> TurnResponse:
+    def _run(self, caller: VerifiedCaller, begun: Begun, on_event, observed: dict) -> TurnResponse:
         request, snapshot = begun.request, begun.snapshot
         if not isinstance(request, MessageTurnInput):
             # begin returns a snapshot only for supported interactions.
             draft = self.handler.prepare(snapshot, request)
             return self.store.commit(caller, begun, draft)
         agent = snapshot.agent
+        if agent.model:
+            observed["provider"] = agent.model.provider
         model = self.models(agent.model.provider) if agent.model else UnconfiguredModel()
         emit = None
         if on_event is not None:
@@ -165,6 +169,11 @@ class TurnService:
                               request.content.text, on_event=emit,
                               should_stop=self._should_stop(caller, begun.response.id),
                               deadline=deadline, clock=self._clock, tool_context=tool_context)
+        observed.update(agent_steps=turn.steps, input_tokens=turn.usage.input_tokens,
+                        output_tokens=turn.usage.output_tokens, fallback=turn.fallback is not None,
+                        fallback_reason=turn.fallback)
+        if knowledge is not None and (searches := knowledge.trace()):
+            observed["knowledge"] = searches
         if turn.cancelled:
             raise TurnCancelled()
         plan = plan_message_turn(snapshot, turn, request, handler=self.handler, persistence=self.store.persistence,

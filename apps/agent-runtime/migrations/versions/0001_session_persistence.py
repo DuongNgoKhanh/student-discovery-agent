@@ -206,7 +206,10 @@ def upgrade() -> None:
             after_revision bigint CHECK (after_revision BETWEEN 0 AND 9007199254740991),
             environment text, agent_release_id text, experience_release_id text,
             algorithm_profile text, engine_version text, latency_ms bigint CHECK (latency_ms >= 0),
-            provider text, fallback boolean, timestamp timestamptz NOT NULL DEFAULT clock_timestamp()
+            provider text, fallback boolean, fallback_reason text,
+            agent_steps integer CHECK (agent_steps >= 0), input_tokens integer CHECK (input_tokens >= 0),
+            output_tokens integer CHECK (output_tokens >= 0), knowledge jsonb,
+            timestamp timestamptz NOT NULL DEFAULT clock_timestamp()
         );
         CREATE INDEX conversations_owner_lookup ON execution.conversations (owner_id, id);
         CREATE INDEX conversations_expiry ON execution.conversations (expires_at) WHERE status = 'active';

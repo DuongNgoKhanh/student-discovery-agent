@@ -1,7 +1,10 @@
 """Knowledge answers: the model searches and picks refs, the server renders cards from the revisions it saw."""
 import pytest
+from sqlalchemy import select
 
 from agent_runtime.agent.model import AssistantMessage, ModelReply, ToolCall
+from agent_runtime.infrastructure.db.tables import runtime_traces
+from agent_runtime.infrastructure.db.trace import DatabaseTraceSink
 from tests.helpers.chat import EXPERIENCE, build_chat
 
 pytestmark = pytest.mark.integration
@@ -80,5 +83,39 @@ def test_runtime_without_knowledge_tells_the_model_instead_of_failing(test_datab
         data = rig.send("học phí bao nhiêu", revision=0, key="k").data
         assert data["status"] == "completed" and blocks(data)[0]["content"] == "Mình chưa tra cứu được lúc này."
         assert rig.model.calls[1][0][-1].content == {"error": "knowledge_unavailable"}
+    finally:
+        rig.dispose()
+
+
+class CapturingSink:
+    def __init__(self):
+        self.events = []
+
+    def emit(self, event):
+        self.events.append(event)
+
+
+def test_turn_trace_names_hits_and_shown_cards_but_not_the_question(test_database, valid_v2_doc, validator):
+    sink = CapturingSink()
+    rig = build_chat(test_database, valid_v2_doc, validator, with_knowledge=True, trace_sink=sink)
+    try:
+        rig.model._outcomes += [
+            ModelReply(text="", tool_calls=(call("knowledge.search", {"query": "học phí công nghệ thông tin"}),)),
+            show("Trường Minh Họa A"),
+            ModelReply(text="Đây nhé."),
+        ]
+        rig.send("học phí ngành CNTT bí mật", revision=0, key="t1")
+        (event,) = sink.events
+        assert (event.provider, event.agent_steps, event.fallback, event.fallback_reason) == ("gemini", 3, False, None)
+        (search,) = event.knowledge
+        assert search.kb_id == "kb_ihrd_demo" and ("demo_school_a_it", 1) in {hit[:2] for hit in search.hits}
+        assert search.shown == ("demo_school_a_it",)
+        assert "bí mật" not in str(event.model_dump()) and "công nghệ" not in str(event.model_dump())
+
+        DatabaseTraceSink(rig.uow).emit(event)
+        with rig.uow.begin() as session:
+            row = session.execute(select(runtime_traces.c.agent_steps, runtime_traces.c.knowledge).where(
+                runtime_traces.c.event_id == event.event_id)).one()
+        assert row.agent_steps == 3 and row.knowledge[0]["shown"] == ["demo_school_a_it"]
     finally:
         rig.dispose()
