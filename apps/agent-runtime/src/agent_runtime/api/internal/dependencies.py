@@ -73,6 +73,20 @@ def _decode_key(value):
     return key
 
 
+def _build_service_verifier(settings: Settings, student_keys: dict[str, bytes]) -> ServiceVerifier | None:
+    """A bad Studio keyring disables only the Studio path; student traffic must keep working."""
+    if not settings.RUNTIME_STUDIO_KEYRING:
+        return None
+    try:
+        raw = read_strict_json(settings.RUNTIME_STUDIO_KEYRING.get_secret_value().encode("utf-8"))
+        keys = {kid: _decode_key(value) for kid, value in raw.items()}
+        if set(keys.values()) & set(student_keys.values()):
+            return None
+        return ServiceVerifier(keys, SystemClock())
+    except Exception:
+        return None
+
+
 def build_runtime(settings: Settings) -> RuntimeContainer | None:
     """No connection/migration at startup; malformed secrets fail closed silently.
 
@@ -86,15 +100,9 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         raw_keys = read_strict_json(settings.RUNTIME_INTERNAL_KEYRING.get_secret_value().encode("utf-8"))
         keys = {kid: _decode_key(value) for kid, value in raw_keys.items()}
         verifier = CallerVerifier(keys, SystemClock())
-        service_verifier = None
-        if settings.RUNTIME_STUDIO_KEYRING:
-            raw_service = read_strict_json(settings.RUNTIME_STUDIO_KEYRING.get_secret_value().encode("utf-8"))
-            service_keys = {kid: _decode_key(value) for kid, value in raw_service.items()}
-            if set(service_keys.values()) & set(keys.values()):
-                raise ValueError
-            service_verifier = ServiceVerifier(service_keys, SystemClock())
     except Exception:
         return None
+    service_verifier = _build_service_verifier(settings, keys)
     unavailable = RuntimeContainer(policy=None, verifier=verifier, service_verifier=service_verifier)
     engine = None
     try:
