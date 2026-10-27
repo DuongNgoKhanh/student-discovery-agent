@@ -5,17 +5,18 @@ import { RotateCw, Search, SearchCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useFields, useSearchKnowledge } from '../hooks/use-knowledge';
+import { useFields } from '../hooks/use-knowledge';
 import { DEFAULT_SETTINGS, QUERY_MAX, buildSearchRequest, droppedConditions, type SearchSettings, type SearchState } from './build-search-request';
 import { EmptyState } from './shared/empty-state';
 import { errorMessage } from './shared/error-message';
 import { relativeTime } from './shared/format';
-import { SearchResults } from './search-results';
+import { SearchResults, SearchResultsSkeleton } from './search-results';
 import { ConditionChips, SearchSettingsPopover } from './search-settings';
 import { useSearchHistory } from './use-search-history';
+import { useTimedSearch } from './use-timed-search';
 
 export function SearchTab({ kb }: { kb: string }) {
-  const search = useSearchKnowledge();
+  const { search, run: runSearch, elapsedMs } = useTimedSearch();
   const fieldsQuery = useFields(kb);
   const fields = fieldsQuery.data ?? [];
   // Without the field list every filter row would be dropped, so searching waits for it.
@@ -32,7 +33,7 @@ export function SearchTab({ kb }: { kb: string }) {
     if (!state.query.trim() || !fieldsReady) return;
     setRan(state);
     history.add(state);
-    search.mutate({ kb, body: buildSearchRequest(state, fields) });
+    runSearch({ kb, body: buildSearchRequest(state, fields) });
   };
 
   return (
@@ -87,19 +88,20 @@ export function SearchTab({ kb }: { kb: string }) {
         </section>
       </div>
       <div className="min-w-0" aria-busy={search.isPending}>
-        {search.error ? (
+        {search.isPending ? (
+          <SearchResultsSkeleton />
+        ) : search.error ? (
           <div role="alert" className="flex flex-col items-start gap-2 rounded-xl border px-4 py-3 text-sm">
             <p className="text-destructive">{errorMessage(search.error)}</p>
-            <Button variant="outline" size="sm" onClick={() => ran && run(ran)} disabled={!ran || search.isPending}>
+            <Button variant="outline" size="sm" onClick={() => ran && run(ran)} disabled={!ran}>
               <RotateCw className="h-4 w-4" aria-hidden />Thử lại
             </Button>
           </div>
         ) : search.data && ran ? (
-          <SearchResults kb={kb} result={search.data} query={ran.query} fields={fields} />
-        ) : search.isPending ? (
-          <p role="status" className="text-13 text-muted-foreground">Đang tìm…</p>
+          <SearchResults kb={kb} result={search.data} query={ran.query} settings={ran.settings} fields={fields} elapsedMs={elapsedMs} />
         ) : (
-          <EmptyState icon={SearchCode} title="Nhập câu hỏi để xem agent sẽ đọc được gì" className="rounded-xl border border-dashed" />
+          <EmptyState icon={SearchCode} title="Nhập câu hỏi để xem agent sẽ đọc được gì"
+            description="Kết quả hiện các đoạn theo thứ tự agent nhận được, kèm điểm và vị trí trong tài liệu." className="rounded-xl border border-dashed" />
         )}
       </div>
     </div>
