@@ -278,9 +278,11 @@ class TestScoringStoppingBounds:
     def test_bounded_winner_at_18_answers(self, default_v2_def):
         """House R has 3 ratings of 5 (lower=3.4). All other 5 houses have 3 ratings of 1 (upper=2.6).
 
-        3.4 > 2.6 -> satisfies bounded_winner early stop.
+        3.4 > 2.6 -> satisfies bounded_winner early stop. The demo cap is 15, so this uses a 30-item cap.
         """
-        engine = ScoringEngine(default_v2_def)
+        uncapped = default_v2_def.model_dump()
+        uncapped["coverage_rules"]["payload"]["max_total"] = 30
+        engine = ScoringEngine(uncapped)
 
         answers = []
         # House R: 3 answers rating 5

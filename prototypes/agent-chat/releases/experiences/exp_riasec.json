@@ -1128,22 +1128,8 @@
   "rule_schema_ref": "rule.schema.localis.selection.adaptive_bounds:v1",
   "engine_version": "career-assessment-v1",
   "payload": {
-   "baseline_order": [
-    "q_r_01",
-    "q_i_01",
-    "q_a_01",
-    "q_s_01",
-    "q_e_01",
-    "q_c_01",
-    "q_r_02",
-    "q_i_02",
-    "q_a_02",
-    "q_s_02",
-    "q_e_02",
-    "q_c_02"
-   ],
    "selector": "widest_bound_gap",
-   "fallback": "tie_order_then_item_order"
+   "fallback": "seeded"
   }
  },
  "scoring_rules": {
@@ -1164,7 +1150,7 @@
    "items_per_house": 5,
    "baseline_total": 12,
    "min_answers_per_house": 2,
-   "max_total": 30,
+   "max_total": 15,
    "stop": "strict_bounds"
   }
  },
@@ -1172,14 +1158,6 @@
   "rule_schema_ref": "rule.schema.localis.tie.fixed_order:v1",
   "engine_version": "career-assessment-v1",
   "payload": {
-   "order": [
-    "house_r",
-    "house_i",
-    "house_a",
-    "house_s",
-    "house_e",
-    "house_c"
-   ],
    "apply_at": "question_limit"
   }
  },
@@ -1192,162 +1170,88 @@
   {
    "case_id": "case_all_neutral",
    "mandatory": true,
+   "seed": "eval_case_all_neutral",
    "answers": [
     {
-     "question_id": "q_r_01",
-     "option_id": "q_r_01_opt_3"
-    },
-    {
-     "question_id": "q_i_01",
-     "option_id": "q_i_01_opt_3"
-    },
-    {
-     "question_id": "q_a_01",
-     "option_id": "q_a_01_opt_3"
-    },
-    {
-     "question_id": "q_s_01",
-     "option_id": "q_s_01_opt_3"
-    },
-    {
-     "question_id": "q_e_01",
-     "option_id": "q_e_01_opt_3"
+     "question_id": "q_e_03",
+     "option_id": "q_e_03_opt_3"
     },
     {
      "question_id": "q_c_01",
      "option_id": "q_c_01_opt_3"
     },
     {
-     "question_id": "q_r_02",
-     "option_id": "q_r_02_opt_3"
+     "question_id": "q_s_01",
+     "option_id": "q_s_01_opt_3"
     },
     {
-     "question_id": "q_i_02",
-     "option_id": "q_i_02_opt_3"
+     "question_id": "q_r_01",
+     "option_id": "q_r_01_opt_3"
     },
     {
-     "question_id": "q_a_02",
-     "option_id": "q_a_02_opt_3"
-    },
-    {
-     "question_id": "q_s_02",
-     "option_id": "q_s_02_opt_3"
-    },
-    {
-     "question_id": "q_e_02",
-     "option_id": "q_e_02_opt_3"
-    },
-    {
-     "question_id": "q_c_02",
-     "option_id": "q_c_02_opt_3"
-    },
-    {
-     "question_id": "q_r_03",
-     "option_id": "q_r_03_opt_3"
+     "question_id": "q_a_01",
+     "option_id": "q_a_01_opt_3"
     },
     {
      "question_id": "q_i_03",
      "option_id": "q_i_03_opt_3"
     },
     {
-     "question_id": "q_a_03",
-     "option_id": "q_a_03_opt_3"
-    },
-    {
-     "question_id": "q_s_03",
-     "option_id": "q_s_03_opt_3"
-    },
-    {
-     "question_id": "q_e_03",
-     "option_id": "q_e_03_opt_3"
-    },
-    {
-     "question_id": "q_c_03",
-     "option_id": "q_c_03_opt_3"
-    },
-    {
-     "question_id": "q_r_04",
-     "option_id": "q_r_04_opt_3"
-    },
-    {
-     "question_id": "q_i_04",
-     "option_id": "q_i_04_opt_3"
-    },
-    {
-     "question_id": "q_a_04",
-     "option_id": "q_a_04_opt_3"
-    },
-    {
-     "question_id": "q_s_04",
-     "option_id": "q_s_04_opt_3"
-    },
-    {
-     "question_id": "q_e_04",
-     "option_id": "q_e_04_opt_3"
+     "question_id": "q_i_01",
+     "option_id": "q_i_01_opt_3"
     },
     {
      "question_id": "q_c_04",
      "option_id": "q_c_04_opt_3"
     },
     {
-     "question_id": "q_r_05",
-     "option_id": "q_r_05_opt_3"
+     "question_id": "q_e_02",
+     "option_id": "q_e_02_opt_3"
     },
     {
-     "question_id": "q_i_05",
-     "option_id": "q_i_05_opt_3"
+     "question_id": "q_r_04",
+     "option_id": "q_r_04_opt_3"
     },
     {
-     "question_id": "q_a_05",
-     "option_id": "q_a_05_opt_3"
+     "question_id": "q_a_03",
+     "option_id": "q_a_03_opt_3"
     },
     {
-     "question_id": "q_s_05",
-     "option_id": "q_s_05_opt_3"
+     "question_id": "q_s_02",
+     "option_id": "q_s_02_opt_3"
     },
     {
      "question_id": "q_e_05",
      "option_id": "q_e_05_opt_3"
     },
     {
-     "question_id": "q_c_05",
-     "option_id": "q_c_05_opt_3"
+     "question_id": "q_r_03",
+     "option_id": "q_r_03_opt_3"
+    },
+    {
+     "question_id": "q_c_02",
+     "option_id": "q_c_02_opt_3"
     }
    ],
    "expected": {
     "question_ids": [
-     "q_r_01",
-     "q_i_01",
-     "q_a_01",
-     "q_s_01",
-     "q_e_01",
-     "q_c_01",
-     "q_r_02",
-     "q_i_02",
-     "q_a_02",
-     "q_s_02",
-     "q_e_02",
-     "q_c_02",
-     "q_r_03",
-     "q_i_03",
-     "q_a_03",
-     "q_s_03",
      "q_e_03",
-     "q_c_03",
-     "q_r_04",
-     "q_i_04",
-     "q_a_04",
-     "q_s_04",
-     "q_e_04",
+     "q_c_01",
+     "q_s_01",
+     "q_r_01",
+     "q_a_01",
+     "q_i_03",
+     "q_i_01",
      "q_c_04",
-     "q_r_05",
-     "q_i_05",
-     "q_a_05",
-     "q_s_05",
+     "q_e_02",
+     "q_r_04",
+     "q_a_03",
+     "q_s_02",
      "q_e_05",
-     "q_c_05"
+     "q_r_03",
+     "q_c_02"
     ],
-    "house_id": "house_r",
+    "house_id": "house_e",
     "scores": {
      "house_r": 3.0,
      "house_i": 3.0,

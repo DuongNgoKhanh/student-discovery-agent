@@ -4,13 +4,14 @@ Provides:
 - 60 localized career activity questions (10 items per house) adapted from the O*NET
   Interest Profiler for Vietnamese high school students (grades 10-12).
 - Deterministic sampler to construct fully compliant Definition 2.0 ExperienceDefinitionDocument
-  instances (30 items, baseline 12 items, 6 houses, exact tie policy).
+  instances (30 items, 6 houses, at most 15 asked per activity in a seeded order).
 """
 
 import copy
 import random
 from typing import Any, Dict, List, Optional, Union
 
+from agent_runtime.engine.services.selector import AdaptiveQuestionSelector
 from agent_runtime.evaluations.schemas.experience import ExperienceDefinitionDocument
 
 # ------------------------------------------------------------------------------
@@ -342,7 +343,6 @@ def sample_experience_definition(
             })
 
     # Sort questions consistently: by item_order 1..5, then by house_id
-    # This guarantees questions[:12] exactly matches the 12 baseline items (2 per house)
     ordered_questions: List[Dict[str, Any]] = []
     for order in range(1, 6):
         for house_id in HOUSE_IDS:
@@ -353,17 +353,13 @@ def sample_experience_definition(
             ordered_questions.append(q)
     questions = ordered_questions
 
-    # Construct standard baseline_order (12 items): R1, I1, A1, S1, E1, C1, R2, I2, A2, S2, E2, C2
-    baseline_order: List[str] = [q["question_id"] for q in questions[:12]]
-
     rules = {
         "selection_rules": {
             "rule_schema_ref": "rule.schema.localis.selection.adaptive_bounds:v1",
             "engine_version": "career-assessment-v1",
             "payload": {
-                "baseline_order": baseline_order,
                 "selector": "widest_bound_gap",
-                "fallback": "tie_order_then_item_order",
+                "fallback": "seeded",
             },
         },
         "scoring_rules": {
@@ -381,7 +377,7 @@ def sample_experience_definition(
                 "items_per_house": 5,
                 "baseline_total": 12,
                 "min_answers_per_house": 2,
-                "max_total": 30,
+                "max_total": 15,
                 "stop": "strict_bounds",
             },
         },
@@ -389,7 +385,6 @@ def sample_experience_definition(
             "rule_schema_ref": "rule.schema.localis.tie.fixed_order:v1",
             "engine_version": "career-assessment-v1",
             "payload": {
-                "order": copy.deepcopy(HOUSE_IDS),
                 "apply_at": "question_limit",
             },
         },
@@ -400,27 +395,6 @@ def sample_experience_definition(
         "clarification_prompt": "Ý bạn là gì trong các mức độ sau?",
         "completion_message": "Chúc mừng bạn đã hoàn thành bài khảo sát! Dưới đây là kết quả của bạn.",
     }
-
-    # Deterministic baseline evaluation case: all 30 questions rating 3
-    all_qids = [q["question_id"] for q in questions]
-    eval_answers = [
-        {"question_id": qid, "option_id": f"{qid}_opt_3"}
-        for qid in all_qids
-    ]
-    evaluation_cases = [
-        {
-            "case_id": "eval_all_neutral_tie_to_r",
-            "mandatory": True,
-            "answers": eval_answers,
-            "expected": {
-                "question_ids": all_qids,
-                "house_id": "house_r",
-                "scores": {house_id: 3.0 for house_id in HOUSE_IDS},
-                "stopping_reason": "question_limit",
-                "tie_applied": True,
-            },
-        }
-    ]
 
     doc_data: Dict[str, Any] = {
         "schema_version": "2.0",
@@ -435,11 +409,41 @@ def sample_experience_definition(
         "coverage_rules": rules["coverage_rules"],
         "tie_policy": rules["tie_policy"],
         "templates": templates,
-        "evaluation_cases": evaluation_cases,
+        "evaluation_cases": [],
         "approval_refs": ["audit_initial_setup", "spec_adr_002_pilot"],
     }
+    doc_data["evaluation_cases"] = [_neutral_case(doc_data)]
 
     if return_dict:
         return doc_data
 
     return ExperienceDefinitionDocument.model_validate(doc_data)
+
+
+def _neutral_case(doc_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Golden case: every answer rated 3 along the seeded path, so the seed alone breaks the final tie."""
+    seed = "eval_all_neutral"
+    first = doc_data["questions"][0]
+    # The document model requires one case; this placeholder is only used to run the selector.
+    draft = {**doc_data, "evaluation_cases": [{
+        "case_id": "draft",
+        "seed": seed,
+        "answers": [{"question_id": first["question_id"], "option_id": first["choices"][0]["option_id"]}],
+        "expected": {"house_id": first["house_id"]},
+    }]}
+    selector, answers = AdaptiveQuestionSelector(), []
+    while (result := selector.select_next_question(answers, definition=draft, seed=seed)).next_question_id:
+        answers.append({"question_id": result.next_question_id, "option_id": f"{result.next_question_id}_opt_3"})
+    return {
+        "case_id": "eval_all_neutral_seeded_tie",
+        "mandatory": True,
+        "seed": seed,
+        "answers": answers,
+        "expected": {
+            "question_ids": [a["question_id"] for a in answers],
+            "house_id": result.primary_house_id,
+            "scores": {house_id: 3.0 for house_id in HOUSE_IDS},
+            "stopping_reason": "question_limit",
+            "tie_applied": True,
+        },
+    }
