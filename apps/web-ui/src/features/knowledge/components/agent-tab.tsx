@@ -9,7 +9,9 @@ export function AgentTab({ kb }: { kb: string }) {
   const { data, error } = useAgentParams(kb);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
-  const json = data ? JSON.stringify(data, null, 2) : '';
+  // `warnings` explains adjustments for the admin; agent.json only takes the two param objects.
+  const { warnings = [], ...params } = data ?? {};
+  const json = data ? JSON.stringify(params, null, 2) : '';
   const copy = () => {
     const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard;
     if (!clipboard) { setCopyFailed(true); return; }
@@ -22,6 +24,11 @@ export function AgentTab({ kb }: { kb: string }) {
         <code>knowledge.show</code> trong mảng <code>tools</code>. Chỉ hội thoại mới thấy thay đổi.
       </p>
       <ErrorText error={error} />
+      {warnings.length > 0 && (
+        <ul role="status" className="list-disc space-y-1 rounded-md bg-amber-50 p-3 pl-6 text-amber-800">
+          {warnings.map(warning => <li key={warning}>{warning}</li>)}
+        </ul>
+      )}
       <pre className="overflow-auto rounded-md bg-gray-50 p-3 text-xs">{json}</pre>
       <Button disabled={!data} onClick={copy}>{copied ? 'Đã copy' : 'Copy'}</Button>
       {copyFailed && <p role="alert" className="text-red-600">Không copy được, hãy chọn và copy thủ công.</p>}

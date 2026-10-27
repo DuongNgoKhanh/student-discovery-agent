@@ -93,8 +93,9 @@ export function DocumentEditor({ kb, docId }: { kb: string; docId: string | null
         {fields.data?.map(field => (
           <label key={field.id} className="block text-sm">{`${field.label || field.name} (${field.name})`}
             <Input
-              type={field.type === 'time' ? 'date' : 'text'}
-              placeholder={field.type === 'string_list' ? 'giá trị 1; giá trị 2' : undefined}
+              type="text"
+              placeholder={field.type === 'string_list' ? 'giá trị 1; giá trị 2'
+                : field.type === 'time' ? '2026-03-01 hoặc 2026-03-01T10:00' : undefined}
               {...form.register(`metadata.${field.name}`)}
             />
           </label>
