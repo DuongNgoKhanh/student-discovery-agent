@@ -7,7 +7,7 @@ Verifies:
 - Unequal answer counts: exact mean comparison vs sum comparison (R=[4,4] vs I=[5,4,3,4])
 - Mathematical Invariants: mean contributions sum exactly to the house mean; display
   contributions sum to the display score within its 2-decimal rounding
-- DEC-04: Holland Hexagonal Tie-Breaking Order (R -> I -> A -> S -> E -> C), applied at question_limit
+- Ties: exact mean, then count of top ratings, then the activity seed (shared with the selector)
 - Bounded winner early stopping vs question limit stopping
 - Answer invalidation & recompute idempotency
 - Typed failure handling for answers and definitions (shared with the selector)
@@ -15,10 +15,13 @@ Verifies:
 - Definition 1.0 reports completion only (no scoring)
 """
 
+import functools
+
 import pytest
 
 from agent_runtime.engine.error_codes import EngineErrorCode
 from agent_runtime.engine.exceptions import (
+    EngineError,
     InvalidPrefixError,
     MissingMappingError,
     UnsupportedDefinitionError,
@@ -32,11 +35,21 @@ from agent_runtime.engine.schemas.selector import (
     RationalScore,
     StoppingReason,
 )
-from agent_runtime.engine.services.scorer import (
-    ScoringEngine,
-    calculate_scores,
-)
+from agent_runtime.engine.services.ordering import rank_houses, seeded_order
+from agent_runtime.engine.services.scorer import ScoringEngine as _ScoringEngine
+from agent_runtime.engine.services.scorer import calculate_scores as _calculate_scores
 from agent_runtime.engine.services.selector import AdaptiveQuestionSelector
+
+SEED = "act_fixture"
+LETTER = {"house_r": "R", "house_i": "I", "house_a": "A", "house_s": "S", "house_e": "E", "house_c": "C"}
+calculate_scores = functools.partial(_calculate_scores, seed=SEED)
+
+
+class ScoringEngine(_ScoringEngine):
+    """Scoring engine bound to one activity seed, as the completion port calls it."""
+
+    def calculate_scores(self, answers=None, definition=None, *, seed=SEED):
+        return super().calculate_scores(answers, definition, seed=seed)
 
 
 def _with_coverage(definition, answers, rating=1):
@@ -108,7 +121,8 @@ class TestScoringEngineUnequalCounts:
         """R has ratings [4, 4] (sum=8, n=2) and I has [5, 4, 3, 4] (sum=16, n=4). Both mean=4.0.
 
         Sum comparison would erroneously pick I (16 > 8).
-        Mean comparison recognises equal mean=4.0 and uses tie policy (R before I).
+        Mean comparison recognises equal mean=4.0; the next tier is the count of top ratings, where I
+        (one 5) beats R (none). The sum never decides.
         """
         engine = ScoringEngine(default_v2_def)
 
@@ -139,10 +153,10 @@ class TestScoringEngineUnequalCounts:
         # Equal exact mean ratings
         assert r_score.mean == i_score.mean
 
-        # House R ranks first due to Holland tie order (R before I); the tie policy is
-        # only reported as applied at question_limit.
-        assert result.primary_house_id == "house_r"
-        assert result.secondary_house_id == "house_i"
+        # I ranks first on top ratings (5 vs none); the tie policy is only reported as applied at
+        # question_limit.
+        assert result.primary_house_id == "house_i"
+        assert result.secondary_house_id == "house_r"
         assert result.is_complete is False
         assert result.tie_applied is False
 
@@ -214,10 +228,10 @@ class TestScoringContributionsInvariants:
 
 
 class TestScoringTiePolicyAndClassification:
-    """Verifies DEC-04 Holland Hexagonal Tie Policy and Full Classification."""
+    """Verifies the seeded tie policy and full classification."""
 
-    def test_all_neutral_answers_tie_resolved_to_house_r(self, default_v2_def):
-        """All 30 answers rating 3: all houses have mean=3.0, resolves to house_r with tie_applied=True."""
+    def test_all_neutral_answers_tie_resolved_by_seed(self, default_v2_def):
+        """All 30 answers rating 3: every house has mean 3.0 and no top ratings, so the seed ranks them."""
         engine = ScoringEngine(default_v2_def)
 
         answers = [
@@ -230,16 +244,11 @@ class TestScoringTiePolicyAndClassification:
         assert result.total_answers == 30
         assert result.is_complete is True
         assert result.stopping_reason == StoppingReason.QUESTION_LIMIT
-        assert result.primary_house_id == "house_r"
-        assert result.secondary_house_id == "house_i"
-        assert result.tertiary_house_id == "house_a"
-        assert result.holland_code == "RIA"
+        expected = seeded_order(SEED, "house", HOUSE_IDS)
+        assert result.ranked_houses == expected
+        assert [result.primary_house_id, result.secondary_house_id, result.tertiary_house_id] == expected[:3]
+        assert result.holland_code == "".join(LETTER[h] for h in expected[:3])
         assert result.tie_applied is True
-
-        # Ranked houses must match tie order exactly
-        assert result.ranked_houses == [
-            "house_r", "house_i", "house_a", "house_s", "house_e", "house_c"
-        ]
 
         for h_id in HOUSE_IDS:
             assert result.house_scores[h_id].display_score == 50.0
@@ -505,8 +514,9 @@ class TestScoringErrorPaths:
         for q in v2_dict["questions"]:
             if q["house_id"] == old:
                 q["house_id"] = new
-        order = v2_dict["tie_policy"]["payload"]["order"]
-        order[order.index(old)] = new
+        order = v2_dict["tie_policy"]["payload"].get("order")
+        if order:
+            order[order.index(old)] = new
         with pytest.raises(MissingMappingError) as exc:
             ScoringEngine(v2_dict).calculate_scores([])
         assert exc.value.code == EngineErrorCode.INVALID_HOUSE_REF
@@ -526,13 +536,6 @@ class TestScoringErrorPaths:
         with pytest.raises(UnsupportedDefinitionError) as exc:
             ScoringEngine(v2_dict).calculate_scores([])
         assert exc.value.code == EngineErrorCode.INVALID_COVERAGE_CONFIG
-
-    @pytest.mark.parametrize("order", ["CSEAIR", {"a": 1}, ["house_c"]])
-    def test_invalid_tie_order_rejected(self, v2_dict, order):
-        v2_dict["tie_policy"]["payload"]["order"] = order
-        with pytest.raises(UnsupportedDefinitionError) as exc:
-            ScoringEngine(v2_dict).calculate_scores([])
-        assert exc.value.code == EngineErrorCode.INVALID_TIE_ORDER
 
 
 class TestScoringEdgeCases:
@@ -555,11 +558,11 @@ class TestScoringEdgeCases:
         assert (res.primary_house_id, res.holland_code, res.ranked_houses) == (None, None, [])
         assert all(d.rank is None for d in res.house_scores.values())
 
-    def test_all_ratings_one_still_ranks_by_tie_order(self, default_v2_def):
+    def test_all_ratings_one_still_ranks_by_seed(self, default_v2_def):
         answers = [_answer(q.question_id, 1) for q in default_v2_def.questions[:12]]
         res = calculate_scores(answers, default_v2_def)
         assert all(d.display_score == 0.0 for d in res.house_scores.values())
-        assert res.holland_code == "RIA"
+        assert res.holland_code == "".join(LETTER[h] for h in seeded_order(SEED, "house", HOUSE_IDS)[:3])
         assert res.is_complete is False
 
     def test_question_limit_without_coverage_rejected(self, v2_dict):
@@ -569,14 +572,6 @@ class TestScoringEdgeCases:
         with pytest.raises(InvalidPrefixError) as exc:
             calculate_scores(answers, doc)
         assert exc.value.code == EngineErrorCode.SEQUENCE_MISMATCH
-
-    def test_custom_tie_order_is_used(self, v2_dict):
-        v2_dict["tie_policy"]["payload"]["order"] = list(reversed(HOUSE_IDS))
-        doc = ScoringEngine._coerce_definition(v2_dict)
-        answers = [_answer(q.question_id, 3) for q in doc.questions]
-        res = calculate_scores(answers, doc)
-        assert res.primary_house_id == "house_c"
-        assert res.tie_applied is True
 
     def test_bounded_lead_without_min_coverage_does_not_stop(self, default_v2_def):
         answers = [_answer(f"q_r_{i:02}", 5) for i in range(1, 6)]
@@ -605,7 +600,7 @@ class TestScoringMatchesSelector:
         question_house = {q.question_id: q.house_id for q in default_v2_def.questions}
         answers = []
         while True:
-            sel = selector.select_next_question(answers)
+            sel = selector.select_next_question(answers, seed=SEED)
             res = calculate_scores(answers, default_v2_def)
             assert res.is_complete == (sel.next_question_id is None)
             for h_id, stats in sel.statistics.items():
@@ -619,3 +614,27 @@ class TestScoringMatchesSelector:
             assert res.tie_applied is False
             qid = sel.next_question_id
             answers.append(_answer(qid, profile.get(question_house[qid], 2)))
+
+
+class TestSeededScoring:
+    """The scorer ranks with the same seeded rule as the selector, so completion never disagrees."""
+
+    def test_scorer_requires_seed_for_v2(self, default_v2_def):
+        with pytest.raises(EngineError) as caught:
+            _ScoringEngine(default_v2_def).calculate_scores([])
+        assert caught.value.code == EngineErrorCode.MISSING_REQUIRED_FIELD
+
+    @pytest.mark.parametrize("n", range(30))
+    def test_scorer_and_selector_agree_on_winner(self, default_v2_def, n):
+        seed = f"act_{n}"
+        prefs = {h: 1 + (n + i) % 5 for i, h in enumerate(HOUSE_IDS)}
+        selector, answers = AdaptiveQuestionSelector(default_v2_def), []
+        house_of = {q.question_id: q.house_id for q in default_v2_def.questions}
+        while (sel := selector.select_next_question(answers, seed=seed)).next_question_id is not None:
+            answers.append(_answer(sel.next_question_id, prefs[house_of[sel.next_question_id]]))
+        res = _ScoringEngine(default_v2_def).calculate_scores(answers, seed=seed)
+        assert (res.primary_house_id, res.tie_applied) == (sel.primary_house_id, sel.tie_applied)
+        ratings = {h: [] for h in HOUSE_IDS}
+        for a in answers:
+            ratings[house_of[a.question_id]].append(a.rating)
+        assert res.ranked_houses == rank_houses(HOUSE_IDS, ratings, seed)

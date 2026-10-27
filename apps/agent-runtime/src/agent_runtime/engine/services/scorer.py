@@ -5,7 +5,7 @@ Conforms to:
 - ADR-002: §7.5 (Exact Rational Scoring, Mean Ratings & Display Score 0..100)
 - ADR-002: §7.5 (Answer Contributions Invariants: sum(mean contrib) == mean exactly)
 - ADR-002: §7.6 (Stopping condition with provable bounds: bounded_winner, question_limit)
-- DEC-04: Holland Hexagonal Tie-Breaking Order (R -> I -> A -> S -> E -> C)
+- Ties: exact mean, then count of top ratings, then a per-activity seeded key (engine/services/ordering.py)
 - 100% Deterministic First (No LLM, no unseeded randomness)
 
 Definition validation, answer normalization and house statistics are shared with
@@ -34,6 +34,7 @@ from agent_runtime.engine.schemas.selector import (
     RationalScore,
     StoppingReason,
 )
+from agent_runtime.engine.services.ordering import rank_houses
 from agent_runtime.engine.services.selector import (
     SUPPORTED_SCHEMA_VERSIONS,
     AdaptiveQuestionSelector,
@@ -88,6 +89,8 @@ class ScoringEngine:
         self,
         answers: Optional[List[Union[AnswerInput, Dict[str, Any]]]] = None,
         definition: Optional[Union[ExperienceDefinitionDocument, Dict[str, Any]]] = None,
+        *,
+        seed: Optional[str] = None,
     ) -> AssessmentScoringResult:
         """Calculate exact rational scores, linear display scores, contributions and rankings.
 
@@ -97,6 +100,7 @@ class ScoringEngine:
         Args:
             answers: List of answered questions (empty/None for unstarted assessment).
             definition: Experience definition document; overrides the one bound at initialization.
+            seed: Activity id the selector used; required for Definition 2.0 so ties rank the same way.
 
         Returns:
             AssessmentScoringResult: Fully resolved score reports, contributions, Holland code.
@@ -122,7 +126,12 @@ class ScoringEngine:
         normalized_answers, _ = self._selector._normalize_and_validate_answers(answers, active_def)
 
         if active_def.schema_version == "2.0":
-            return self._score_v2(active_def, normalized_answers)
+            if not isinstance(seed, str) or not seed:
+                raise EngineError(
+                    "Definition 2.0 scoring requires a non-empty seed (the activity id)",
+                    code=EngineErrorCode.MISSING_REQUIRED_FIELD,
+                )
+            return self._score_v2(active_def, normalized_answers, seed)
         return self._score_v1(active_def, normalized_answers)
 
     # --------------------------------------------------------------------------
@@ -133,6 +142,7 @@ class ScoringEngine:
         self,
         definition: ExperienceDefinitionDocument,
         answers: List[AnswerInput],
+        seed: str,
     ) -> AssessmentScoringResult:
         """Execute scoring, contributions and classification for Definition 2.0."""
         house_ids = [h.house_id for h in definition.houses]
@@ -146,7 +156,6 @@ class ScoringEngine:
         question_map = {q.question_id: q for q in definition.questions}
         house_name_map = {h.house_id: h.name for h in definition.houses}
         # Presence and shape of these keys is enforced by _validate_definition.
-        tie_order: List[str] = definition.tie_policy.payload["order"]
         coverage_payload = definition.coverage_rules.payload
         items_per_house: int = coverage_payload["items_per_house"]
         max_total: int = coverage_payload["max_total"]
@@ -155,6 +164,7 @@ class ScoringEngine:
         stats: Dict[str, HouseStatistics] = self._selector._compute_house_statistics(
             definition, answers, question_map, items_per_house
         )
+        ratings = self._selector._ratings_by_house(definition, answers, question_map)
 
         # Step 1: Per-answer contributions, keeping the 1-based answer ordinal (ADR-002 §7.5)
         contributions_by_house: Dict[str, List[AnswerContribution]] = {h_id: [] for h_id in house_ids}
@@ -174,7 +184,7 @@ class ScoringEngine:
             )
 
         # Step 2: No ranking or classification before every house reaches baseline
-        # coverage (ADR-002 §7.5). Once covered, rank by exact mean, ties by tie_order.
+        # coverage (ADR-002 §7.5). Once covered, rank with the shared seeded ranking (mean, top ratings, seed).
         total_answers = len(answers)
         covered = all(s.count >= min_answers_per_house for s in stats.values())
         if total_answers >= max_total and not covered:
@@ -184,7 +194,7 @@ class ScoringEngine:
             )
         ranked_houses: List[str] = []
         if covered:
-            ranked_houses = sorted(tie_order, key=lambda h_id: -stats[h_id].mean.to_fraction())
+            ranked_houses = rank_houses(house_ids, ratings, seed)
         rank_of = {h_id: rank for rank, h_id in enumerate(ranked_houses, start=1)}
 
         # Step 3: Build house details; display_score is a per-house rescale, never a share.
@@ -195,7 +205,7 @@ class ScoringEngine:
                 rank=rank_of.get(h_id),
                 contributions=contributions_by_house[h_id],
             )
-            for h_id in tie_order
+            for h_id in house_ids
         }
 
         # Step 4: Classify primary, secondary, tertiary houses and Holland Code
@@ -208,7 +218,7 @@ class ScoringEngine:
 
         if total_answers >= max_total:
             stopping_reason = StoppingReason.QUESTION_LIMIT
-            winner, tie_applied = self._selector._resolve_winner_at_limit(stats, tie_order)
+            winner, tie_applied = self._selector._resolve_winner_at_limit(stats, ratings, seed)
             if winner != ranked_houses[0]:
                 raise EngineError(
                     f"Scorer winner '{ranked_houses[0]}' disagrees with selector winner '{winner}'",
@@ -265,7 +275,9 @@ class ScoringEngine:
 def calculate_scores(
     answers: Optional[List[Union[AnswerInput, Dict[str, Any]]]] = None,
     definition: Optional[Union[ExperienceDefinitionDocument, Dict[str, Any]]] = None,
+    *,
+    seed: Optional[str] = None,
 ) -> AssessmentScoringResult:
     """Convenience module-level entry point to calculate assessment scores and contributions."""
     engine = ScoringEngine(definition)
-    return engine.calculate_scores(answers)
+    return engine.calculate_scores(answers, seed=seed)
