@@ -20,19 +20,11 @@ const TIMEOUT = { timeout: 4000 };
 describe('ChatShell với mock', () => {
   it('hiển thị lời chào và nút bắt đầu', async () => {
     renderShell();
-    expect(await screen.findByText('Chúng ta nên bắt đầu từ đâu?', {}, TIMEOUT)).toBeInTheDocument();
-    expect(screen.getByText(GREETING_TEXT)).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: GREETING_TEXT }, TIMEOUT),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Bắt đầu' })).toBeEnabled();
-    expect(screen.getByPlaceholderText('Hỏi ChatGPT')).toBeInTheDocument();
-  });
-
-  it('bắt đầu phiên bằng cách nhập tin nhắn vào thanh input mở đầu', async () => {
-    renderShell();
-    const input = await screen.findByPlaceholderText('Hỏi ChatGPT', {}, TIMEOUT);
-    fireEvent.change(input, { target: { value: 'Bắt đầu ngay' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
-
-    expect(await screen.findByLabelText('Mình gọi bạn là gì nhỉ?', {}, TIMEOUT)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Hỏi ChatGPT')).not.toBeInTheDocument();
   });
 
   it('đi hết luồng: tên, trả lời, tiến độ tăng đúng một lần', async () => {

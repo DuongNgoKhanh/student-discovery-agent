@@ -19,7 +19,6 @@ import type { CreatedConversation, TurnResult } from '../schemas/conversation';
 import { ActivityControls, type SendFn } from './activity-controls';
 import { BlockRenderer } from './block-renderer';
 import { ChatHeader } from './chat-header';
-import { ChatInputBar } from './chat-input-bar';
 import { ChatSidebar, type ChatThreadItem } from './chat-sidebar';
 import { ErrorPanel, LoadingPanel, NotConfiguredPanel } from './status-panels';
 
@@ -208,20 +207,9 @@ export function ChatShell() {
             </div>
           ) : isInitial ? (
             <div className="mx-auto flex h-full min-h-[460px] w-full max-w-2xl flex-1 flex-col items-center justify-center py-10 text-center">
-              <h1 className="mb-2 text-2xl font-medium tracking-tight text-slate-800 dark:text-slate-100 sm:text-3xl">
-                Chúng ta nên bắt đầu từ đâu?
-              </h1>
-              <p className="mb-8 max-w-md text-sm text-slate-500 dark:text-slate-400 sm:text-base">
+              <h1 className="mb-8 max-w-lg text-2xl font-medium tracking-tight text-slate-800 dark:text-slate-100 sm:text-3xl">
                 {GREETING_TEXT}
-              </p>
-
-              <div className="mb-4 w-full">
-                <ChatInputBar
-                  disabled={busy}
-                  placeholder="Hỏi ChatGPT"
-                  onSend={(text) => send({ type: 'message', content: { text } }, text)}
-                />
-              </div>
+              </h1>
 
               {turns.isPending && (
                 <p role="status" className="mb-3 text-xs text-muted-foreground">
