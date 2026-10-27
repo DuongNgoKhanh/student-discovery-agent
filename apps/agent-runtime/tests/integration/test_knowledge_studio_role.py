@@ -71,6 +71,9 @@ def test_studio_writes_content_columns(engines):
     "UPDATE knowledge.metadata_fields SET name = 'other' WHERE id = 'f1'",
     "UPDATE knowledge.knowledge_bases SET embedding_model = 'other' WHERE id = 'kb1'",
     "UPDATE knowledge.imports SET report = '{}' WHERE id = 'i1'",
+    "INSERT INTO knowledge.document_revisions (id, document_id, revision, title, body, content_hash, index_status) "
+    f"VALUES ('r2', 'd1', 2, 'T', 'B', '{HASH}', 'ready')",
+    "INSERT INTO knowledge.documents (id, kb_id, active_revision_id) VALUES ('d2', 'kb1', 'r1')",
 ])
 def test_studio_cannot_touch_index_state_or_identity(engines, statement):
     _, studio = engines

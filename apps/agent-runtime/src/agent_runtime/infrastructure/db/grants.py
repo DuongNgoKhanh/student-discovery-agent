@@ -48,7 +48,11 @@ def grant_knowledge_roles(connection: Connection, runtime_role: str, indexer_rol
         connection.exec_driver_sql(
             f"GRANT INSERT, DELETE, UPDATE (label, filterable, ordinal) ON knowledge.metadata_fields TO {studio}")
         connection.exec_driver_sql(
-            f"GRANT INSERT, UPDATE (status, revision, latest_revision_id, updated_at) ON knowledge.documents TO {studio}")
-        connection.exec_driver_sql(f"GRANT INSERT ON knowledge.document_revisions TO {studio}")
+            "GRANT INSERT (id, kb_id), UPDATE (status, revision, latest_revision_id, updated_at) "
+            f"ON knowledge.documents TO {studio}")
+        # No index_status/error/claimed_at: a new revision always starts pending, only the indexer moves it on.
+        connection.exec_driver_sql(
+            "GRANT INSERT (id, document_id, revision, title, body, source_url, metadata, content_hash) "
+            f"ON knowledge.document_revisions TO {studio}")
         connection.exec_driver_sql(f"GRANT INSERT ON knowledge.imports TO {studio}")
         connection.exec_driver_sql(f"GRANT EXECUTE ON FUNCTION knowledge.retry_revision(text) TO {studio}")
