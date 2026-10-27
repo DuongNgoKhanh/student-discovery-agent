@@ -91,6 +91,36 @@ describe('agent params', () => {
       'knowledge.show': { display: [
         { field: 'major', label: 'Ngành' }, { field: 'tuition_text', label: 'Học phí' }, { field: 'houses', label: 'houses' },
       ] },
+      warnings: [],
     });
+  });
+
+  it('keeps the params within the runtime limits and warns about what was dropped', async () => {
+    const kbId = await createKb(admin);
+    for (let i = 1; i <= 12; i++) {
+      await createField(admin, kbId, {
+        name: `f${String(i).padStart(2, '0')}`, type: 'string', ordinal: i, filterable: i <= 11,
+        label: i === 2 ? 'x'.repeat(70) : i === 3 ? '   ' : `Nhãn ${i}`,
+      });
+    }
+    const res = await api('GET', `/admin/knowledge-bases/${kbId}/agent-params`, admin);
+    expect(res.status).toBe(200);
+    expectDeclared(res.body, '/admin/knowledge-bases/{kb_id}/agent-params', 'get', 200);
+    const { 'knowledge.search': search, 'knowledge.show': show, warnings } = res.body.data;
+    expect(show.display).toHaveLength(8);
+    for (const item of show.display) {
+      expect(item.label.length).toBeLessThanOrEqual(60);
+      expect(item.label.trim()).not.toBe('');
+    }
+    expect(show.display[2]).toEqual({ field: 'f03', label: 'f03' });
+    expect(search.auto_filter_fields).toHaveLength(10);
+    expect(warnings.length).toBeGreaterThan(0);
+  });
+
+  it('warns when the knowledge base has no fields', async () => {
+    const kbId = await createKb(admin);
+    const res = await api('GET', `/admin/knowledge-bases/${kbId}/agent-params`, admin);
+    expect(res.body.data['knowledge.show'].display).toEqual([]);
+    expect(res.body.data.warnings).toHaveLength(1);
   });
 });

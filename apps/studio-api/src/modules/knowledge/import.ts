@@ -40,7 +40,7 @@ export interface ParsedRow {
 const stripBom = (text: string) => text.replace(/^﻿/, '');
 
 export function firstHeading(markdown: string): string | null {
-  const match = /^#[ \t]+(.+?)[ \t]*#*[ \t]*$/m.exec(markdown);
+  const match = /^#[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/m.exec(markdown);
   return match?.[1]?.trim() || null;
 }
 
@@ -158,7 +158,7 @@ export function parseCsvRows(
       source: `dòng ${index + 2}`,
       documentId,
       title,
-      body: bodyColumn === undefined ? undefined : cells[bodyColumn] ?? '',
+      body: bodyColumn === undefined || !cell(bodyColumn) ? undefined : cells[bodyColumn],
       sourceUrl: sourceColumn === undefined ? undefined : cell(sourceColumn) || null,
       metadata,
       errors,

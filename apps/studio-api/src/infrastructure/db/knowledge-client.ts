@@ -38,7 +38,7 @@ export function getKnowledgePool(): Pool {
   if (current) void current.pool.end().catch(() => {});
   const pool = new Pool({ connectionString: url, max: 5, statement_timeout: 10_000, connectionTimeoutMillis: 5_000 });
   pool.on('error', (error: Error) => {
-    console.error('[knowledge-db] idle connection lost', error.message);
+    console.error('[knowledge-db] idle connection lost', error.name, (error as { code?: string }).code ?? '');
   });
   globalHandle.__sdaKnowledgePool = { url, pool };
   return pool;

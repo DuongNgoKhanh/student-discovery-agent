@@ -38,6 +38,11 @@ describe('parseFiles', () => {
     expect(firstHeading('## Không phải\n# Đây')).toBe('Đây');
     expect(firstHeading('không có')).toBeNull();
   });
+  it('keeps a trailing # that is part of the title but strips closing hashes', () => {
+    expect(firstHeading('# Ngành C#')).toBe('Ngành C#');
+    expect(firstHeading('# HUTECH — Tuyển sinh #')).toBe('HUTECH — Tuyển sinh');
+    expect(firstHeading('# Ngành C# ##')).toBe('Ngành C#');
+  });
   it('caps the number of files', () => {
     const files = Array.from({ length: MAX_IMPORT_ROWS + 1 }, (_, i) => ({ name: `f${i}.md`, content: 'x' }));
     expect(() => parseFiles(files)).toThrow(ImportInputError);
@@ -57,6 +62,11 @@ describe('parseCsvRows', () => {
     expect(rows[1]!.errors.some(e => e.includes('fee'))).toBe(true);
     expect(rows[1]!.metadata.province).toBeNull();
     expect(rows[2]!.errors.some(e => e.includes('document_id'))).toBe(true);
+  });
+
+  it('treats an empty or blank mapped body cell as not provided', () => {
+    const rows = parseCsvRows('id,body\na,\nb,   \nc, thân \n', { document_id: 'id', body: 'body', metadata: {} }, FIELDS);
+    expect(rows.map(r => r.body)).toEqual([undefined, undefined, ' thân ']);
   });
 
   it('derives ids from titles when no id column is mapped', () => {

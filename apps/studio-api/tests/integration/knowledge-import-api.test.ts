@@ -74,6 +74,42 @@ describe('knowledge import', () => {
     expect(badColumn.status).toBe(422);
   });
 
+  it('treats an empty mapped CSV body cell as missing: invalid for new documents, kept for existing ones', async () => {
+    const kbId = await kb();
+    await api('PUT', `${base(kbId)}/documents/keep-body`, admin, {
+      title: 'HUTECH', body: 'thân bài', source_url: null, metadata: {}, expected_revision: 0,
+    });
+    const preview = await api('POST', `${base(kbId)}/imports/preview`, admin, {
+      kind: 'csv', content: 'id,title,body,province\nkeep-body,Giữ,,Hà Nội\nmoi,Mới,  ,\n',
+      mapping: { document_id: 'id', title: 'title', body: 'body', metadata: { province: 'province' } },
+    });
+    const rows = preview.body.data.rows;
+    expect(rows[0]).toMatchObject({ action: 'update', payload: { body: 'thân bài', metadata: { province: 'Hà Nội' } } });
+    expect(rows[1]).toMatchObject({ action: 'invalid', payload: null });
+  });
+
+  it('marks rows containing NUL characters invalid instead of failing at commit', async () => {
+    const kbId = await kb();
+    const preview = await api('POST', `${base(kbId)}/imports/preview`, admin, { kind: 'files', files: [
+      { name: 'tot.md', content: '# Tốt\n\nok' },
+      { name: 'nul.md', content: '# NUL\n\nxin\u0000chào' },
+    ] });
+    expect(preview.status).toBe(200);
+    expect(preview.body.data.rows.map((r: { action: string }) => r.action)).toEqual(['create', 'invalid']);
+    expect(preview.body.data.rows[1].errors[0]).toContain('NUL');
+
+    const csv = await api('POST', `${base(kbId)}/imports/preview`, admin, {
+      kind: 'csv', content: 'id,title,body,province\na,A,x,Hà\u0000 Nội\n', mapping: { document_id: 'id', title: 'title', body: 'body', metadata: { province: 'province' } },
+    });
+    expect(csv.body.data.rows[0].action).toBe('invalid');
+
+    const commit = await api('POST', `${base(kbId)}/imports`, admin, {
+      idempotency_key: 'nul-key', rows: [{ row: 1, document_id: 'nul-doc', expected_revision: 0,
+        payload: { title: 'T', body: 'a\u0000b', source_url: null, metadata: {} } }],
+    });
+    expect(commit.status).toBe(422);
+  });
+
   it('commits row by row, reports conflicts after preview and replays by key', async () => {
     const kbId = await kb();
     await api('PUT', `${base(kbId)}/documents/b-doc`, admin, { title: 'B', body: 'v1', source_url: null, metadata: {}, expected_revision: 0 });

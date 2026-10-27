@@ -75,7 +75,7 @@ export const handleDeleteField = withHandler<FieldParams>(async (req, ctx, route
 const DOCUMENT_BODY = 512 * 1024;
 type DocParams = KbParams & { document_id: string };
 type RevisionParams = DocParams & { revision: string };
-const revisionParamSchema = z.coerce.number().int().min(1);
+const revisionParamSchema = z.coerce.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const queryOf = (req: Request) => Object.fromEntries(new URL(req.url).searchParams);
 
 export const handleListDocuments = withHandler<KbParams>(async (req, ctx, route) => {

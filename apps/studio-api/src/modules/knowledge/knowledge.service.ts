@@ -12,6 +12,7 @@ import {
   retryRevision, setDocumentStatus, updateField, updateKnowledgeBase,
   type DocumentRow, type DocumentSummaryRow, type FieldRow, type KnowledgeBaseRow,
 } from '@/modules/knowledge/knowledge.repository';
+import { buildAgentParams } from '@/modules/knowledge/agent-params';
 import { newId } from '@/modules/knowledge/ids';
 import { invalidMetadata, MetadataValidationError, namedMetadata } from '@/modules/knowledge/metadata';
 import { slugify } from '@/modules/knowledge/slug';
@@ -265,12 +266,6 @@ export async function searchKnowledgeBase(kbId: string, input: SearchInput, ctx:
 export async function agentParams(kbId: string) {
   return withKnowledgeClient(async client => {
     await requireKnowledgeBase(client, kbId);
-    const fields = await listFieldRows(client, kbId);
-    return {
-      'knowledge.search': {
-        knowledge_base_id: kbId, top_k: 4, auto_filter_fields: fields.filter(field => field.filterable).map(field => field.name),
-      },
-      'knowledge.show': { display: fields.map(field => ({ field: field.name, label: field.label || field.name })) },
-    };
+    return buildAgentParams(kbId, await listFieldRows(client, kbId));
   });
 }

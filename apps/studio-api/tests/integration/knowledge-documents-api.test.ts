@@ -81,6 +81,18 @@ describe('documents', () => {
     expect((await api('PUT', doc(kb, 'missing'), admin, { ...content, expected_revision: 3 })).status).toBe(404);
   });
 
+  it('rejects NUL characters in title, body, source_url and metadata with 422', async () => {
+    const kb = await kbWithFields();
+    for (const bad of [
+      { title: 'a\u0000b' }, { body: 'a\u0000b' }, { source_url: 'https://ihrd.vn/a\u0000b' }, { metadata: { province: 'a\u0000b' } },
+      { metadata: { houses: ['E', 'a\u0000b'] } },
+    ]) {
+      const res = await api('PUT', doc(kb, 'nul'), admin, { ...content, ...bad, expected_revision: 0 });
+      expect(res.status, JSON.stringify(bad)).toBe(422);
+    }
+    expect((await api('GET', doc(kb, 'nul'), admin)).status).toBe(404);
+  });
+
   it('refuses a document id owned by another knowledge base', async () => {
     const first = await kbWithFields();
     const second = await kbWithFields();
@@ -115,6 +127,9 @@ describe('documents', () => {
     expect(retried.status).toBe(200);
     expect(retried.body.data.latest).toMatchObject({ index_status: 'pending', error: null });
     expect((await api('POST', `${doc(kb, 'mtu')}/revisions/9/retry`, admin)).status).toBe(404);
+    expect((await api('POST', `${doc(kb, 'mtu')}/revisions/99999999999999999999/retry`, admin)).status).toBe(422);
+    const huge = await api('PUT', doc(kb, 'mtu'), admin, { ...content, expected_revision: 99999999999999999999 });
+    expect(huge.status, JSON.stringify(huge.body)).toBe(400); // the shared JSON reader already refuses integers beyond 2^53-1
   });
 
   it('pages documents by id', async () => {

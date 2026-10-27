@@ -588,7 +588,7 @@ components:
     AgentParams:
       type: object
       additionalProperties: false
-      required: [knowledge.search, knowledge.show]
+      required: [knowledge.search, knowledge.show, warnings]
       properties:
         knowledge.search:
           type: object
@@ -612,6 +612,10 @@ components:
                 properties:
                   field: {type: string}
                   label: {type: string}
+        warnings:
+          type: array
+          description: Điều chỉnh để params hợp lệ với runtime (cắt field/nhãn, KB chưa có field); không đưa vào agent.json.
+          items: {type: string}
     PaginationMeta:
       type: object
       required: [limit, next_cursor, has_more]

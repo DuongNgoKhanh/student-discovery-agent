@@ -113,7 +113,8 @@ function replay(stored: { request_hash: string; report: unknown }, requestHash: 
 
 /**
  * One transaction per row, so a bad row never rolls back good ones. Two concurrent requests with the same key may
- * both write; the second then sees its rows as unchanged and the first stored report wins.
+ * both write rows (the second then sees them as unchanged) and the first stored report wins. If the payloads differ,
+ * the losing request answers 409 but may already have written its rows.
  */
 export async function commitImport(kbId: string, input: ImportCommitInput, actor: string): Promise<ImportReportDTO> {
   const requestHash = computeContentHash(input.rows);

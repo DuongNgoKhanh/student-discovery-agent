@@ -43,21 +43,34 @@ export type PatchKnowledgeBaseInput = z.infer<typeof patchKnowledgeBaseSchema>;
 export type CreateFieldInput = z.infer<typeof createFieldSchema>;
 export type PatchFieldInput = z.infer<typeof patchFieldSchema>;
 
+/** Postgres text/jsonb reject U+0000, so it must be a validation error rather than a failed insert. */
+const NUL_MESSAGE = 'Không được chứa ký tự NUL (U+0000)';
+const noNul = (value: string) => !value.includes('\u0000');
+const hasNul = (value: unknown): boolean => {
+  if (typeof value === 'string') return !noNul(value);
+  if (Array.isArray(value)) return value.some(hasNul);
+  if (value !== null && typeof value === 'object') {
+    return Object.entries(value).some(([key, item]) => !noNul(key) || hasNul(item));
+  }
+  return false;
+};
+
 export const documentContentSchema = z.object({
-  title: z.string().max(300).refine(value => /\S/.test(value), 'Title must not be blank'),
-  body: z.string().refine(value => Buffer.byteLength(value, 'utf8') <= MAX_BODY_BYTES, 'Body exceeds 262144 bytes'),
+  title: z.string().max(300).refine(value => /\S/.test(value), 'Title must not be blank').refine(noNul, NUL_MESSAGE),
+  body: z.string().refine(value => Buffer.byteLength(value, 'utf8') <= MAX_BODY_BYTES, 'Body exceeds 262144 bytes')
+    .refine(noNul, NUL_MESSAGE),
   source_url: z.string().max(2000).url().refine(value => /^https?:\/\//i.test(value), 'Expected an http(s) URL')
-    .nullable().default(null),
-  metadata: z.record(z.unknown()).default({}),
+    .refine(noNul, NUL_MESSAGE).nullable().default(null),
+  metadata: z.record(z.unknown()).refine(value => !hasNul(value), NUL_MESSAGE).default({}),
 }).strict();
 
 export type DocumentContent = z.infer<typeof documentContentSchema>;
 
 export const putDocumentSchema = documentContentSchema.extend({
-  expected_revision: z.number().int().min(0),
+  expected_revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
 }).strict();
 
-export const statusChangeSchema = z.object({ expected_revision: z.number().int().min(1) }).strict();
+export const statusChangeSchema = z.object({ expected_revision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER) }).strict();
 
 export const listDocumentsQuerySchema = z.object({
   status: z.enum(['active', 'archived']).optional(),
@@ -94,7 +107,7 @@ export const importCommitSchema = z.object({
   rows: z.array(z.object({
     row: z.number().int().min(1),
     document_id: documentIdSchema,
-    expected_revision: z.number().int().min(0),
+    expected_revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
     payload: documentContentSchema,
   }).strict()).min(1).max(MAX_ROWS),
 }).strict();
