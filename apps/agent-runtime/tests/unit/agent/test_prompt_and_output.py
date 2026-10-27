@@ -50,6 +50,8 @@ def test_links_rule_follows_the_allowlist():
 @pytest.mark.parametrize(("url", "allowed"), [
     ("https://ihrd.vn/nganh", True), ("https://tuyensinh.ihrd.vn", True), ("http://ihrd.vn", False),
     ("https://ihrd.vn.evil.com", False), ("https://evilihrd.vn", False), ("javascript:alert(1)", False),
+    ("https://evil.example\\@ihrd.vn/x", False), ("https://ihrd.vn\\.evil.example/", False),
+    ("https://user@ihrd.vn/x", False), ("https://ihrd.vn:pw@ihrd.vn/x", False),
 ])
 def test_link_allowlist_matches_domain_and_subdomains_over_https(url, allowed):
     assert link_allowed(url, ("ihrd.vn",)) is allowed

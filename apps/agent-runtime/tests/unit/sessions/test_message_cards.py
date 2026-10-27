@@ -62,3 +62,16 @@ def test_unreadable_knowledge_fields_degrade_to_a_context_without_fields(caplog)
     assert context.knowledge_fields == {}
     assert isinstance(tools, KnowledgeTools)
     assert "knowledge fields unavailable: RuntimeError" in caplog.text
+
+
+def test_a_failing_knowledge_tool_becomes_an_error_result_not_a_failed_turn(caplog):
+    def broken(arguments):
+        raise KeyError("secret-detail")
+
+    tools = SimpleNamespace(search=broken, show=broken, cards=lambda: ())
+    executor = SnapshotToolExecutor(SimpleNamespace(activity=None), tools)
+    assert executor.execute("knowledge.search", KnowledgeSearchArguments(query="học phí")) == {
+        "error": "knowledge_unavailable"}
+    assert executor.execute("knowledge.show", KnowledgeShowArguments(refs=("k1",))) == {
+        "error": "knowledge_unavailable"}
+    assert "KeyError" in caplog.text and "secret-detail" not in caplog.text

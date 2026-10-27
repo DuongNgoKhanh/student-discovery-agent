@@ -4,6 +4,7 @@ Pure apart from the injected engine/Product calls in ``plan_message_turn``; no D
 validates a call against the preflight snapshot and records it; every state change is committed afterwards
 under the parent lock by ``TurnStore.commit_message``.
 """
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -104,6 +105,8 @@ def chat_history(views: Sequence[MessageView]) -> list[ChatMessage]:
                 history.append(AssistantMessage("\n".join(parts)))
     return history
 
+logger = logging.getLogger(__name__)
+
 
 class SnapshotToolExecutor:
     """Checks each call against the captured snapshot; results are what the model sees."""
@@ -119,7 +122,11 @@ class SnapshotToolExecutor:
         if name in {"knowledge.search", "knowledge.show"}:
             if self.knowledge is None:
                 return {"error": "knowledge_unavailable"}
-            return self.knowledge.search(arguments) if name == "knowledge.search" else self.knowledge.show(arguments)
+            try:  # a knowledge failure never fails the turn: the model sees an error result instead
+                return self.knowledge.search(arguments) if name == "knowledge.search" else self.knowledge.show(arguments)
+            except Exception as error:
+                logger.warning("knowledge tool %s failed: %s", name, type(error).__name__)
+                return {"error": "knowledge_unavailable"}
         snapshot, current = self.snapshot, phase(self.snapshot)
         if name == "assessment.start":
             binding = snapshot.agent.tool(name)
