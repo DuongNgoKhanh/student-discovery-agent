@@ -1,14 +1,16 @@
 import type { Hono } from 'hono';
+import { z } from 'zod';
 import { honoHandler, withHandler } from '@/http/handler';
 import { success } from '@/http/response';
 import { requireAdmin } from '@/modules/auth/auth.service';
 import { readExperienceJsonBody } from '@/modules/experiences/body';
 import {
-  createFieldSchema, createKnowledgeBaseSchema, fieldNameSchema, kbIdSchema, patchFieldSchema, patchKnowledgeBaseSchema,
+  createFieldSchema, createKnowledgeBaseSchema, documentIdSchema, fieldNameSchema, kbIdSchema, listDocumentsQuerySchema,
+  patchFieldSchema, patchKnowledgeBaseSchema, putDocumentSchema, statusChangeSchema,
 } from '@/modules/knowledge/knowledge.schemas';
 import {
-  createField, createKnowledgeBase, deleteField, getKnowledgeBase, listFields, listKnowledgeBases, patchField,
-  patchKnowledgeBase,
+  changeDocumentStatus, createField, createKnowledgeBase, deleteField, getDocument, getKnowledgeBase, listDocuments,
+  listFields, listKnowledgeBases, patchField, patchKnowledgeBase, retryDocumentRevision, saveDocument,
 } from '@/modules/knowledge/knowledge.service';
 
 export const KB_BASE = '/api/v1/admin/knowledge-bases';
@@ -67,6 +69,53 @@ export const handleDeleteField = withHandler<FieldParams>(async (req, ctx, route
   return success(await deleteField(kbId, name), ctx);
 });
 
+const DOCUMENT_BODY = 512 * 1024;
+type DocParams = KbParams & { document_id: string };
+type RevisionParams = DocParams & { revision: string };
+const revisionParamSchema = z.coerce.number().int().min(1);
+const queryOf = (req: Request) => Object.fromEntries(new URL(req.url).searchParams);
+
+export const handleListDocuments = withHandler<KbParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  const kbId = kbIdSchema.parse(route.params.kb_id);
+  const query = listDocumentsQuerySchema.parse(queryOf(req));
+  const { items, next_cursor } = await listDocuments(kbId, query);
+  return success({ items }, ctx, 200, { meta: { pagination: { limit: query.limit, next_cursor, has_more: next_cursor !== null } } });
+});
+
+export const handleGetDocument = withHandler<DocParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  return success(await getDocument(kbIdSchema.parse(route.params.kb_id), documentIdSchema.parse(route.params.document_id)), ctx);
+});
+
+export const handlePutDocument = withHandler<DocParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  const kbId = kbIdSchema.parse(route.params.kb_id);
+  const documentId = documentIdSchema.parse(route.params.document_id);
+  const body = putDocumentSchema.parse(await readExperienceJsonBody(req, { maxBytes: DOCUMENT_BODY }));
+  const result = await saveDocument(kbId, documentId, body);
+  return success(result.data, ctx, result.status);
+});
+
+const statusHandler = (status: 'active' | 'archived') => withHandler<DocParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  const kbId = kbIdSchema.parse(route.params.kb_id);
+  const documentId = documentIdSchema.parse(route.params.document_id);
+  const body = statusChangeSchema.parse(await readExperienceJsonBody(req, { maxBytes: SMALL_BODY }));
+  return success(await changeDocumentStatus(kbId, documentId, status, body.expected_revision), ctx);
+});
+export const handleArchiveDocument = statusHandler('archived');
+export const handleRestoreDocument = statusHandler('active');
+
+export const handleRetryRevision = withHandler<RevisionParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  await readExperienceJsonBody(req, { optional: true, maxBytes: SMALL_BODY });
+  const kbId = kbIdSchema.parse(route.params.kb_id);
+  const documentId = documentIdSchema.parse(route.params.document_id);
+  const revision = revisionParamSchema.parse(route.params.revision);
+  return success(await retryDocumentRevision(kbId, documentId, revision), ctx);
+});
+
 export function registerKnowledgeRoutes(app: Hono): void {
   app.get(KB_BASE, honoHandler(handleListKnowledgeBases));
   app.post(KB_BASE, honoHandler(handleCreateKnowledgeBase));
@@ -76,4 +125,10 @@ export function registerKnowledgeRoutes(app: Hono): void {
   app.post(`${KB_BASE}/:kb_id/fields`, honoHandler(handleCreateField));
   app.patch(`${KB_BASE}/:kb_id/fields/:field_name`, honoHandler(handlePatchField));
   app.delete(`${KB_BASE}/:kb_id/fields/:field_name`, honoHandler(handleDeleteField));
+  app.get(`${KB_BASE}/:kb_id/documents`, honoHandler(handleListDocuments));
+  app.get(`${KB_BASE}/:kb_id/documents/:document_id`, honoHandler(handleGetDocument));
+  app.put(`${KB_BASE}/:kb_id/documents/:document_id`, honoHandler(handlePutDocument));
+  app.post(`${KB_BASE}/:kb_id/documents/:document_id/archive`, honoHandler(handleArchiveDocument));
+  app.post(`${KB_BASE}/:kb_id/documents/:document_id/restore`, honoHandler(handleRestoreDocument));
+  app.post(`${KB_BASE}/:kb_id/documents/:document_id/revisions/:revision/retry`, honoHandler(handleRetryRevision));
 }

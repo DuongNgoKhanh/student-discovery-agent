@@ -1,16 +1,21 @@
 import { getKnowledgeEnv } from '@/config/env';
 import { ProductError } from '@/http/errors';
 import { inKnowledgeTransaction, withKnowledgeClient, type Queryable } from '@/infrastructure/db/knowledge-client';
+import { decodeCursor, encodeCursor } from '@/modules/experiences/cursor';
 import type {
-  CreateFieldInput, CreateKnowledgeBaseInput, PatchFieldInput, PatchKnowledgeBaseInput,
+  CreateFieldInput, CreateKnowledgeBaseInput, DocumentContent, ListDocumentsQuery, PatchFieldInput,
+  PatchKnowledgeBaseInput,
 } from '@/modules/knowledge/knowledge.schemas';
 import {
-  countDocumentsUsingField, deleteField as deleteFieldRow, findKnowledgeBase, insertField, insertKnowledgeBase,
-  listFieldRows, listKnowledgeBaseRows, lockField, updateField, updateKnowledgeBase,
-  type FieldRow, type KnowledgeBaseRow,
+  countDocumentsUsingField, deleteField as deleteFieldRow, findDocument, findKnowledgeBase, findRevisionId,
+  insertField, insertKnowledgeBase, listDocumentRows, listFieldRows, listKnowledgeBaseRows, lockDocument, lockField,
+  retryRevision, setDocumentStatus, updateField, updateKnowledgeBase,
+  type DocumentRow, type DocumentSummaryRow, type FieldRow, type KnowledgeBaseRow,
 } from '@/modules/knowledge/knowledge.repository';
 import { newId } from '@/modules/knowledge/ids';
+import { invalidMetadata, MetadataValidationError, namedMetadata } from '@/modules/knowledge/metadata';
 import { slugify } from '@/modules/knowledge/slug';
+import { putDocument, type PutOutcome } from '@/modules/knowledge/writer';
 
 export interface KnowledgeBaseDTO {
   id: string;
@@ -132,5 +137,120 @@ export async function deleteField(kbId: string, name: string): Promise<{ name: s
     }
     await deleteFieldRow(client, field.id);
     return { name, deleted: true };
+  });
+}
+
+export interface DocumentDetailDTO {
+  id: string;
+  kb_id: string;
+  status: 'active' | 'archived';
+  revision: number;
+  updated_at: string;
+  latest: {
+    revision: number; title: string; body: string; source_url: string | null; metadata: Record<string, unknown>;
+    index_status: DocumentRow['index_status']; error: string | null; created_at: string;
+  };
+  active: { revision: number } | null;
+}
+
+export type DocumentSummaryDTO = Omit<DocumentSummaryRow, 'updated_at'> & { updated_at: string };
+
+async function documentDetail(client: Queryable, kbId: string, documentId: string): Promise<DocumentDetailDTO> {
+  const row = await findDocument(client, kbId, documentId);
+  if (!row) throw notFound('Document');
+  const fields = await listFieldRows(client, kbId);
+  return {
+    id: row.id,
+    kb_id: row.kb_id,
+    status: row.status,
+    revision: row.revision,
+    updated_at: row.updated_at.toISOString(),
+    latest: {
+      revision: row.latest_revision, title: row.title, body: row.body, source_url: row.source_url,
+      metadata: namedMetadata(fields, row.metadata), index_status: row.index_status, error: row.error,
+      created_at: row.latest_created_at.toISOString(),
+    },
+    active: row.active_revision === null ? null : { revision: row.active_revision },
+  };
+}
+
+export async function getDocument(kbId: string, documentId: string): Promise<DocumentDetailDTO> {
+  return withKnowledgeClient(async client => {
+    await requireKnowledgeBase(client, kbId);
+    return documentDetail(client, kbId, documentId);
+  });
+}
+
+export async function listDocuments(kbId: string, query: ListDocumentsQuery) {
+  const { cursor, limit, ...filter } = query;
+  const scope = `knowledge-documents:${kbId}:${filter.status ?? ''}:${filter.index_status ?? ''}:${filter.q ?? ''}`;
+  const afterId = cursor ? String(decodeCursor(cursor, scope)) : null;
+  return withKnowledgeClient(async client => {
+    await requireKnowledgeBase(client, kbId);
+    const rows = await listDocumentRows(client, kbId, filter, afterId, limit + 1);
+    const items: DocumentSummaryDTO[] = rows.slice(0, limit).map(row => ({ ...row, updated_at: row.updated_at.toISOString() }));
+    const next_cursor = rows.length > limit ? encodeCursor(scope, items[items.length - 1]!.id) : null;
+    return { items, next_cursor };
+  });
+}
+
+/** Shared with import: maps a non-written outcome to the error a single PUT would return. */
+export function writeOutcomeError(outcome: Exclude<PutOutcome, { status: 'written' }>, expectedRevision: number): ProductError {
+  switch (outcome.status) {
+    case 'not_found':
+      return notFound('Document');
+    case 'wrong_kb':
+      return new ProductError(409, 'CONFLICT_ALREADY_EXISTS', 'Document id belongs to another knowledge base', false, { kind: 'already_exists' });
+    case 'conflict':
+      return new ProductError(409, 'CONFLICT_REVISION', 'Document revision conflict', false, {
+        kind: 'revision_conflict', expected_revision: expectedRevision, actual_revision: outcome.actual,
+      });
+  }
+}
+
+export async function saveDocument(kbId: string, documentId: string, input: DocumentContent & { expected_revision: number }) {
+  const { expected_revision, ...content } = input;
+  return inKnowledgeTransaction(async client => {
+    await requireKnowledgeBase(client, kbId);
+    let outcome: PutOutcome;
+    try {
+      outcome = await putDocument(client, kbId, documentId, content, expected_revision);
+    } catch (error) {
+      throw error instanceof MetadataValidationError ? invalidMetadata(error) : error;
+    }
+    if (outcome.status !== 'written') throw writeOutcomeError(outcome, expected_revision);
+    return {
+      status: outcome.outcome === 'created' ? 201 : 200,
+      data: { document_id: documentId, revision: outcome.revision, outcome: outcome.outcome },
+    };
+  });
+}
+
+export async function changeDocumentStatus(kbId: string, documentId: string, status: 'active' | 'archived', expectedRevision: number) {
+  return inKnowledgeTransaction(async client => {
+    await requireKnowledgeBase(client, kbId);
+    const current = await lockDocument(client, documentId);
+    if (!current || current.kb_id !== kbId) throw notFound('Document');
+    if (current.revision !== expectedRevision) {
+      throw writeOutcomeError({ status: 'conflict', actual: current.revision }, expectedRevision);
+    }
+    if (current.status !== status) await setDocumentStatus(client, documentId, status);
+    return documentDetail(client, kbId, documentId);
+  });
+}
+
+export async function retryDocumentRevision(kbId: string, documentId: string, revision: number) {
+  return inKnowledgeTransaction(async client => {
+    await requireKnowledgeBase(client, kbId);
+    const current = await lockDocument(client, documentId);
+    if (!current || current.kb_id !== kbId) throw notFound('Document');
+    const revisionId = await findRevisionId(client, documentId, revision);
+    if (!revisionId) throw notFound('Revision');
+    if (!await retryRevision(client, revisionId)) {
+      throw new ProductError(409, 'CONFLICT_INVALID_STATE', 'Only a revision that failed indexing can be retried', false, {
+        kind: 'invalid_state',
+      });
+    }
+    return documentDetail(client, kbId, documentId);
   });
 }
