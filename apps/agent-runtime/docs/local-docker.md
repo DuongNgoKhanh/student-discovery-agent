@@ -63,3 +63,19 @@ docker compose -f docker-compose.runtime-local.yaml down
 ```
 
 File Compose này không tạo database, không migrate dữ liệu và không gắn volume của stack Product. Image production và cơ chế xác thực runtime giữ nguyên.
+
+## Knowledge base demo
+
+DB phải dùng image `pgvector/pgvector:pg16`. Sau khi đổi image hoặc schema, drop volume DB và migrate lại.
+
+```bash
+# Nạp knowledge base minh họa (trường hư cấu), chạy lại bao nhiêu lần cũng được
+RUNTIME_KNOWLEDGE_SEED_DATABASE_URL=... python -m agent_runtime.cli.knowledge_seed
+# Index một lượt rồi thoát (cần GOOGLE_API_KEY; không có key thì dùng --fake-embedding và seed với
+# --embedding-model fake-embedding)
+RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL=... python -m agent_runtime.cli.knowledge_indexer --once
+```
+
+Thử tìm kiếm qua `POST /api/v1/internal/knowledge/retrieval` (contract trong
+`contracts/openapi/internal/runtime-api.yaml`, ví dụ trong `contracts/fixtures/knowledge-retrieval.json`).
+Service `knowledge-indexer` trong `docker-compose.yaml` chạy worker liên tục, thức dậy bằng `LISTEN knowledge_index`.
