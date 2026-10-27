@@ -5,13 +5,14 @@ import { success } from '@/http/response';
 import { requireAdmin } from '@/modules/auth/auth.service';
 import { readExperienceJsonBody } from '@/modules/experiences/body';
 import {
-  createFieldSchema, createKnowledgeBaseSchema, documentIdSchema, fieldNameSchema, kbIdSchema, listDocumentsQuerySchema,
-  patchFieldSchema, patchKnowledgeBaseSchema, putDocumentSchema, statusChangeSchema,
+  createFieldSchema, createKnowledgeBaseSchema, documentIdSchema, fieldNameSchema, importCommitSchema, importPreviewSchema,
+  kbIdSchema, listDocumentsQuerySchema, patchFieldSchema, patchKnowledgeBaseSchema, putDocumentSchema, statusChangeSchema,
 } from '@/modules/knowledge/knowledge.schemas';
 import {
   changeDocumentStatus, createField, createKnowledgeBase, deleteField, getDocument, getKnowledgeBase, listDocuments,
   listFields, listKnowledgeBases, patchField, patchKnowledgeBase, retryDocumentRevision, saveDocument,
 } from '@/modules/knowledge/knowledge.service';
+import { commitImport, previewImport } from '@/modules/knowledge/import.service';
 
 export const KB_BASE = '/api/v1/admin/knowledge-bases';
 const SMALL_BODY = 64 * 1024;
@@ -116,6 +117,22 @@ export const handleRetryRevision = withHandler<RevisionParams>(async (req, ctx, 
   return success(await retryDocumentRevision(kbId, documentId, revision), ctx);
 });
 
+const IMPORT_BODY = 5 * 1024 * 1024;
+
+export const handlePreviewImport = withHandler<KbParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  const kbId = kbIdSchema.parse(route.params.kb_id);
+  const body = importPreviewSchema.parse(await readExperienceJsonBody(req, { maxBytes: IMPORT_BODY }));
+  return success(await previewImport(kbId, body), ctx);
+});
+
+export const handleCommitImport = withHandler<KbParams>(async (req, ctx, route) => {
+  const actor = await requireAdmin(req);
+  const kbId = kbIdSchema.parse(route.params.kb_id);
+  const body = importCommitSchema.parse(await readExperienceJsonBody(req, { maxBytes: IMPORT_BODY }));
+  return success(await commitImport(kbId, body, actor.sub), ctx);
+});
+
 export function registerKnowledgeRoutes(app: Hono): void {
   app.get(KB_BASE, honoHandler(handleListKnowledgeBases));
   app.post(KB_BASE, honoHandler(handleCreateKnowledgeBase));
@@ -131,4 +148,6 @@ export function registerKnowledgeRoutes(app: Hono): void {
   app.post(`${KB_BASE}/:kb_id/documents/:document_id/archive`, honoHandler(handleArchiveDocument));
   app.post(`${KB_BASE}/:kb_id/documents/:document_id/restore`, honoHandler(handleRestoreDocument));
   app.post(`${KB_BASE}/:kb_id/documents/:document_id/revisions/:revision/retry`, honoHandler(handleRetryRevision));
+  app.post(`${KB_BASE}/:kb_id/imports/preview`, honoHandler(handlePreviewImport));
+  app.post(`${KB_BASE}/:kb_id/imports`, honoHandler(handleCommitImport));
 }

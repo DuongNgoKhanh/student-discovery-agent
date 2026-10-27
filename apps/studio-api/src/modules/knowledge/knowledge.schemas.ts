@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { idempotencyKeySchema } from '@/modules/experiences/experiences.schemas';
 import { FIELD_TYPES } from '@/modules/knowledge/metadata';
 
 export const MAX_BODY_BYTES = 262_144;
@@ -67,3 +68,36 @@ export const listDocumentsQuerySchema = z.object({
 }).strict();
 
 export type ListDocumentsQuery = z.infer<typeof listDocumentsQuerySchema>;
+
+const MAX_ROWS = 200;
+
+export const importPreviewSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('files'),
+    files: z.array(z.object({ name: z.string().min(1).max(255), content: z.string() }).strict()).min(1).max(MAX_ROWS + 1),
+  }).strict(),
+  z.object({
+    kind: z.literal('csv'),
+    content: z.string().min(1),
+    mapping: z.object({
+      document_id: z.string().min(1).optional(),
+      title: z.string().min(1).optional(),
+      body: z.string().min(1).optional(),
+      source_url: z.string().min(1).optional(),
+      metadata: z.record(z.string().min(1)).default({}),
+    }).strict(),
+  }).strict(),
+]);
+
+export const importCommitSchema = z.object({
+  idempotency_key: idempotencyKeySchema.max(256),
+  rows: z.array(z.object({
+    row: z.number().int().min(1),
+    document_id: documentIdSchema,
+    expected_revision: z.number().int().min(0),
+    payload: documentContentSchema,
+  }).strict()).min(1).max(MAX_ROWS),
+}).strict();
+
+export type ImportPreviewInput = z.infer<typeof importPreviewSchema>;
+export type ImportCommitInput = z.infer<typeof importCommitSchema>;

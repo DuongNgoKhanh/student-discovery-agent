@@ -195,3 +195,39 @@ export async function findRevisionId(client: Queryable, documentId: string, revi
 export async function retryRevision(client: Queryable, revisionId: string): Promise<boolean> {
   return (await client.query<{ retried: boolean }>('SELECT knowledge.retry_revision($1) AS retried', [revisionId])).rows[0]!.retried;
 }
+
+export interface LatestContentRow {
+  kb_id: string;
+  revision: number;
+  title: string;
+  body: string;
+  source_url: string | null;
+  metadata: Record<string, unknown>;
+  content_hash: string;
+}
+
+export async function findLatestContent(client: Queryable, documentId: string): Promise<LatestContentRow | null> {
+  return (await client.query<LatestContentRow>(
+    `SELECT d.kb_id, d.revision::int AS revision, r.title, r.body, r.source_url, r.metadata, r.content_hash
+     FROM knowledge.documents d JOIN knowledge.document_revisions r ON r.id = d.latest_revision_id WHERE d.id = $1`,
+    [documentId],
+  )).rows[0] ?? null;
+}
+
+export async function findImport(client: Queryable, kbId: string, key: string): Promise<{ request_hash: string; report: unknown } | null> {
+  return (await client.query(
+    'SELECT request_hash, report FROM knowledge.imports WHERE kb_id = $1 AND idempotency_key = $2', [kbId, key],
+  )).rows[0] ?? null;
+}
+
+export async function insertImport(
+  client: Queryable,
+  row: { id: string; kbId: string; key: string; requestHash: string; report: unknown; createdBy: string },
+): Promise<boolean> {
+  const result = await client.query(
+    `INSERT INTO knowledge.imports (id, kb_id, idempotency_key, request_hash, report, created_by)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6) ON CONFLICT (kb_id, idempotency_key) DO NOTHING RETURNING id`,
+    [row.id, row.kbId, row.key, row.requestHash, JSON.stringify(row.report), row.createdBy],
+  );
+  return result.rowCount === 1;
+}
