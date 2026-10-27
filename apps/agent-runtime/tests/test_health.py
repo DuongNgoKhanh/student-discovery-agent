@@ -28,6 +28,7 @@ def test_health_without_product_dependencies(monkeypatch):
         "/api/v1/internal/results/{result_id}/share-card": {"get"},
         "/api/v1/internal/responses/{response_id}": {"get"},
         "/api/v1/internal/responses/{response_id}/cancel": {"post"},
+        "/api/v1/internal/knowledge/retrieval": {"post"},
     }
     schema = main.create_app().openapi()["paths"]
     assert {path: set(operations) for path, operations in schema.items() if path != "/health"} == allowed

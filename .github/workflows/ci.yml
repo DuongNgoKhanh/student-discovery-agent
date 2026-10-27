@@ -161,7 +161,7 @@ jobs:
         working-directory: apps/agent-runtime
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: sda_b01_test_admin
           POSTGRES_PASSWORD: disposable-ci-only

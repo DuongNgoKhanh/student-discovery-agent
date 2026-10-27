@@ -59,6 +59,7 @@ class RuntimeContainer:
     responses: ResponseService | None = None
     product_ready: bool = False
     engine: object | None = None
+    knowledge: object | None = None
 
 
 def _decode_key(value):
@@ -111,7 +112,14 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         store = TurnStore(uow, ActivityPersistence(uow, product, validator), conversations)
         handler = TurnHandler(PinnedAssessmentEngine(), completion=EngineCompletionPort())
         # Imported lazily: provider SDKs load only when a runtime with a database is built.
+        from agent_runtime.infrastructure.llm.gemini_embedding import build_embedding_port
         from agent_runtime.infrastructure.llm.model_registry import build_model_port
+        from agent_runtime.knowledge.retrieval import PgKnowledge
+        # Query path: no retries; a failed embed degrades to keyword search. The embedding timeout and the
+        # SQL statement timeout run in sequence, so the worst case is their sum, not one shared budget.
+        knowledge = PgKnowledge(uow, build_embedding_port(
+            settings, timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS, max_retries=0),
+            timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS)
         responses = ResponseService(uow, trace_sink=trace_sink)
         turns = TurnService(store, handler, models=functools.cache(build_model_port), responses=responses,
                             trace_sink=trace_sink)
@@ -119,6 +127,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
+            knowledge=knowledge,
             product_ready=isinstance(product, LocalReleaseSource))
     except Exception:
         if engine is not None:

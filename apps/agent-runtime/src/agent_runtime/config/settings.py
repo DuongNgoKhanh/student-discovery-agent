@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     GOOGLE_CLOUD_PROJECT: str = ""
     GOOGLE_CLOUD_LOCATION: str = ""
     GOOGLE_EMBEDDING_MODEL: str = "text-embedding-004"
+    # Knowledge bases (gemini-embedding-2 ignores GOOGLE_EMBEDDING_MODEL, which belongs to legacy helpers)
+    KNOWLEDGE_EMBEDDING_MODEL: str = "gemini-embedding-2"
+    KNOWLEDGE_RETRIEVAL_TIMEOUT_MS: int = 1500
 
     # Optional outbound proxy
     PROXY_HOST: str | None = None
