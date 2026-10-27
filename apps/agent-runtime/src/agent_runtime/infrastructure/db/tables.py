@@ -87,5 +87,7 @@ runtime_traces = Table(
     Column("error_code", Text), Column("before_revision", BigInteger), Column("after_revision", BigInteger),
     Column("environment", Text), Column("agent_release_id", Text), Column("experience_release_id", Text),
     Column("algorithm_profile", Text), Column("engine_version", Text), Column("latency_ms", BigInteger),
-    Column("provider", Text), Column("fallback", Boolean), timestamp("timestamp", default=True),
+    Column("provider", Text), Column("fallback", Boolean), Column("fallback_reason", Text),
+    Column("agent_steps", Integer), Column("input_tokens", Integer), Column("output_tokens", Integer),
+    Column("knowledge", JSONB), timestamp("timestamp", default=True),
 )

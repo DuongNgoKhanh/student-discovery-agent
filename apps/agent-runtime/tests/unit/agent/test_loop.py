@@ -4,10 +4,11 @@ import json
 from datetime import date
 from pathlib import Path
 
-from agent_runtime.agent.catalog import ProposeAnswerArguments, SetNameArguments
+from agent_runtime.agent.catalog import ProposeAnswerArguments, SetNameArguments, ToolContext
 from agent_runtime.agent.loop import TextDelta, ToolCallStarted, offered_tools, run_agent_turn
 from agent_runtime.agent.model import FakeModel, ModelReply, ModelUnavailable, ToolCall, ToolResultMessage, UserMessage
 from agent_runtime.agent.prompt import AgentContext
+from agent_runtime.knowledge.schemas import MetadataField
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -112,8 +113,14 @@ def test_model_failures_fall_back_to_templates():
     result = turn(FakeModel(ModelUnavailable("rate_limited", "ModelProviderError:429")))
     text, chips = result.blocks
     assert result.fallback == "rate_limited"
-    assert (text.type, text.content) == ("text", SNAPSHOT.templates.unknown_message)
+    assert (text.type, text.content) == ("text", SNAPSHOT.templates.busy_message)
     assert [i.label for i in chips.items] == list(SNAPSHOT.templates.fallback_suggestions)
+
+
+def test_only_a_reply_the_agent_could_not_use_says_it_did_not_understand():
+    assert turn(FakeModel(ModelReply(text=""))).blocks[0].content == SNAPSHOT.templates.unknown_message
+    for reason in ("timeout", "provider_error"):
+        assert turn(FakeModel(ModelUnavailable(reason))).blocks[0].content == SNAPSHOT.templates.busy_message
 
 
 def test_no_model_configured_never_calls_one():
@@ -157,6 +164,24 @@ def test_offered_tools_carry_catalog_schemas_and_binding_details():
     assert suggest["properties"]["items"]["items"]["required"] == ["label", "message_text"]
 
 
+def test_knowledge_search_schema_is_built_from_the_turn_context():
+    context = ToolContext(knowledge_fields={"kb_ihrd_demo": (
+        MetadataField(id="f1", name="houses", type="string_list", filterable=True),)})
+    search = offered_tools(SNAPSHOT, context)["knowledge.search"].definition
+    conditions = search.parameters["properties"]["filter"]["properties"]["conditions"]["items"]["properties"]
+    assert conditions["name"]["enum"] == ["houses", "province", "major"]
+    assert "houses (string_list:" in search.description
+
+
+def test_knowledge_errors_go_back_to_the_model_not_to_the_fallback_template():
+    executor = Executor(**{"knowledge.search": {"error": "knowledge_unavailable"}})
+    model = FakeModel(ModelReply(text="", tool_calls=(call("knowledge.search", {"query": "học phí"}),)),
+                      ModelReply(text="Mình chưa tra cứu được lúc này."))
+    result = turn(model, executor)
+    assert model.calls[1][0][-1].content == {"error": "knowledge_unavailable"}
+    assert result.fallback is None and result.blocks[0].content == "Mình chưa tra cứu được lúc này."
+
+
 def test_events_stream_text_and_announce_tool_calls():
     events = []
     model = FakeModel(ModelReply(text="", tool_calls=(call("result.explain", {}),)), ModelReply(text="Xong rồi"))
@@ -186,3 +211,27 @@ def test_deadline_falls_back_to_templates():
     result = run_agent_turn(SNAPSHOT, model, Executor(), IN_PROGRESS, [], "hi", new_id=ids(), deadline=10.0,
                             clock=lambda: next(now))
     assert result.fallback == "deadline" and len(model.calls) == 1
+
+
+COMPLETED = AgentContext(today=date(2026, 10, 26), phase="completed")
+
+
+def test_lead_in_written_with_a_tool_call_survives_an_empty_final_reply():
+    model = FakeModel(ModelReply(text="Đây nhé", tool_calls=(call("result.explain", {}),)), ModelReply(text=""))
+    result = turn(model, context=COMPLETED)
+    (block,) = result.blocks
+    assert (block.type, block.content, result.fallback) == ("markdown", "Đây nhé", None)
+
+
+def test_a_non_empty_final_reply_wins_over_the_lead_in():
+    model = FakeModel(ModelReply(text="A", tool_calls=(call("result.explain", {}),)), ModelReply(text="B"))
+    result = turn(model, context=COMPLETED)
+    assert [b.content for b in result.blocks] == ["B"]
+
+
+def test_lead_in_precedes_a_handoff_that_has_no_text():
+    executor = Executor(**{"assessment.propose_answer": {"proposal_id": "p1"}})
+    model = FakeModel(ModelReply(text="A", tool_calls=(call("result.explain", {}),)),
+                      ModelReply(text="", tool_calls=(call("assessment.propose_answer", {"option_id": "o2"}),)))
+    result = turn(model, executor)
+    assert [b.content for b in result.blocks] == ["A"] and result.handoff.name == "assessment.propose_answer"

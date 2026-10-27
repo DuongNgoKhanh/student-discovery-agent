@@ -17,6 +17,8 @@ def link_allowed(url: str, allowed_domains: Iterable[str]) -> bool:
         parts = urlsplit(url)
     except ValueError:
         return False
+    if "\\" in url or parts.username is not None or parts.password is not None:  # parsers disagree on these
+        return False
     host = (parts.hostname or "").lower()
     return parts.scheme == "https" and any(host == domain or host.endswith("." + domain)
                                            for domain in allowed_domains)

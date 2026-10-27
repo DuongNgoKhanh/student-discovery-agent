@@ -1,15 +1,19 @@
 """Turn orchestration: begin UoW, engine/agent work outside transactions, guarded commit UoW."""
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import replace
 from time import monotonic_ns
 from typing import Literal
 
+from agent_runtime.agent.catalog import NO_CONTEXT, KnowledgeSearchParams, KnowledgeShowParams, ToolContext
+from agent_runtime.agent.knowledge_tools import KnowledgePort, KnowledgeTools
 from agent_runtime.agent.loop import TextDelta, run_agent_turn
 from agent_runtime.agent.model import ModelPort, UnconfiguredModel
 from agent_runtime.infrastructure.auth.caller import VerifiedCaller
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import ServiceResponse
+from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.schemas.responses import TurnResponse
 from agent_runtime.sessions.schemas.turn import ConversationTurnInput, MessageTurnInput
 from agent_runtime.sessions.services.message_turns import (
@@ -25,6 +29,8 @@ from agent_runtime.sessions.trace import describe_metadata, emit_trace
 
 __all__ = ["CANCEL_POLL_SECONDS", "Begun", "StreamEvent", "TurnCancelled", "TurnService", "describe_response",
            "describe_turn"]
+
+logger = logging.getLogger(__name__)
 
 TRACE_ACTION = "conversation.turn"
 
@@ -56,12 +62,14 @@ def describe_response(subject: tuple[Begun, TurnResponse]) -> dict:
 
 class TurnService:
     def __init__(self, store: TurnStore, handler: TurnHandler, *, models: Callable[[str], ModelPort] | None = None,
-                 responses: ResponseService | None = None, trace_sink=None, clock=time.monotonic):
+                 responses: ResponseService | None = None, knowledge: KnowledgePort | None = None,
+                 trace_sink=None, clock=time.monotonic):
         self.store = store
         self.handler = handler
         self.models = models or (lambda provider: UnconfiguredModel())
         # Cancel polling reads the same rows the store writes.
         self.responses = responses or ResponseService(store.uow, clock=store.access.clock)
+        self.knowledge = knowledge
         self.trace_sink = trace_sink
         self._clock = clock
 
@@ -89,14 +97,16 @@ class TurnService:
     def finish(self, caller: VerifiedCaller, begun: Begun,
                on_event: Callable[[StreamEvent], None] | None = None) -> TurnResponse:
         """Never raises after begin: every outcome is a terminal Response, traced exactly once."""
-        response = self._settle(caller, begun, on_event)
+        observed: dict = {}  # agent metadata of this turn; validated apart so a bad item never drops the identifiers
+        response = self._settle(caller, begun, on_event, observed)
+        metadata = describe_metadata(describe_response, (begun, response)) | describe_metadata(dict, observed)
         emit_trace(self.trace_sink, TRACE_ACTION, "failure" if response.status == "failed" else "success",
-                   describe_metadata(describe_response, (begun, response)), begun.started_ns)
+                   metadata, begun.started_ns)
         return response
 
-    def _settle(self, caller: VerifiedCaller, begun: Begun, on_event) -> TurnResponse:
+    def _settle(self, caller: VerifiedCaller, begun: Begun, on_event, observed: dict) -> TurnResponse:
         try:
-            return self._run(caller, begun, on_event)
+            return self._run(caller, begun, on_event, observed)
         except TurnCancelled:
             return self.responses.read_model(caller, begun.response.id)
         except RuntimeSessionError as error:
@@ -115,23 +125,57 @@ class TurnService:
             return self.responses.is_finished(caller, response_id)
         return check
 
-    def _run(self, caller: VerifiedCaller, begun: Begun, on_event) -> TurnResponse:
+    def _read_fields(self, knowledge_base_id: str) -> dict:
+        """No knowledge error may fail a turn: unreadable fields degrade to none."""
+        if self.knowledge is None:
+            return {}
+        try:
+            return self.knowledge.fields([knowledge_base_id])
+        except Exception as error:
+            logger.warning("knowledge fields unavailable: %s", type(error).__name__)
+            return {}
+
+    def _knowledge(self, agent: AgentSnapshotV1) -> tuple[ToolContext, KnowledgeTools | None]:
+        """Fields are read once per turn, outside any session transaction; search and show share one KnowledgeTools."""
+        search = agent.tool("knowledge.search")
+        if search is None:
+            return NO_CONTEXT, None
+        params = KnowledgeSearchParams.model_validate(search.params)
+        show = agent.tool("knowledge.show")
+        fields = self._read_fields(params.knowledge_base_id)
+        show_params = KnowledgeShowParams.model_validate(show.params) if show else None
+        tools = KnowledgeTools(self.knowledge, params, show_params, fields.get(params.knowledge_base_id, ()),
+                               allowed_domains=agent.links.allowed_domains)
+        return ToolContext(knowledge_fields=fields), tools
+
+    def _run(self, caller: VerifiedCaller, begun: Begun, on_event, observed: dict) -> TurnResponse:
         request, snapshot = begun.request, begun.snapshot
         if not isinstance(request, MessageTurnInput):
             # begin returns a snapshot only for supported interactions.
             draft = self.handler.prepare(snapshot, request)
             return self.store.commit(caller, begun, draft)
         agent = snapshot.agent
+        if agent.model:
+            observed["provider"] = agent.model.provider
         model = self.models(agent.model.provider) if agent.model else UnconfiguredModel()
         emit = None
         if on_event is not None:
             def emit(event):
                 on_event(("delta", event.text) if isinstance(event, TextDelta) else ("tool_call", event.name))
-        turn = run_agent_turn(agent, model, SnapshotToolExecutor(snapshot), agent_context(snapshot),
-                              chat_history(snapshot.history), request.content.text, on_event=emit,
+        deadline = self._clock() + agent.limits.turn_timeout_ms / 1000  # field reads count against the turn budget
+        tool_context, knowledge = self._knowledge(agent)
+        executor = SnapshotToolExecutor(snapshot, knowledge)
+        turn = run_agent_turn(agent, model, executor, agent_context(snapshot), chat_history(snapshot.history),
+                              request.content.text, on_event=emit,
                               should_stop=self._should_stop(caller, begun.response.id),
-                              deadline=self._clock() + agent.limits.turn_timeout_ms / 1000, clock=self._clock)
+                              deadline=deadline, clock=self._clock, tool_context=tool_context)
+        observed.update(agent_steps=turn.steps, input_tokens=turn.usage.input_tokens,
+                        output_tokens=turn.usage.output_tokens, fallback=turn.fallback is not None,
+                        fallback_reason=turn.fallback)
+        if knowledge is not None and (searches := knowledge.trace()):
+            observed["knowledge"] = searches
         if turn.cancelled:
             raise TurnCancelled()
-        plan = plan_message_turn(snapshot, turn, request, handler=self.handler, persistence=self.store.persistence)
+        plan = plan_message_turn(snapshot, turn, request, handler=self.handler, persistence=self.store.persistence,
+                                 cards=executor.cards())
         return self.store.commit_message(caller, begun, plan)

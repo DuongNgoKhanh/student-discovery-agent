@@ -122,7 +122,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS)
         responses = ResponseService(uow, trace_sink=trace_sink)
         turns = TurnService(store, handler, models=functools.cache(build_model_port), responses=responses,
-                            trace_sink=trace_sink)
+                            knowledge=knowledge, trace_sink=trace_sink)
         return RuntimeContainer(policy=policy, verifier=verifier, conversations=conversations,
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
