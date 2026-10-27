@@ -50,7 +50,9 @@ class GeminiEmbedding:
         config = types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIMENSIONS)
         for attempt in range(self._max_retries + 1):
             try:
-                response = self._client.models.embed_content(model=self.model, contents=texts, config=config)
+                # One Content per text: gemini-embedding-2 treats a list of plain strings as ONE multi-part input.
+                contents = [types.Content(parts=[types.Part(text=item)]) for item in texts]
+                response = self._client.models.embed_content(model=self.model, contents=contents, config=config)
             except errors.APIError as error:
                 reason = "rate_limited" if error.code == 429 else "provider_error"
                 retryable = error.code is None or error.code == 429 or error.code >= 500

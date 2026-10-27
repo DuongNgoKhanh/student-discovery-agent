@@ -2,7 +2,7 @@ import math
 from types import SimpleNamespace
 
 import httpx
-from google.genai import errors
+from google.genai import errors, types
 
 from agent_runtime.infrastructure.llm.gemini_embedding import GeminiEmbedding
 from agent_runtime.knowledge.embedding import DocumentText, EmbeddingUnavailable, vector_literal
@@ -15,12 +15,16 @@ class StubModels:
         self.calls = []
 
     def embed_content(self, *, model, contents, config):
-        self.calls.append((model, list(contents), config.output_dimensionality, config.task_type))
+        # Like the real gemini-embedding-2 API: a list of plain strings is ONE multi-part input (one vector);
+        # only a list of Content objects yields one vector per item.
+        texts = [item.parts[0].text if isinstance(item, types.Content) else item for item in contents]
+        self.calls.append((model, texts, config.output_dimensionality, config.task_type))
         outcome = self.outcomes.pop(0)
         if isinstance(outcome, Exception):
             raise outcome
         size = outcome if isinstance(outcome, int) else 768
-        return SimpleNamespace(embeddings=[SimpleNamespace(values=[0.5] * size) for _ in contents])
+        count = len(contents) if all(isinstance(item, types.Content) for item in contents) else 1
+        return SimpleNamespace(embeddings=[SimpleNamespace(values=[0.5] * size) for _ in range(count)])
 
 
 def adapter(*outcomes, **kwargs):
