@@ -69,23 +69,6 @@ HOUSE_ALLOWED_KEYS = {
 TEMPLATE_ALLOWED_KEYS = {"intro_prompt", "clarification_prompt", "completion_message"}
 RULE_DOC_ALLOWED_KEYS = {"rule_schema_ref", "engine_version", "payload"}
 
-# Baseline sequence specification (ADR-002 §7.4)
-EXPECTED_BASELINE_SEQUENCE = [
-    ("house_r", 1),
-    ("house_i", 1),
-    ("house_a", 1),
-    ("house_s", 1),
-    ("house_e", 1),
-    ("house_c", 1),
-    ("house_r", 2),
-    ("house_i", 2),
-    ("house_a", 2),
-    ("house_s", 2),
-    ("house_e", 2),
-    ("house_c", 2),
-]
-
-
 def is_strict_int(val: Any) -> bool:
     """Check if value is an integer and strictly not a boolean."""
     return isinstance(val, int) and not isinstance(val, bool)
@@ -1145,83 +1128,20 @@ class ExperienceValidator:
                     )
                 )
 
-        # 3. Selection Rules payload validation (baseline_order, selector, fallback)
+        # 3. Selection Rules payload validation (selector, fallback; baseline items are drawn per activity seed)
         sel_rules = doc.get("selection_rules")
         if isinstance(sel_rules, dict):
             payload = sel_rules.get("payload")
             if isinstance(payload, dict):
-                baseline = payload.get("baseline_order")
-                if not isinstance(baseline, list) or len(baseline) != 12:
+                if "baseline_order" in payload:
                     issues.append(
                         ValidationIssue(
                             path="selection_rules.payload.baseline_order",
-                            code="VAL_INVALID_BASELINE_COUNT",
-                            message=f"baseline_order must contain exactly 12 question IDs, found {len(baseline) if isinstance(baseline, list) else 0}.",
-                            rule_id="BASELINE_SELECTION_INTEGRITY",
+                            code="VAL_UNEXPECTED_FIELD",
+                            message="baseline_order is not used: baseline items are drawn per activity seed.",
+                            rule_id="SELECTION_ALGORITHM_INTEGRITY",
                         )
                     )
-                else:
-                    # Check each item is string and check for duplicates
-                    has_invalid_type = False
-                    for b_idx, b_item in enumerate(baseline):
-                        if not isinstance(b_item, str):
-                            has_invalid_type = True
-                            issues.append(
-                                ValidationIssue(
-                                    path=f"selection_rules.payload.baseline_order[{b_idx}]",
-                                    code="VAL_INVALID_TYPE",
-                                    message=f"baseline_order item must be a string question ID, got '{type(b_item).__name__}'.",
-                                    rule_id="BASELINE_SELECTION_INTEGRITY",
-                                )
-                            )
-
-                    if not has_invalid_type:
-                        if len(set(baseline)) != 12:
-                            issues.append(
-                                ValidationIssue(
-                                    path="selection_rules.payload.baseline_order",
-                                    code="VAL_DUPLICATE_BASELINE_QUESTION",
-                                    message="baseline_order must not contain duplicate question IDs.",
-                                    rule_id="BASELINE_SELECTION_INTEGRITY",
-                                )
-                            )
-
-                        missing_in_bank = [
-                            (b_idx, qid) for b_idx, qid in enumerate(baseline)
-                            if qid not in seen_qids
-                        ]
-                        if missing_in_bank:
-                            for b_idx, qid in missing_in_bank:
-                                issues.append(
-                                    ValidationIssue(
-                                        path=f"selection_rules.payload.baseline_order[{b_idx}]",
-                                        code="VAL_BASELINE_QUESTION_NOT_IN_BANK",
-                                        message=f"Baseline contains question ID '{qid}' not found in question bank.",
-                                        rule_id="BASELINE_SELECTION_INTEGRITY",
-                                    )
-                                )
-                        else:
-                            # Map question ID to its (house_id, item_order) in bank
-                            qid_to_house_order = {
-                                q.get("question_id"): (q.get("house_id"), q.get("item_order"))
-                                for q in questions if isinstance(q, dict) and "question_id" in q
-                            }
-                            actual_seq = [qid_to_house_order.get(qid) for qid in baseline]
-                            for b_idx, (actual_item, exp_item) in enumerate(zip(actual_seq, EXPECTED_BASELINE_SEQUENCE, strict=True)):
-                                if actual_item != exp_item:
-                                    issues.append(
-                                        ValidationIssue(
-                                            path=f"selection_rules.payload.baseline_order[{b_idx}]",
-                                            code="VAL_INVALID_BASELINE_SEQUENCE",
-                                            message=(
-                                                f"baseline_order[{b_idx}] expected ({exp_item[0]}, item_order={exp_item[1]}), "
-                                                f"got ({actual_item[0] if actual_item else 'None'}, item_order={actual_item[1] if actual_item else 'None'}). "
-                                                "Sequence must strictly follow R1, I1, A1, S1, E1, C1, R2, I2, A2, S2, E2, C2 per ADR-002 §7.4."
-                                            ),
-                                            rule_id="BASELINE_SELECTION_INTEGRITY",
-                                        )
-                                    )
-                                    break
 
                 if payload.get("selector") != "widest_bound_gap":
                     issues.append(
@@ -1233,32 +1153,27 @@ class ExperienceValidator:
                         )
                     )
 
-                if payload.get("fallback") != "tie_order_then_item_order":
+                if payload.get("fallback") != "seeded":
                     issues.append(
                         ValidationIssue(
                             path="selection_rules.payload.fallback",
                             code="VAL_INVALID_SELECTION_FALLBACK",
-                            message=f"Selection fallback policy must be 'tie_order_then_item_order' per ADR-002 §7.2, found '{payload.get('fallback')}'.",
+                            message=f"Selection fallback policy must be 'seeded', found '{payload.get('fallback')}'.",
                             rule_id="SELECTION_ALGORITHM_INTEGRITY",
                         )
                     )
 
-        # 4. Tie Policy payload validation (R/I/A/S/E/C permutation)
+        # 4. Tie Policy payload validation (ties break by mean, top ratings, then the activity seed)
         tie_policy = doc.get("tie_policy")
         if isinstance(tie_policy, dict):
             tie_payload = tie_policy.get("payload")
             if isinstance(tie_payload, dict):
-                order = tie_payload.get("order")
-                expected_tie_order = ["house_r", "house_i", "house_a", "house_s", "house_e", "house_c"]
-                if order != expected_tie_order:
+                if "order" in tie_payload:
                     issues.append(
                         ValidationIssue(
                             path="tie_policy.payload.order",
-                            code="VAL_INVALID_TIE_ORDER",
-                            message=(
-                                f"Tie order policy must be the exact approved DEC-04 Holland permutation "
-                                f"{expected_tie_order}, found {order}."
-                            ),
+                            code="VAL_UNEXPECTED_FIELD",
+                            message="tie order is not used: ties break by mean, top ratings, then the activity seed.",
                             rule_id="TIE_POLICY_INTEGRITY",
                         )
                     )
@@ -1403,7 +1318,7 @@ class ExperienceValidator:
                                 opt_ids.add(c["option_id"])
                     q_bank[qid] = opt_ids
 
-        CASE_ALLOWED_KEYS = {"case_id", "mandatory", "answers", "expected"}
+        CASE_ALLOWED_KEYS = {"case_id", "mandatory", "seed", "answers", "expected"}
         EXPECTED_ALLOWED_KEYS = {"question_ids", "house_id", "scores", "stopping_reason", "tie_applied"}
 
         for k, case in enumerate(cases):
@@ -1437,6 +1352,17 @@ class ExperienceValidator:
                         path=f"{case_path}.case_id",
                         code="VAL_INVALID_IDENTIFIER_FORMAT",
                         message=f"case_id '{case_id}' does not match pattern ^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                        rule_id="EVALUATION_CASES_INTEGRITY",
+                    )
+                )
+
+            seed = case.get("seed")
+            if schema_version == "2.0" and (not isinstance(seed, str) or not ID_REGEX.match(seed)):
+                issues.append(
+                    ValidationIssue(
+                        path=f"{case_path}.seed",
+                        code="VAL_MISSING_REQUIRED_FIELD",
+                        message="Definition 2.0 golden cases need a seed (activity id) to fix the question order.",
                         rule_id="EVALUATION_CASES_INTEGRITY",
                     )
                 )

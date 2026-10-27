@@ -178,6 +178,11 @@ class AssessmentGoldenCase(BaseModel):
 
     case_id: str = Field(..., pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
     mandatory: bool = Field(default=True, description="Whether passing this case is mandatory")
+    seed: Optional[str] = Field(
+        default=None,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        description="Activity seed that fixes the question order (required for Definition 2.0)",
+    )
     answers: List[AssessmentGoldenAnswer] = Field(
         ..., min_length=1, description="Input answer sequence"
     )

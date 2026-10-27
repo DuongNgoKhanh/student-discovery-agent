@@ -1,9 +1,11 @@
 """Minimal definition data built in memory for validator tests."""
 
 import copy
+import functools
 
 import pytest
 
+from agent_runtime.engine.services.selector import AdaptiveQuestionSelector
 from agent_runtime.evaluations.services.compatibility import (
     PILOT_ENGINE_REGISTRY,
     CompatibilityChecker,
@@ -77,6 +79,11 @@ def with_engine(doc, engine_version):
 
 @pytest.fixture
 def valid_v2_doc():
+    return copy.deepcopy(_valid_v2_template())
+
+
+@functools.cache
+def _valid_v2_template():
     questions = [
         {
             "question_id": f"q_{code}_{order:02}",
@@ -97,29 +104,31 @@ def valid_v2_doc():
     ]
     question_ids = [f"q_{code}_{order:02}" for order in range(1, 6) for code in HOUSE_CODES]
     rules = {
-        "selection_rules": rule("selection.adaptive_bounds", {
-            "baseline_order": question_ids[:12],
-            "selector": "widest_bound_gap",
-            "fallback": "tie_order_then_item_order",
-        }),
+        "selection_rules": rule("selection.adaptive_bounds", {"selector": "widest_bound_gap", "fallback": "seeded"}),
         "scoring_rules": rule("scoring.mean_rating", {"rating_scale": [1, 5], "algorithm": "mean_rating"}),
         "coverage_rules": rule("coverage.bounded_stop", {
             "items_per_house": 5, "baseline_total": 12,
             "min_answers_per_house": 2, "max_total": 30, "stop": "strict_bounds",
         }),
-        "tie_policy": rule("tie.fixed_order", {"order": list(HOUSE_IDS), "apply_at": "question_limit"}),
+        "tie_policy": rule("tie.fixed_order", {"apply_at": "question_limit"}),
     }
     doc = document("2.0", questions, rules, question_ids, {house_id: 3.0 for house_id in HOUSE_IDS})
-    doc["evaluation_cases"][0]["expected"].update(stopping_reason="question_limit", tie_applied=True)
+    # The golden case replays the seeded selector with neutral answers, so its order matches its seed.
+    case = doc["evaluation_cases"][0]
+    case["seed"] = "case_seed"
+    selector, answers = AdaptiveQuestionSelector(), []
+    while (result := selector.select_next_question(answers, definition=doc, seed=case["seed"])).next_question_id:
+        answers.append({"question_id": result.next_question_id, "option_id": f"{result.next_question_id}_opt_3"})
+    case["answers"] = answers
+    case["expected"].update(question_ids=[a["question_id"] for a in answers], house_id=result.primary_house_id,
+                            stopping_reason="question_limit", tie_applied=True)
     return doc
 
 
 @pytest.fixture
 def seeded_v2_doc(valid_v2_doc):
-    doc = copy.deepcopy(valid_v2_doc)
-    doc["selection_rules"]["payload"] = {"selector": "widest_bound_gap", "fallback": "seeded"}
-    doc["tie_policy"]["payload"] = {"apply_at": "question_limit"}
-    return doc
+    """Alias kept for the engine tests written while the validator still expected fixed orders."""
+    return copy.deepcopy(valid_v2_doc)
 
 
 @pytest.fixture

@@ -175,54 +175,27 @@ class TestExperienceValidator:
         assert report.status == ValidationStatus.FAILED
         assert any(i.code in ("VAL_INVALID_RATING", "VAL_INCOMPLETE_RATING_SCALE") for i in report.issues)
 
-    def test_invalid_v2_baseline_order_count(self, validator, valid_v2_doc):
-        doc = copy.deepcopy(valid_v2_doc)
-        doc["selection_rules"]["payload"]["baseline_order"] = doc["selection_rules"]["payload"]["baseline_order"][:2]
-        report = validator.validate(doc)
-        assert report.status == ValidationStatus.FAILED
-        assert any(i.code == "VAL_INVALID_BASELINE_COUNT" and i.path == "selection_rules.payload.baseline_order" for i in report.issues)
+    def test_seeded_v2_definition_passes(self, validator, valid_v2_doc):
+        assert validator.validate(valid_v2_doc).status == ValidationStatus.PASSED
 
-    def test_baseline_order_duplicates(self, validator, valid_v2_doc):
-        """Review #5: baseline_order with duplicate IDs must be rejected."""
+    @pytest.mark.parametrize("slot, key", [("selection_rules", "baseline_order"), ("tie_policy", "order")])
+    def test_fixed_order_fields_are_rejected(self, validator, valid_v2_doc, slot, key):
+        """Order is drawn per activity seed, so a fixed baseline or tie order would be silently ignored."""
         doc = copy.deepcopy(valid_v2_doc)
-        doc["selection_rules"]["payload"]["baseline_order"] = ["q_r_01"] * 12
+        doc[slot]["payload"][key] = ["house_r"]
         report = validator.validate(doc)
         assert report.status == ValidationStatus.FAILED
-        assert any(i.code == "VAL_DUPLICATE_BASELINE_QUESTION" and i.path == "selection_rules.payload.baseline_order" for i in report.issues)
+        assert any(i.code == "VAL_UNEXPECTED_FIELD" and i.path == f"{slot}.payload.{key}" for i in report.issues)
 
-    def test_baseline_order_house_imbalance(self, validator, valid_v2_doc):
-        """Review #5: baseline_order missing S, E, C items must be rejected."""
+    def test_v2_case_requires_seed(self, validator, valid_v2_doc):
         doc = copy.deepcopy(valid_v2_doc)
-        # R1-R5, I1-I5, A1, A2
-        doc["selection_rules"]["payload"]["baseline_order"] = [
-            "q_r_01", "q_r_02", "q_r_03", "q_r_04", "q_r_05",
-            "q_i_01", "q_i_02", "q_i_03", "q_i_04", "q_i_05",
-            "q_a_01", "q_a_02"
-        ]
+        del doc["evaluation_cases"][0]["seed"]
         report = validator.validate(doc)
         assert report.status == ValidationStatus.FAILED
-        assert any(i.code in ("VAL_BASELINE_HOUSE_IMBALANCE", "VAL_INVALID_BASELINE_SEQUENCE") for i in report.issues)
-
-    def test_baseline_order_sequence_order(self, validator, valid_v2_doc):
-        """Review #5: baseline_order must strictly follow R1, I1, A1, S1, E1, C1, R2... sequence (§7.4)."""
-        doc = copy.deepcopy(valid_v2_doc)
-        # Swap R1 and I1
-        seq = list(doc["selection_rules"]["payload"]["baseline_order"])
-        seq[0], seq[1] = seq[1], seq[0]
-        doc["selection_rules"]["payload"]["baseline_order"] = seq
-        report = validator.validate(doc)
-        assert report.status == ValidationStatus.FAILED
-        assert any(i.code == "VAL_INVALID_BASELINE_SEQUENCE" and i.path == "selection_rules.payload.baseline_order[0]" for i in report.issues)
-
-    def test_invalid_v2_baseline_question_not_in_bank(self, validator, valid_v2_doc):
-        doc = copy.deepcopy(valid_v2_doc)
-        doc["selection_rules"]["payload"]["baseline_order"][0] = "q_non_existent"
-        report = validator.validate(doc)
-        assert report.status == ValidationStatus.FAILED
-        assert any(i.code == "VAL_BASELINE_QUESTION_NOT_IN_BANK" and i.path == "selection_rules.payload.baseline_order[0]" for i in report.issues)
+        assert any(i.code == "VAL_MISSING_REQUIRED_FIELD" and i.path == "evaluation_cases[0].seed" for i in report.issues)
 
     def test_v2_payload_selection_fallback_invalid(self, validator, valid_v2_doc):
-        """Review #6: selection fallback='random' must be rejected (deterministic requirement)."""
+        """Review #6: any fallback other than 'seeded' is rejected (unseeded 'random' would not replay)."""
         doc = copy.deepcopy(valid_v2_doc)
         doc["selection_rules"]["payload"]["fallback"] = "random"
         report = validator.validate(doc)
@@ -244,13 +217,6 @@ class TestExperienceValidator:
         report = validator.validate(doc)
         assert report.status == ValidationStatus.FAILED
         assert any(i.code == "VAL_INVALID_RATING_SCALE" and i.path == "scoring_rules.payload.rating_scale" for i in report.issues)
-
-    def test_invalid_v2_tie_order_not_holland(self, validator, valid_v2_doc):
-        doc = copy.deepcopy(valid_v2_doc)
-        doc["tie_policy"]["payload"]["order"] = ["house_c", "house_e", "house_s", "house_a", "house_i", "house_r"]
-        report = validator.validate(doc)
-        assert report.status == ValidationStatus.FAILED
-        assert any(i.code == "VAL_INVALID_TIE_ORDER" and i.path == "tie_policy.payload.order" for i in report.issues)
 
     def test_v2_template_promises_fixed_questions(self, validator, valid_v2_doc):
         doc = copy.deepcopy(valid_v2_doc)
@@ -310,14 +276,12 @@ class TestExperienceValidator:
         assert any(i.code == "VAL_MISSING_RULE_FIELD" and i.path == "selection_rules.payload" for i in report1.issues)
         assert any(i.code == "VAL_INVALID_TYPE" and i.path == "scoring_rules.payload" for i in report1.issues)
 
-        # 2. Unhashable types in house_id and baseline_order
+        # 2. Unhashable types in house_id
         doc2 = copy.deepcopy(valid_v2_doc)
         doc2["houses"][0]["house_id"] = ["unhashable_list"]
-        doc2["selection_rules"]["payload"]["baseline_order"] = [["unhashable_sub_list"]] * 12
         report2 = validator.validate(doc2)
         assert report2.status == ValidationStatus.FAILED
         assert any(i.code == "VAL_INVALID_TYPE" and i.path == "houses[0].house_id" for i in report2.issues)
-        assert any(i.code == "VAL_INVALID_TYPE" and i.path == "selection_rules.payload.baseline_order[0]" for i in report2.issues)
 
     def test_missing_version_strings_and_invalid_caller_inputs(self, validator, valid_v2_doc):
         """Review #5: Missing/null versions and invalid caller inputs must create reports cleanly."""
