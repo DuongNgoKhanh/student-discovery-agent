@@ -167,7 +167,8 @@ details.adv summary{cursor:pointer;color:var(--blue);font-weight:700;font-size:.
             <option value="/rt/knowledge/retrieval">Endpoint runtime thật</option>
             <option value="/lab/search">In-process trong lab</option></select></label>
           <label class="f">knowledge_id<input id="kbId" value="kb_ihrd_demo"></label>
-          <label class="f">top_k<input id="topK" type="number" min="1" max="20" value="4"></label>
+          <label class="f">top_k (số chunk)<input id="topK" type="number" min="1" max="20" value="6"></label>
+          <label class="f">max_chunks_per_doc<input id="perDoc" type="number" min="1" max="10" value="3"></label>
           <label class="f">score_threshold<input id="threshold" type="number" min="0" max="1" step="0.05" value="0"></label>
           <label class="f">semantic_weight<input id="weight" type="number" min="0" max="1" step="0.1" value="0.7"></label>
         </div>
@@ -492,13 +493,13 @@ function renderResults(status, data) {
   $("results").innerHTML = `<div style="display:flex;gap:8px;margin-bottom:10px"><span class="pill">${records.length} kết quả</span>
     ${result.degraded ? `<span class="pill warn">degraded: chỉ tìm theo từ khoá</span>` : `<span class="pill ok">vector + từ khoá</span>`}</div>` +
     (records.length ? records.map((record) => {
-      const {document_id, revision, updated_at, source_url, ...fields} = record.metadata;
+      const {document_id, revision, chunk, updated_at, source_url, ...fields} = record.metadata;
       return `<article class="result">
         <div style="display:flex;gap:10px;align-items:baseline"><h3 style="flex:1">${esc(record.title)}</h3><span class="pill ok">${record.score.toFixed(3)}</span></div>
         <div class="score"><i style="width:${Math.max(2, record.score * 100)}%"></i></div>
         <div class="content">${esc(record.content)}</div>
         <div class="chips">${metaChips(fields)}</div>
-        <div class="mono muted" style="margin-top:6px">${esc(document_id)} · r${esc(revision)} · ${esc(updated_at)}${source_url ? ` · ${esc(source_url)}` : ""}</div>
+        <div class="mono muted" style="margin-top:6px">${esc(document_id)} · r${esc(revision)} · chunk ${esc(chunk)} · ${esc(updated_at)}${source_url ? ` · ${esc(source_url)}` : ""}</div>
       </article>`;
     }).join("") : `<div class="panel empty">Không có kết quả vượt ngưỡng.</div>`);
 }
@@ -506,7 +507,7 @@ function renderResults(status, data) {
 $("search").onclick = async () => {
   const body = {knowledge_id: $("kbId").value.trim(), query: $("query").value,
     retrieval_setting: {top_k: Number($("topK").value), score_threshold: Number($("threshold").value),
-                        semantic_weight: Number($("weight").value)}};
+                        semantic_weight: Number($("weight").value), max_chunks_per_doc: Number($("perDoc").value)}};
   const condition = readConditions();
   if (condition) body.metadata_condition = condition;
   $("search").disabled = true;
