@@ -11,6 +11,21 @@ export default {
       screens: { '2xl': '1400px' },
     },
     extend: {
+      keyframes: {
+        'message-pop': {
+          '0%': { opacity: '0', transform: 'translateY(16px) scale(0.97)' },
+          '60%': { opacity: '1', transform: 'translateY(-2px) scale(1.008)' },
+          '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+        'fade-in-up': {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'message-pop': 'message-pop 0.4s cubic-bezier(0.16, 1, 0.3, 1) both',
+        'fade-in-up': 'fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

@@ -27,6 +27,15 @@ describe('ChatShell với mock', () => {
     expect(screen.queryByPlaceholderText('Hỏi ChatGPT')).not.toBeInTheDocument();
   });
 
+  it('khi bấm Bắt đầu, chuyển cảnh sang hội thoại và hiển thị tin nhắn Bắt đầu', async () => {
+    renderShell();
+    const startBtn = await screen.findByRole('button', { name: 'Bắt đầu' }, TIMEOUT);
+    fireEvent.click(startBtn);
+
+    expect(await screen.findByRole('list', { name: 'Hội thoại' }, TIMEOUT)).toBeInTheDocument();
+    expect(await screen.findByText('Bắt đầu', { selector: 'div' }, TIMEOUT)).toBeInTheDocument();
+  });
+
   it('đi hết luồng: tên, trả lời, tiến độ tăng đúng một lần', async () => {
     renderShell();
     fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu' }, TIMEOUT));

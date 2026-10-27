@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api/errors';
 import { mapErrorMessage } from '@/lib/api/error-map';
 import { queryKeys } from '@/lib/query/keys';
+import { cn } from '@/lib/utils/cn';
 import { DEMO_NOTICE_TEXT, GREETING_TEXT } from '../fixtures';
 import {
   newIdempotencyKey,
@@ -45,6 +47,14 @@ export function ChatShell() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
   const [threads, setThreads] = useState<ChatThreadItem[]>([]);
+  const [isStarting, setIsStarting] = useState(false);
+  const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (startTimerRef.current) clearTimeout(startTimerRef.current);
+    };
+  }, []);
 
   const conversation = useConversation(conversationId);
   const turns = useSendTurn(conversationId ?? '');
@@ -85,6 +95,7 @@ export function ChatShell() {
 
   /** Bắt đầu phiên mới với key mới. Retry lỗi tạo phiên dùng lại key cũ. */
   const startSession = useCallback(() => {
+    setIsStarting(false);
     createKey.current = newIdempotencyKey('create');
     createConversation.mutate(createKey.current, { onSuccess: handleCreated });
   }, [createConversation, handleCreated]);
@@ -118,11 +129,9 @@ export function ChatShell() {
     (draft: TurnDraft, echo: string) => {
       if (!view) return;
       pendingEcho.current = echo;
+      appendEntries([{ role: 'user', text: echo }]);
       turns.submit(draft, view.revision, (result: TurnResult) => {
-        appendEntries([
-          { role: 'user', text: pendingEcho.current },
-          ...result.blocks.map((block) => ({ role: 'bot' as const, block })),
-        ]);
+        appendEntries(result.blocks.map((block) => ({ role: 'bot' as const, block })));
       });
     },
     [appendEntries, turns, view],
@@ -130,13 +139,19 @@ export function ChatShell() {
 
   const retryTurn = () =>
     turns.retry((result: TurnResult) => {
-      appendEntries([
-        { role: 'user', text: pendingEcho.current },
-        ...result.blocks.map((block) => ({ role: 'bot' as const, block })),
-      ]);
+      appendEntries(result.blocks.map((block) => ({ role: 'bot' as const, block })));
     });
 
   const busy = turns.isPending || createConversation.isPending;
+
+  const handleStart = useCallback(() => {
+    if (isStarting || busy) return;
+    setIsStarting(true);
+    startTimerRef.current = setTimeout(() => {
+      send({ type: 'message', content: { text: 'Bắt đầu' } }, 'Bắt đầu');
+      setIsStarting(false);
+    }, 150);
+  }, [busy, isStarting, send]);
   const turnError = turns.error instanceof ApiError ? turns.error : null;
   const turnErrorRetryable = turnError?.retryable ?? false;
 
@@ -183,7 +198,7 @@ export function ChatShell() {
           className="no-scrollbar flex flex-1 flex-col space-y-6 overflow-y-auto px-4 py-6 md:px-8 md:py-8 lg:px-10"
         >
           {activity?.is_demo && (
-            <div className="mx-auto w-full max-w-2xl md:max-w-3xl">
+            <div className="mx-auto w-full max-w-2xl md:max-w-3xl animate-in fade-in duration-300">
               <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 {DEMO_NOTICE_TEXT}
               </p>
@@ -206,13 +221,18 @@ export function ChatShell() {
               )}
             </div>
           ) : isInitial ? (
-            <div className="mx-auto flex h-full min-h-[460px] w-full max-w-2xl flex-1 flex-col items-center justify-center py-10 text-center">
-              <h1 className="mb-8 max-w-lg text-2xl font-medium tracking-tight text-slate-800 dark:text-slate-100 sm:text-3xl">
+            <div
+              className={cn(
+                'mx-auto flex h-full min-h-[460px] w-full max-w-2xl flex-1 flex-col items-center justify-center py-10 text-center transition-all duration-300 ease-out',
+                isStarting && 'scale-95 -translate-y-6 opacity-0 pointer-events-none',
+              )}
+            >
+              <h1 className="mb-8 max-w-lg text-2xl font-medium tracking-tight text-slate-800 dark:text-slate-100 sm:text-3xl animate-in fade-in duration-500">
                 {GREETING_TEXT}
               </h1>
 
               {turns.isPending && (
-                <p role="status" className="mb-3 text-xs text-muted-foreground">
+                <p role="status" className="mb-3 text-xs text-muted-foreground animate-pulse">
                   Đang gửi...
                 </p>
               )}
@@ -227,20 +247,26 @@ export function ChatShell() {
 
               <div className="flex items-center justify-center">
                 <Button
-                  disabled={busy}
-                  onClick={() => send({ type: 'message', content: { text: 'Bắt đầu' } }, 'Bắt đầu')}
-                  className="rounded-full bg-slate-900 px-6 py-2 text-sm font-medium text-white shadow-xs transition-all hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+                  disabled={busy || isStarting}
+                  onClick={handleStart}
+                  className="rounded-full bg-slate-900 px-6 py-2 text-sm font-medium text-white shadow-xs transition-all hover:bg-slate-800 active:scale-95 hover:scale-105 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
                 >
                   Bắt đầu
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="mx-auto w-full max-w-2xl md:max-w-3xl">
+            <div className="mx-auto w-full max-w-2xl md:max-w-3xl animate-in fade-in duration-300">
               <ol aria-label="Hội thoại" className="flex flex-col gap-6">
                 {entries.map((entry, index) => {
                   const isConsecutiveBot =
                     entry.role === 'bot' && index > 0 && entries[index - 1]?.role === 'bot';
+                  const staggerClass =
+                    index === 1
+                      ? 'animation-delay-150'
+                      : index === 2
+                        ? 'animation-delay-300'
+                        : undefined;
                   return (
                     <li key={entry.id} className="w-full">
                       <ChatMessageItem
@@ -248,23 +274,41 @@ export function ChatShell() {
                         text={entry.text}
                         block={entry.block}
                         showAvatar={!isConsecutiveBot}
+                        className={staggerClass}
                       />
                     </li>
                   );
                 })}
+
+                {turns.isPending && (
+                  <li className="w-full animate-message-pop animation-delay-150" aria-label="Trợ lý đang trả lời">
+                    <div className="flex w-full items-start justify-start gap-3">
+                      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white shadow-xs dark:border-slate-700 dark:bg-slate-800">
+                        <Image
+                          src="/bot-avatar.png"
+                          alt="Avatar trợ lý"
+                          width={24}
+                          height={24}
+                          className="h-6 w-6 object-contain"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-xs dark:border-slate-800 dark:bg-slate-800">
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                        <span className="sr-only">Đang gửi...</span>
+                      </div>
+                    </div>
+                  </li>
+                )}
               </ol>
             </div>
           )}
         </div>
 
         {!isInitial && (
-          <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur-md dark:border-white/5 dark:bg-panel/90 md:px-8 lg:px-10">
+          <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur-md dark:border-white/5 dark:bg-panel/90 md:px-8 lg:px-10 animate-in fade-in slide-in-from-bottom-4 duration-400 ease-out fill-mode-both">
             <div className="mx-auto max-w-2xl md:max-w-3xl">
-              {turns.isPending && (
-                <p role="status" className="mb-2 text-xs text-muted-foreground">
-                  Đang gửi...
-                </p>
-              )}
               {turnError && (
                 <div className="mb-2">
                   <ErrorPanel

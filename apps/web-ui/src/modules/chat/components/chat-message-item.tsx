@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { Check, Copy, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { cn } from '@/lib/utils/cn';
 import type { RenderableBlock } from '../schemas/blocks';
 import { BlockRenderer } from './block-renderer';
 
@@ -11,6 +12,7 @@ export interface ChatMessageItemProps {
   text?: string;
   block?: RenderableBlock;
   showAvatar?: boolean;
+  className?: string;
 }
 
 export function ChatMessageItem({
@@ -18,6 +20,7 @@ export function ChatMessageItem({
   text,
   block,
   showAvatar = true,
+  className,
 }: ChatMessageItemProps) {
   const [copied, setCopied] = useState(false);
   const [reaction, setReaction] = useState<'up' | 'down' | null>(null);
@@ -48,7 +51,7 @@ export function ChatMessageItem({
 
   if (isUser) {
     return (
-      <div className="flex w-full items-start justify-end gap-3">
+      <div className={cn('flex w-full items-start justify-end gap-3 animate-message-pop', className)}>
         <div className="max-w-[85%] rounded-2xl border border-slate-200/90 bg-white px-5 py-3.5 text-sm leading-relaxed text-slate-800 shadow-xs dark:border-slate-700/60 dark:bg-slate-800 dark:text-slate-100 sm:max-w-xl whitespace-pre-wrap break-words">
           {text}
         </div>
@@ -66,7 +69,7 @@ export function ChatMessageItem({
   }
 
   return (
-    <div className="flex w-full items-start justify-start gap-3">
+    <div className={cn('flex w-full items-start justify-start gap-3 animate-message-pop', className)}>
       {showAvatar ? (
         <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white shadow-xs dark:border-slate-700 dark:bg-slate-800">
           <Image
