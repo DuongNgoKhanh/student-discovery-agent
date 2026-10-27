@@ -1,4 +1,5 @@
 """Turn orchestration: begin UoW, engine/agent work outside transactions, guarded commit UoW."""
+import logging
 import time
 from collections.abc import Callable
 from dataclasses import replace
@@ -28,6 +29,8 @@ from agent_runtime.sessions.trace import describe_metadata, emit_trace
 
 __all__ = ["CANCEL_POLL_SECONDS", "Begun", "StreamEvent", "TurnCancelled", "TurnService", "describe_response",
            "describe_turn"]
+
+logger = logging.getLogger(__name__)
 
 TRACE_ACTION = "conversation.turn"
 
@@ -59,7 +62,8 @@ def describe_response(subject: tuple[Begun, TurnResponse]) -> dict:
 
 class TurnService:
     def __init__(self, store: TurnStore, handler: TurnHandler, *, models: Callable[[str], ModelPort] | None = None,
-                 responses: ResponseService | None = None, knowledge: KnowledgePort | None = None, trace_sink=None, clock=time.monotonic):
+                 responses: ResponseService | None = None, knowledge: KnowledgePort | None = None,
+                 trace_sink=None, clock=time.monotonic):
         self.store = store
         self.handler = handler
         self.models = models or (lambda provider: UnconfiguredModel())
@@ -119,6 +123,16 @@ class TurnService:
             return self.responses.is_finished(caller, response_id)
         return check
 
+    def _read_fields(self, knowledge_base_id: str) -> dict:
+        """No knowledge error may fail a turn: unreadable fields degrade to none."""
+        if self.knowledge is None:
+            return {}
+        try:
+            return self.knowledge.fields([knowledge_base_id])
+        except Exception as error:
+            logger.warning("knowledge fields unavailable: %s", type(error).__name__)
+            return {}
+
     def _knowledge(self, agent: AgentSnapshotV1) -> tuple[ToolContext, KnowledgeTools | None]:
         """Fields are read once per turn, outside any session transaction; search and show share one KnowledgeTools."""
         search = agent.tool("knowledge.search")
@@ -126,9 +140,10 @@ class TurnService:
             return NO_CONTEXT, None
         params = KnowledgeSearchParams.model_validate(search.params)
         show = agent.tool("knowledge.show")
-        fields = self.knowledge.fields([params.knowledge_base_id]) if self.knowledge else {}
-        tools = KnowledgeTools(self.knowledge, params, KnowledgeShowParams.model_validate(show.params) if show else None,
-                               fields.get(params.knowledge_base_id, ()), allowed_domains=agent.links.allowed_domains)
+        fields = self._read_fields(params.knowledge_base_id)
+        show_params = KnowledgeShowParams.model_validate(show.params) if show else None
+        tools = KnowledgeTools(self.knowledge, params, show_params, fields.get(params.knowledge_base_id, ()),
+                               allowed_domains=agent.links.allowed_domains)
         return ToolContext(knowledge_fields=fields), tools
 
     def _run(self, caller: VerifiedCaller, begun: Begun, on_event) -> TurnResponse:

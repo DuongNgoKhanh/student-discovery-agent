@@ -38,3 +38,27 @@ def test_executor_routes_knowledge_calls_and_reports_missing_knowledge():
     assert executor.execute("knowledge.search", search) == {"results": []}
     assert executor.execute("knowledge.show", KnowledgeShowArguments(refs=("k1",))) == {"shown": 1}
     assert executor.cards() == (CARD,)
+
+
+def test_unreadable_knowledge_fields_degrade_to_a_context_without_fields(caplog):
+    import json
+    from pathlib import Path
+
+    from agent_runtime.agent.knowledge_tools import KnowledgeTools
+    from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+    from agent_runtime.sessions.services.turns import TurnService
+
+    root = Path(__file__).resolve().parents[5]
+    agent = AgentSnapshotV1.model_validate(
+        json.loads((root / "contracts/fixtures/agent-snapshot-demo.json").read_text("utf-8")))
+
+    class BrokenPort:
+        def fields(self, kb_ids):
+            raise RuntimeError("no schema")
+
+    service = TurnService(SimpleNamespace(uow=None, access=SimpleNamespace(clock=None)), None,
+                          responses=SimpleNamespace(), knowledge=BrokenPort())
+    context, tools = service._knowledge(agent)
+    assert context.knowledge_fields == {}
+    assert isinstance(tools, KnowledgeTools)
+    assert "knowledge fields unavailable: RuntimeError" in caplog.text
