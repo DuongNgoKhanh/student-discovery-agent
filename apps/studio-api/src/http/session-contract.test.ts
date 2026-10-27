@@ -106,6 +106,7 @@ describe('session lifecycle public and internal contracts', () => {
       document_id: 'doc_a', revision: 2, updated_at: '2026-10-27T03:00:00Z' };
     expect(validate(card), JSON.stringify(validate.errors)).toBe(true);
     expect(validate({ ...card, source_url: undefined })).toBe(true);
+    expect(validate({ ...card, source_url: null }), JSON.stringify(validate.errors)).toBe(true);
     expect(validate({ ...card, fields: [] })).toBe(false);
     expect(validate({ ...card, schema_version: 2 })).toBe(false);
   });

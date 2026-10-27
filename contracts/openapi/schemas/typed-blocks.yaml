@@ -329,7 +329,7 @@ components:
             $ref: '#/components/schemas/KnowledgeCardField'
           minItems: 1
           maxItems: 8
-        source_url: {type: string, maxLength: 2000, pattern: '^https://\S+$'}
+        source_url: {type: string, nullable: true, maxLength: 2000, pattern: '^https://\S+$'}
         document_id:
           type: string
           minLength: 1
