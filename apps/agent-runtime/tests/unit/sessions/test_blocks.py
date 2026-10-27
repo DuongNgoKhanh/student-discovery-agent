@@ -150,3 +150,18 @@ def test_knowledge_card_with_markup_degrades_straight_to_text():
 def test_knowledge_card_rejects_bad_shapes(change):
     with pytest.raises(ValidationError):
         _BLOCK.validate_python({**CARD, **change})
+
+
+def test_knowledge_card_values_cannot_become_live_links_or_emphasis():
+    card = _BLOCK.validate_python({**CARD, "title": "A_*B*", "source_url": None,
+                                   "fields": [{"label": "Đăng ký", "value": "[x](http://evil.example)"}]})
+    (md,) = project_blocks((card,), TEXT_AND_MARKDOWN)
+    assert md.type == "markdown"
+    assert "[x](" not in md.content and "\\[x\\]\\(http://evil.example\\)" in md.content
+    assert "A\\_\\*B\\*" in md.content
+    (text,) = project_blocks((card,), CapabilitySnapshot())
+    assert text.content == "A_*B*\n• Đăng ký: [x](http://evil.example)"
+
+
+def test_markdown_to_text_unescapes_backslash_escapes():
+    assert markdown_to_text(r"\*not bold\* a\\b \`c\`") == "*not bold* a\\b `c`"
