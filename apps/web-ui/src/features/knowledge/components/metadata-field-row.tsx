@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { IconButton } from '@/components/shared/icon-button';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -13,7 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { ApiError } from '@/lib/api/errors';
 import { knowledgeKeys, useDeleteField, usePatchField } from '../hooks/use-knowledge';
 import type { MetadataField } from '../types';
-import { kbHref } from './knowledge-base-shell';
+import { kbHref } from './kb-routes';
 import { FIELD_TYPES } from './metadata-field-form';
 import { ConfirmDialog } from './shared/confirm-dialog';
 import { errorMessage } from './shared/error-message';
@@ -96,14 +97,14 @@ export function MetadataFieldRow({ kb, field, previous, next }: MetadataFieldRow
     <li className="py-2">
       <div className="flex items-center gap-2">
         <div className="flex shrink-0 flex-col">
-          <Button variant="ghost" size="icon" className="h-5 w-6" aria-label={`Đưa "${title}" lên`} disabled={!previous || moving}
+          <IconButton className="h-5 w-6" label={`Đưa "${title}" lên`} tooltip="Đưa lên" side="left" disabled={!previous || moving}
             onClick={() => previous && void move(previous, true)}>
             <ArrowUp className="h-3.5 w-3.5" aria-hidden />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-5 w-6" aria-label={`Đưa "${title}" xuống`} disabled={!next || moving}
+          </IconButton>
+          <IconButton className="h-5 w-6" label={`Đưa "${title}" xuống`} tooltip="Đưa xuống" side="left" disabled={!next || moving}
             onClick={() => next && void move(next, false)}>
             <ArrowDown className="h-3.5 w-3.5" aria-hidden />
-          </Button>
+          </IconButton>
         </div>
         <div className="min-w-0 flex-1">
           {editing ? (
@@ -123,9 +124,9 @@ export function MetadataFieldRow({ kb, field, previous, next }: MetadataFieldRow
           aria-label={`Lọc được theo ${title}`} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Thao tác cho trường ${title}`}>
+            <IconButton className="h-8 w-8" label={`Thao tác cho trường ${title}`} tooltip="Thao tác">
               <MoreHorizontal className="h-4 w-4" aria-hidden />
-            </Button>
+            </IconButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={() => { setLabel(field.label); setEditing(true); }}><Pencil aria-hidden />Sửa label</DropdownMenuItem>

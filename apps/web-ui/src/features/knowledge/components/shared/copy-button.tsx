@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
+import { IconButton } from '@/components/shared/icon-button';
 import { Button, type ButtonProps } from '@/components/ui/button';
 
 /** Clipboard API first, then the legacy execCommand path (http origins, older browsers). */
@@ -23,7 +24,7 @@ export async function copyText(text: string): Promise<boolean> {
 
 export interface CopyButtonProps extends Omit<ButtonProps, 'onClick' | 'value' | 'children'> {
   value: string | (() => string);
-  /** Visible text; with `iconOnly` it becomes the aria-label. */
+  /** Visible text; with `iconOnly` it becomes the aria-label and tooltip. */
   label?: string;
   copiedLabel?: string;
   iconOnly?: boolean;
@@ -45,13 +46,15 @@ export function CopyButton({
   const Icon = state === 'copied' ? Check : Copy;
   return (
     <span className="inline-flex flex-col items-start gap-1">
-      <Button
-        type="button" variant={variant} size={iconOnly ? 'icon' : size}
-        aria-label={iconOnly ? text : undefined} title={iconOnly ? text : undefined}
-        onClick={() => void copy()} {...props}
-      >
-        <Icon className="h-4 w-4" aria-hidden />{!iconOnly && text}
-      </Button>
+      {iconOnly ? (
+        <IconButton label={text} variant={variant} onClick={() => void copy()} {...props}>
+          <Icon className="h-4 w-4" aria-hidden />
+        </IconButton>
+      ) : (
+        <Button type="button" variant={variant} size={size} onClick={() => void copy()} {...props}>
+          <Icon className="h-4 w-4" aria-hidden />{text}
+        </Button>
+      )}
       {state === 'failed' && <span role="alert" className="text-xs text-destructive">Không copy được, hãy chọn và copy thủ công.</span>}
     </span>
   );

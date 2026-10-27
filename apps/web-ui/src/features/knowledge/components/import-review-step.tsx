@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils/cn';
 import type { ImportPreviewRow, ImportReport } from '../types';
-import { kbHref } from './knowledge-base-shell';
+import { kbHref } from './kb-routes';
 import { StatusDot, type StatusTone } from './shared/status-dot';
 
 type Action = ImportPreviewRow['action'];

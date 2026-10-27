@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, ExternalLink, FileText, Copy, MoreHorizontal, RotateCw, SearchX, Upload } from 'lucide-react';
+import { IconButton } from '@/components/shared/icon-button';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,17 +14,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ApiError } from '@/lib/api/errors';
 import { cn } from '@/lib/utils/cn';
-import { knowledgeKeys, useArchiveDocument, useDocuments, useRestoreDocument, useRetryRevision } from '../hooks/use-knowledge';
+import { isIndexPending, knowledgeKeys, useArchiveDocument, useDocuments, useRestoreDocument, useRetryRevision } from '../hooks/use-knowledge';
 import type { DocumentFilters, DocumentSummary } from '../types';
-import { kbHref } from './knowledge-base-shell';
+import { kbHref } from './kb-routes';
 import { copyText } from './shared/copy-button';
 import { ConfirmDialog } from './shared/confirm-dialog';
-import { documentStatus } from './shared/document-status';
 import { EmptyState } from './shared/empty-state';
 import { errorMessage } from './shared/error-message';
 import { fullDateTime, relativeTime } from './shared/format';
+import { IndexStatus } from './shared/index-status';
 import { QueryState } from './shared/query-state';
-import { StatusDot } from './shared/status-dot';
 
 export const PAGE_SIZE = 20;
 const CONFLICT = 'Tài liệu vừa thay đổi, đã tải lại.';
@@ -54,7 +54,8 @@ function DocumentRow({ kb, doc, index }: { kb: string; doc: DocumentSummary; ind
   const retry = useRetryRevision();
   const act = useDocumentAction(kb);
   const [confirmOff, setConfirmOff] = useState(false);
-  const status = documentStatus(doc);
+  const failed = doc.index_status === 'error';
+  const hint = isIndexPending(doc.index_status) && doc.active_revision ? `Agent vẫn dùng r${doc.active_revision}` : undefined;
   const archived = doc.status === 'archived';
   const busy = archive.isPending || restore.isPending;
   const href = docHref(kb, doc.id);
@@ -66,9 +67,9 @@ function DocumentRow({ kb, doc, index }: { kb: string; doc: DocumentSummary; ind
     if (await copyText(doc.id)) toast.success('Đã copy ID'); else toast.error('Không copy được ID.');
   };
 
-  const dot = <StatusDot tone={status.tone}>{status.label}</StatusDot>;
+  const dot = <IndexStatus status={doc.index_status} />;
   return (
-    <TableRow className={cn('group', archived && 'text-muted-foreground')}>
+    <TableRow className={cn('group', archived && 'text-muted-foreground opacity-70')}>
       <TableCell className="w-12 tabular-nums text-muted-foreground">{index}</TableCell>
       <TableCell className="max-w-0 min-w-48">
         <Link href={href} className="block truncate rounded-sm font-medium hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -84,13 +85,13 @@ function DocumentRow({ kb, doc, index }: { kb: string; doc: DocumentSummary; ind
       </TableCell>
       <TableCell className="whitespace-nowrap">
         <span className="inline-flex items-center gap-2">
-          {status.hint ? (
+          {hint ? (
             <Tooltip>
               <TooltipTrigger asChild><span tabIndex={0} className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{dot}</span></TooltipTrigger>
-              <TooltipContent>{status.hint}</TooltipContent>
+              <TooltipContent>{hint}</TooltipContent>
             </Tooltip>
           ) : dot}
-          {status.kind === 'error' && (
+          {failed && !archived && (
             <Button variant="ghost" size="sm" className="h-7 px-2" disabled={retry.isPending} onClick={() => void retryIndex()}>
               <RotateCw className="h-3.5 w-3.5" aria-hidden />Thử lại
             </Button>
@@ -106,14 +107,14 @@ function DocumentRow({ kb, doc, index }: { kb: string; doc: DocumentSummary; ind
       <TableCell className="w-12 text-right">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Thao tác cho ${doc.title}`}>
+            <IconButton className="h-8 w-8" label={`Thao tác cho ${doc.title}`} tooltip="Thao tác">
               <MoreHorizontal className="h-4 w-4" aria-hidden />
-            </Button>
+            </IconButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem asChild><Link href={href}><ExternalLink aria-hidden />Mở</Link></DropdownMenuItem>
             <DropdownMenuItem onSelect={() => void copyId()}><Copy aria-hidden />Copy ID</DropdownMenuItem>
-            {status.kind === 'error' && <DropdownMenuItem onSelect={() => void retryIndex()}><RotateCw aria-hidden />Thử index lại</DropdownMenuItem>}
+            {failed && <DropdownMenuItem onSelect={() => void retryIndex()}><RotateCw aria-hidden />Thử index lại</DropdownMenuItem>}
           </DropdownMenuContent>
         </DropdownMenu>
       </TableCell>

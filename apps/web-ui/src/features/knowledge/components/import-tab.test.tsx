@@ -1,6 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestProviders } from '@/test/render';
 import { knowledgeApi } from '../api/knowledge';
 import { ImportTab } from './import-tab';
 
@@ -17,7 +18,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView ??= () => undefined;
 });
 
-const renderImport = () => render(<QueryClientProvider client={new QueryClient()}><ImportTab kb="kb1" /></QueryClientProvider>);
+const renderImport = () => render(<TestProviders client={new QueryClient()}><ImportTab kb="kb1" /></TestProviders>);
 const addFiles = (...files: File[]) => fireEvent.change(screen.getByLabelText('File cần nhập'), { target: { files } });
 const next = () => fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục' }));
 function pick(label: string, option: string) {

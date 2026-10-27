@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import type { MetadataField, SearchResult } from '../types';
 import { highlightSegments } from './highlight';
-import { kbHref } from './knowledge-base-shell';
+import { kbHref } from './kb-routes';
 
 type SearchRecord = SearchResult['records'][number];
 

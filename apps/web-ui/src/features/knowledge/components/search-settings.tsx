@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Plus, Settings2, X } from 'lucide-react';
+import { IconButton } from '@/components/shared/icon-button';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,12 +10,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils/cn';
 import type { MetadataField } from '../types';
 import {
   DEFAULT_SETTINGS, MAX_CONDITIONS, OPERATORS, isValueless, toCondition, type FilterCondition, type SearchSettings,
 } from './build-search-request';
-import { kbHref } from './knowledge-base-shell';
+import { kbHref } from './kb-routes';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
 /** A cleared or unparsable number input means "unset", never NaN. */
@@ -35,10 +37,10 @@ export function SearchSettingsPopover({ kb, settings, fields, onChange }: Search
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" variant="ghost" size="icon" className="relative h-8 w-8" aria-label="Cài đặt truy xuất" title="Cài đặt truy xuất">
+        <IconButton className="relative h-8 w-8" label="Cài đặt truy xuất">
           <Settings2 className="h-4 w-4 text-muted-foreground" aria-hidden />
           {changed && <span aria-hidden className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-primary" />}
-        </Button>
+        </IconButton>
       </PopoverTrigger>
       <PopoverContent align="end" className="max-h-[80vh] w-[min(420px,calc(100vw-32px))] space-y-4 overflow-y-auto text-sm">
         <div className="flex items-center justify-between">
@@ -147,10 +149,10 @@ function ConditionEditor({ settings, fields, onChange }: {
                 type={field?.type === 'number' ? 'number' : field?.type === 'time' ? 'datetime-local' : 'text'}
                 onChange={event => update(row.id, { value: event.target.value })} />
             )}
-            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" aria-label={`Xoá điều kiện ${n}`} title="Xoá điều kiện"
+            <IconButton className="h-8 w-8" label={`Xoá điều kiện ${n}`} tooltip="Xoá điều kiện"
               onClick={() => onChange({ conditions: rows.filter(item => item.id !== row.id) })}>
               <X className="h-4 w-4" aria-hidden />
-            </Button>
+            </IconButton>
           </div>
         );
       })}
@@ -184,11 +186,16 @@ export function ConditionChips({ settings, fields, onChange, className }: Condit
         return (
           <li key={row.id} className="inline-flex max-w-full items-center gap-1 rounded-md border bg-sidebar py-0.5 pl-2 pr-0.5 text-xs">
             <span className="truncate">{text}</span>
-            <button type="button" aria-label={`Bỏ lọc ${text}`}
-              className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => onChange({ ...settings, conditions: settings.conditions.filter(item => item.id !== row.id) })}>
-              <X className="h-3 w-3" aria-hidden />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" aria-label={`Bỏ lọc ${text}`}
+                  className="rounded p-0.5 text-muted-foreground hover:bg-primary-subtle hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => onChange({ ...settings, conditions: settings.conditions.filter(item => item.id !== row.id) })}>
+                  <X className="h-3 w-3" aria-hidden />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Bỏ lọc</TooltipContent>
+            </Tooltip>
           </li>
         );
       })}

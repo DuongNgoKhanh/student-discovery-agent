@@ -2,71 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Knowledge Studio tokens (plan §2). shadcn names kept; values are HSL channels. */
+/* Knowledge Studio tokens (plan §2, navy palette from the UI feedback round). shadcn names kept; values are HSL channels. */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 220 43% 11%;
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 220 43% 11%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 43% 11%;
-    --primary: 220 87% 51%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 214 52% 25%;
     --primary-foreground: 0 0% 100%;
-    --primary-subtle: 221 100% 97%;
-    --secondary: 216 24% 96%;
-    --secondary-foreground: 218 24% 27%;
-    --muted: 216 24% 96%;
-    --muted-foreground: 216 18% 34%;
-    --accent: 216 24% 96%;
-    --accent-foreground: 220 43% 11%;
+    --primary-subtle: 213 36% 95%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 215 25% 27%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 19% 35%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
     --destructive: 4 74% 49%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 17% 93%;
-    --input: 217 16% 84%;
-    --ring: 220 87% 51%;
-    --sidebar: 210 20% 98%;
-    --sidebar-foreground: 218 24% 27%;
-    --brand: 220 50% 20%;
+    --destructive-subtle: 0 86% 97%;
+    --border: 214 32% 91%;
+    --input: 213 27% 84%;
+    --ring: 214 52% 25%;
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 215 25% 27%;
+    --brand: 214 52% 25%;
     --status-success: 152 77% 39%;
     --status-warning: 34 94% 50%;
     --status-danger: 4 86% 58%;
     --status-neutral: 218 15% 65%;
     --warning-subtle: 45 100% 96%;
     --warning-foreground: 22 92% 37%;
+    --success-foreground: 152 80% 25%;
     --radius: 0.625rem;
   }
 
   .dark {
-    --background: 222 42% 8%;
-    --foreground: 240 5% 96%;
-    --card: 221 27% 12%;
-    --card-foreground: 240 5% 96%;
-    --popover: 221 27% 12%;
-    --popover-foreground: 240 5% 96%;
-    --primary: 220 100% 58%;
-    --primary-foreground: 0 0% 100%;
-    --primary-subtle: 220 50% 20%;
-    --secondary: 221 21% 15%;
-    --secondary-foreground: 225 4% 82%;
-    --muted: 221 21% 15%;
-    --muted-foreground: 225 4% 60%;
-    --accent: 221 21% 15%;
-    --accent-foreground: 240 5% 96%;
+    --background: 222 47% 7%;
+    --foreground: 210 40% 96%;
+    --card: 222 40% 10%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 40% 10%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 213 60% 72%;
+    --primary-foreground: 222 47% 11%;
+    --primary-subtle: 214 40% 18%;
+    --secondary: 217 33% 15%;
+    --secondary-foreground: 214 32% 82%;
+    --muted: 217 33% 15%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 15%;
+    --accent-foreground: 210 40% 96%;
     --destructive: 4 92% 69%;
-    --destructive-foreground: 222 42% 8%;
-    --border: 221 21% 15%;
-    --input: 221 15% 25%;
-    --ring: 220 100% 58%;
-    --sidebar: 221 27% 12%;
-    --sidebar-foreground: 225 4% 82%;
-    --brand: 220 100% 58%;
+    --destructive-foreground: 222 47% 7%;
+    --destructive-subtle: 4 50% 15%;
+    --border: 217 25% 20%;
+    --input: 217 20% 28%;
+    --ring: 213 60% 72%;
+    --sidebar: 222 40% 10%;
+    --sidebar-foreground: 214 32% 82%;
+    --brand: 213 60% 72%;
     --status-success: 152 60% 45%;
     --status-warning: 34 94% 55%;
     --status-danger: 4 92% 69%;
     --status-neutral: 225 4% 60%;
     --warning-subtle: 19 84% 15%;
     --warning-foreground: 34 94% 60%;
+    --success-foreground: 152 60% 55%;
   }
 
   * {

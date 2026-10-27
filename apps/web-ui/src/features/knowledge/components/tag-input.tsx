@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { X } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils/cn';
 
 export interface TagInputProps {
@@ -48,13 +49,18 @@ export function TagInput({ value, onChange, label, id, autoFocus, invalid, descr
       {value.map((tag, index) => (
         <span key={tag} className="inline-flex items-center gap-0.5 rounded bg-muted py-0.5 pl-1.5 pr-0.5 text-13">
           {tag}
-          <button
-            type="button" aria-label={`Xoá ${tag}`}
-            className="rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => { onChange(value.filter((_, i) => i !== index)); input.current?.focus(); }}
-          >
-            <X className="h-3 w-3" aria-hidden />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button" aria-label={`Xoá ${tag}`}
+                className="rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => { onChange(value.filter((_, i) => i !== index)); input.current?.focus(); }}
+              >
+                <X className="h-3 w-3" aria-hidden />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Xoá</TooltipContent>
+          </Tooltip>
         </span>
       ))}
       <input

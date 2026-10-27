@@ -1,6 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestProviders } from '@/test/render';
 import { ApiError } from '@/lib/api/errors';
 import { knowledgeApi } from '../api/knowledge';
 import { DEFAULT_SETTINGS } from './build-search-request';
@@ -9,7 +10,7 @@ import { KnowledgeTestingPage } from './knowledge-testing-page';
 vi.mock('../api/knowledge', () => ({ knowledgeApi: { search: vi.fn(), listFields: vi.fn() } }));
 const mocked = vi.mocked(knowledgeApi);
 const fields = [{ id: 'f1', name: 'school', type: 'string' as const, label: 'Trường', filterable: true, ordinal: 0 }];
-const renderPage = () => render(<QueryClientProvider client={new QueryClient()}><KnowledgeTestingPage kb="kb1" /></QueryClientProvider>);
+const renderPage = () => render(<TestProviders client={new QueryClient()}><KnowledgeTestingPage kb="kb1" /></TestProviders>);
 
 describe('KnowledgeTestingPage', () => {
   beforeEach(() => {

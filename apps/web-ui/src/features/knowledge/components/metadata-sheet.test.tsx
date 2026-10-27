@@ -1,6 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestProviders } from '@/test/render';
 import { ApiError } from '@/lib/api/errors';
 import { knowledgeApi } from '../api/knowledge';
 import type { MetadataField } from '../types';
@@ -18,7 +19,7 @@ const fields: MetadataField[] = [
 ];
 
 const openSheet = async () => {
-  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MetadataSheet kb="kb1" /></QueryClientProvider>);
+  render(<TestProviders client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MetadataSheet kb="kb1" /></TestProviders>);
   fireEvent.click(screen.getByRole('button', { name: 'Metadata' }));
   await screen.findByText('hoc_phi');
 };

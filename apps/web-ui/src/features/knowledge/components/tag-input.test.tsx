@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
+import { TestProviders } from '@/test/render';
 import { TagInput } from './tag-input';
 
 function Harness() {
@@ -10,7 +11,7 @@ function Harness() {
 
 describe('TagInput', () => {
   it('adds with Enter or ";" and removes with × or Backspace', () => {
-    render(<Harness />);
+    render(<TestProviders><Harness /></TestProviders>);
     const input = screen.getByLabelText('Hệ');
     fireEvent.change(input, { target: { value: 'C' } });
     fireEvent.keyDown(input, { key: 'Enter' });

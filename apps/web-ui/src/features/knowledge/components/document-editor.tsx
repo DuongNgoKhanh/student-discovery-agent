@@ -21,7 +21,7 @@ import {
   type EditorForm, type EditorSchemaContext,
 } from './document-editor-form';
 import { ErrorText } from './error-text';
-import { kbHref } from './knowledge-base-shell';
+import { kbHref } from './kb-routes';
 import { MarkdownPreview } from './markdown-preview';
 import { fromFormValues, toFormValues } from './metadata-form';
 import { MetadataInputs, fieldLabel } from './metadata-inputs';

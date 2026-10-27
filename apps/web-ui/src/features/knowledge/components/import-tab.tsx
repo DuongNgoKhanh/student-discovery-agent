@@ -15,7 +15,7 @@ import { checkFiles, MAX_ROWS, readText } from './import-files';
 import { BASE_TARGETS, ImportMappingStep, mappingTargets, metaKey } from './import-mapping-step';
 import { ImportPreviewTable, ImportResult } from './import-review-step';
 import { type ImportStep, ImportStepper } from './import-stepper';
-import { kbHref } from './knowledge-base-shell';
+import { kbHref } from './kb-routes';
 
 const READ_ERROR = 'Không đọc được file, hãy thử lại.';
 

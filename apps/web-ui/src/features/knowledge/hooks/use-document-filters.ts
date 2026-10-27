@@ -2,16 +2,17 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
+import { INDEX_STATUS_LABELS } from '../components/shared/index-status';
 import type { DocumentFilters } from '../types';
 
 export const DOCUMENT_STATES = {
   all: { label: 'Tất cả', filters: {} },
-  ready: { label: 'Sẵn sàng', filters: { status: 'active', index_status: 'ready' } },
-  // The API takes one index_status, so queued and in-progress revisions are separate states; `indexing` keeps its URL value.
-  indexing: { label: 'Chờ index', filters: { status: 'active', index_status: 'pending' } },
-  processing: { label: 'Đang xử lý', filters: { status: 'active', index_status: 'indexing' } },
-  error: { label: 'Lỗi', filters: { status: 'active', index_status: 'error' } },
-  archived: { label: 'Đã tắt', filters: { status: 'archived' } },
+  // The API takes one index_status, so queued and in-progress revisions are separate states.
+  pending: { label: INDEX_STATUS_LABELS.pending, filters: { status: 'active', index_status: 'pending' } },
+  indexing: { label: INDEX_STATUS_LABELS.indexing, filters: { status: 'active', index_status: 'indexing' } },
+  ready: { label: INDEX_STATUS_LABELS.ready, filters: { status: 'active', index_status: 'ready' } },
+  error: { label: INDEX_STATUS_LABELS.error, filters: { status: 'active', index_status: 'error' } },
+  archived: { label: 'Tắt truy xuất', filters: { status: 'archived' } },
 } as const satisfies Record<string, { label: string; filters: DocumentFilters }>;
 export type DocumentState = keyof typeof DOCUMENT_STATES;
 

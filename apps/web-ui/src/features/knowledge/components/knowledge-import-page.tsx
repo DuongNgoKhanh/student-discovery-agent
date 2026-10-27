@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { ImportTab } from './import-tab';
-import { kbHref } from './knowledge-base-shell';
+import { kbHref } from './kb-routes';
 import { PageTitle } from './shared/page-title';
 
 export function KnowledgeImportPage({ kb }: { kb: string }) {

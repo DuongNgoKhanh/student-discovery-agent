@@ -1,6 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestProviders } from '@/test/render';
 import { knowledgeApi } from '../api/knowledge';
 import { AgentTab } from './agent-tab';
 import { tokenizeJson } from './json-code';
@@ -19,7 +20,7 @@ describe('AgentTab', () => {
     mocked.agentParams.mockResolvedValue({ ...params, warnings: ['Chỉ hiển thị 8 field đầu tiên theo thứ tự.'] });
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    render(<QueryClientProvider client={new QueryClient()}><AgentTab kb="kb1" /></QueryClientProvider>);
+    render(<TestProviders client={new QueryClient()}><AgentTab kb="kb1" /></TestProviders>);
 
     expect(await screen.findByText('Chỉ hiển thị 8 field đầu tiên theo thứ tự.')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copy cả hai' })).toBeEnabled());

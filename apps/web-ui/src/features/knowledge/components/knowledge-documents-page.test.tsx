@@ -1,7 +1,6 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { renderWithProviders } from '@/test/render';
 import { knowledgeApi } from '../api/knowledge';
 import type { DocumentSummary } from '../types';
 import { KnowledgeDocumentsPage } from './knowledge-documents-page';
@@ -20,25 +19,22 @@ const doc = (id: string, patch: Partial<DocumentSummary> = {}): DocumentSummary 
   id, status: 'active', revision: 2, title: id.toUpperCase(), index_status: 'ready', active_revision: 2, updated_at: '2026-10-27T00:00:00Z', ...patch,
 });
 
-const renderPage = () => render(
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <TooltipProvider><KnowledgeDocumentsPage kb="kb1" /></TooltipProvider>
-  </QueryClientProvider>,
-);
+const renderPage = () => renderWithProviders(<KnowledgeDocumentsPage kb="kb1" />);
 
 describe('KnowledgeDocumentsPage', () => {
   beforeEach(() => { vi.resetAllMocks(); search = ''; });
 
-  it('lists documents with one status column and confirms before turning one off', async () => {
+  it('lists documents with their index status and confirms before turning one off', async () => {
     mocked.listDocuments.mockResolvedValue({
       items: [doc('hutech'), doc('uel', { index_status: 'error' }), doc('ftu', { status: 'archived' })], next_cursor: null,
     });
     mocked.archiveDocument.mockResolvedValue({} as never);
     renderPage();
     expect(await screen.findByRole('link', { name: 'HUTECH' })).toHaveAttribute('href', '/admin/knowledge/kb1/documents/hutech');
-    expect(screen.getByText('Sẵn sàng')).toBeInTheDocument();
     expect(screen.getByText('Lỗi index')).toBeInTheDocument();
-    expect(screen.getByText('Đã tắt', { selector: 'span' })).toBeInTheDocument();
+    // Archived rows keep their index status; the switch carries "off".
+    expect(screen.getAllByText('Sẵn sàng')).toHaveLength(2);
+    expect(screen.getByRole('switch', { name: 'Bật tài liệu FTU' })).not.toBeChecked();
     expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
     expect(mocked.listDocuments).toHaveBeenCalledWith('kb1', { limit: 20 });
 
@@ -60,14 +56,14 @@ describe('KnowledgeDocumentsPage', () => {
 
   it('filters queued and in-progress indexing as separate states', async () => {
     mocked.listDocuments.mockResolvedValue({ items: [], next_cursor: null });
-    search = 'state=indexing';
+    search = 'state=pending';
     const { unmount } = renderPage();
     await waitFor(() => expect(mocked.listDocuments).toHaveBeenCalledWith('kb1', { status: 'active', index_status: 'pending', limit: 20 }));
-    expect(screen.getByRole('combobox')).toHaveTextContent('Chờ index');
+    expect(screen.getByRole('combobox')).toHaveTextContent('Chờ xử lý');
     unmount();
-    search = 'state=processing';
+    search = 'state=indexing';
     renderPage();
     await waitFor(() => expect(mocked.listDocuments).toHaveBeenCalledWith('kb1', { status: 'active', index_status: 'indexing', limit: 20 }));
-    expect(screen.getByRole('combobox')).toHaveTextContent('Đang xử lý');
+    expect(screen.getByRole('combobox')).toHaveTextContent('Đang index');
   });
 });

@@ -1,7 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestProviders } from '@/test/render';
 import { toast } from '@/components/ui/sonner';
 import { ApiError } from '@/lib/api/errors';
 import { knowledgeApi } from '../api/knowledge';
@@ -19,7 +20,7 @@ const mocked = vi.mocked(knowledgeApi);
 
 const renderEditor = (docId: string | null) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={client}><DocumentEditor kb="kb1" docId={docId} /></QueryClientProvider>);
+  render(<TestProviders client={client}><DocumentEditor kb="kb1" docId={docId} /></TestProviders>);
   return client;
 };
 
@@ -86,7 +87,7 @@ describe('DocumentEditor', () => {
     const client = renderEditor('hutech');
     fireEvent.change(await screen.findByDisplayValue('cũ'), { target: { value: 'đang gõ dở' } });
     await client.invalidateQueries();
-    await waitFor(() => expect(screen.getByText('Đang index')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Chờ xử lý')).toBeInTheDocument());
     expect(screen.getByLabelText('Nội dung (Markdown)')).toHaveValue('đang gõ dở');
     fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
     await waitFor(() => expect(mocked.putDocument).toHaveBeenCalledWith(expect.objectContaining({
@@ -144,10 +145,10 @@ describe('DocumentEditor', () => {
     mocked.getDocument.mockResolvedValue(detail(1, 'ready'));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <QueryClientProvider client={client}>
+      <TestProviders client={client}>
         <nav><Link href="/admin/knowledge/kb1/settings">Cài đặt</Link></nav>
         <DocumentEditor kb="kb1" docId="hutech" />
-      </QueryClientProvider>,
+      </TestProviders>,
     );
     fireEvent.change(await screen.findByDisplayValue('cũ'), { target: { value: 'mới' } });
     fireEvent.click(screen.getByRole('link', { name: 'Cài đặt' }));

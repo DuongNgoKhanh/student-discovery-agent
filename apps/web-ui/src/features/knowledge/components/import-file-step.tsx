@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { FileText, Upload, X } from 'lucide-react';
+import { IconButton } from '@/components/shared/icon-button';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils/cn';
 import { ACCEPT, formatSize, MAX_BODY_BYTES, MAX_ROWS } from './import-files';
@@ -53,9 +54,9 @@ export function ImportFileStep({ files, errors, onAdd, onRemove }: ImportFileSte
               <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
               <span className="min-w-0 flex-1 truncate">{file.name}</span>
               <span className="shrink-0 text-muted-foreground">{formatSize(file.size)}</span>
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={`Bỏ ${file.name}`} onClick={() => onRemove(index)}>
+              <IconButton className="h-7 w-7" label={`Bỏ ${file.name}`} tooltip="Bỏ file" onClick={() => onRemove(index)}>
                 <X className="h-4 w-4" aria-hidden />
-              </Button>
+              </IconButton>
             </li>
           ))}
         </ul>

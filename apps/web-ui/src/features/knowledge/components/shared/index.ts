@@ -1,6 +1,6 @@
 export { ConfirmDialog, type ConfirmDialogProps } from './confirm-dialog';
 export { CopyButton, copyText, type CopyButtonProps } from './copy-button';
-export { documentStatus, type DocumentStatus, type DocumentStatusKind } from './document-status';
+export { INDEX_STATUS_LABELS, IndexStatus, type IndexStatusProps } from './index-status';
 export { EmptyState, type EmptyStateProps } from './empty-state';
 export { errorMessage, STATUS_MESSAGES } from './error-message';
 export { PageTitle, type PageTitleProps } from './page-title';

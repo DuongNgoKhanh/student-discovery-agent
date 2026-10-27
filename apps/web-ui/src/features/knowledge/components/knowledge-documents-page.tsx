@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useDocumentFilters } from '../hooks/use-document-filters';
 import { DocumentsTable } from './documents-table';
 import { DocumentsToolbar } from './documents-toolbar';
-import { kbHref } from './knowledge-base-shell';
+import { kbHref } from './kb-routes';
 import { MetadataSheet } from './metadata-sheet';
 import { PageTitle } from './shared/page-title';
 
