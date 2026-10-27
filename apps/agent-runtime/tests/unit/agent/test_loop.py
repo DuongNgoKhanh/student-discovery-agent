@@ -113,8 +113,14 @@ def test_model_failures_fall_back_to_templates():
     result = turn(FakeModel(ModelUnavailable("rate_limited", "ModelProviderError:429")))
     text, chips = result.blocks
     assert result.fallback == "rate_limited"
-    assert (text.type, text.content) == ("text", SNAPSHOT.templates.unknown_message)
+    assert (text.type, text.content) == ("text", SNAPSHOT.templates.busy_message)
     assert [i.label for i in chips.items] == list(SNAPSHOT.templates.fallback_suggestions)
+
+
+def test_only_a_reply_the_agent_could_not_use_says_it_did_not_understand():
+    assert turn(FakeModel(ModelReply(text=""))).blocks[0].content == SNAPSHOT.templates.unknown_message
+    for reason in ("timeout", "provider_error"):
+        assert turn(FakeModel(ModelUnavailable(reason))).blocks[0].content == SNAPSHOT.templates.busy_message
 
 
 def test_no_model_configured_never_calls_one():

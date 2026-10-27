@@ -119,6 +119,7 @@
           description: "Mọi text template dùng cùng luật biến như persona.system_prompt; fallback_suggestions không được trùng."
           properties:
             unknown_message: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+            busy_message: {type: string, minLength: 1, maxLength: 500, pattern: '\S', description: "Hiển thị khi model bận, lỗi hoặc hết thời gian lượt; unknown_message chỉ dùng khi model trả lời không dùng được."}
             fallback_suggestions: {type: array, maxItems: 4, items: {type: string, minLength: 1, maxLength: 60, pattern: '\S'}}
             next_question: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
             completed: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}

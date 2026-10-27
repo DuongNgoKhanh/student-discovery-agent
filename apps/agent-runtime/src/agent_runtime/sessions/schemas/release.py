@@ -122,6 +122,7 @@ class AgentLinks(ContractModel):
 
 class AgentTemplates(ContractModel):
     unknown_message: TemplateText = "Mình chưa hiểu ý bạn. Bạn thử chọn một gợi ý bên dưới nhé."
+    busy_message: TemplateText = "Hệ thống đang hơi bận, bạn gửi lại câu hỏi sau ít phút nhé."
     fallback_suggestions: Labels = ("Làm bài khám phá",)
     next_question: TemplateText = "Câu tiếp theo nhé, {{display_name}}!"
     completed: TemplateText = "Đây là kết quả của bạn!"

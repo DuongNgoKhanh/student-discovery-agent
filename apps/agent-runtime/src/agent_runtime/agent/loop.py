@@ -39,6 +39,7 @@ from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.services.blocks import markdown_to_text
 
 Fallback = UnavailableReason | Literal["max_tool_steps", "empty_reply", "deadline"]
+_BUSY = frozenset({"rate_limited", "timeout", "provider_error", "deadline"})
 
 
 @dataclass(frozen=True)
@@ -107,8 +108,9 @@ def _text_block(block_id: str, text: str, allowed_domains: tuple[str, ...]) -> T
 def _fallback(snapshot: AgentSnapshotV1, reason: Fallback, new_id: Callable[[], str], steps: int,
               usage: ModelUsage) -> AgentTurn:
     templates = snapshot.templates
-    blocks: list[TypedBlock] = [TextBlock(block_id=new_id(), type="text", schema_version=1,
-                                          content=templates.unknown_message)]
+    # Only a reply the agent could not use means "not understood"; the rest are on our side and worth a retry.
+    content = templates.busy_message if reason in _BUSY else templates.unknown_message
+    blocks: list[TypedBlock] = [TextBlock(block_id=new_id(), type="text", schema_version=1, content=content)]
     if templates.fallback_suggestions:
         blocks.append(SuggestionsBlock(block_id=new_id(), type="suggestions", schema_version=1, items=[
             {"label": label, "message_text": label} for label in templates.fallback_suggestions]))
