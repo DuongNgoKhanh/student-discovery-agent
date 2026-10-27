@@ -1,5 +1,6 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { AdminShell } from '@/components/shared/admin-shell';
+import { AdminAccount } from '@/features/auth';
 import { SessionExpired, getSession } from '@/lib/api/session.server';
 
 export const dynamic = 'force-dynamic';
@@ -10,16 +11,5 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     throw error;
   });
   if (!session?.is_admin) redirect('/admin/login');
-  return (
-    <div className="mx-auto max-w-5xl p-6">
-      <header className="mb-4 flex items-center gap-4">
-        <span className="font-bold">Khu vực Admin</span>
-        <nav className="flex gap-3 text-sm">
-          <Link className="underline" href="/admin">Users</Link>
-          <Link className="underline" href="/admin/knowledge">Knowledge</Link>
-        </nav>
-      </header>
-      {children}
-    </div>
-  );
+  return <AdminShell account={<AdminAccount />}>{children}</AdminShell>;
 }
