@@ -52,4 +52,25 @@ LAB_KEYRING="$KEYRING" LAB_RUNTIME_URL=http://127.0.0.1:18100 LAB_OWNER_DATABASE
 
 Sau đó sửa `releases/agent.json`: `knowledge_base_id` thành id KB vừa tạo, `auto_filter_fields` và `display` theo field của KB đó. Hội thoại mới mới thấy thay đổi.
 
+## Knowledge Studio
+
+`start.sh` tạo role `kb_studio` (chỉ ghi nội dung knowledge), cho runtime nhận token của Studio (`RUNTIME_STUDIO_KEYRING`) và ghi `studio.env` (mode 600, git-ignore). Indexer chạy nền nên sửa trong Studio được index trong lúc chat. Mở thêm hai terminal:
+
+```bash
+# studio-api :3001 (migration Product chạy trên cùng DB của prototype)
+set -a; source prototypes/agent-chat/studio.env; set +a
+cd apps/studio-api && corepack pnpm db:migrate && corepack pnpm dev
+
+# web-ui :3000, gọi studio-api qua rewrite /api
+cd apps/web-ui && corepack pnpm dev
+```
+
+Máy không có `pnpm` trên PATH thì dùng `corepack pnpm ...` như trên (có `pnpm` thì gõ thẳng cũng được). Cổng 3000 có thể đang bị stack Docker local đầy đủ chiếm: khi đó chạy `corepack pnpm dev -p 3002` cho web-ui và mở cổng 3002 thay cho 3000.
+
+Đăng nhập <http://localhost:3000/admin/login> bằng `admin` / `STUDIO_ADMIN_PASSWORD` trong `.env.local`, vào **Knowledge**. Không có `GOOGLE_API_KEY` thì tạo KB với model `fake-embedding` (studio.env chỉ cho phép model đó).
+
+Gắn KB vào agent: tab **Dùng cho agent** → Copy → thay `params` của `knowledge.search` và `knowledge.show` trong `releases/agent.json`. Chỉ hội thoại mới thấy thay đổi.
+
+Sau khi pull bản này, chạy `start.sh reset` một lần: migration được sửa tại chỗ (thêm bảng `knowledge.imports` và hàm retry), nên DB cũ không tự nâng cấp (script sẽ nhắc nếu thiếu `knowledge.imports`). `.env.local` cũ vẫn dùng được: các secret mới của Studio chỉ được thêm khi chưa có.
+
 Proxy ký cho bất kỳ owner nào và chỉ bind `127.0.0.1`. Đừng mở nó ra mạng.

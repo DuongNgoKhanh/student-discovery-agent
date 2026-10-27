@@ -3,6 +3,7 @@ import { honoHandler, withHandler } from '@/http/handler';
 import { success } from '@/http/response';
 import { registerAuthRoutes } from '@/modules/auth/auth.routes';
 import { registerExperiencesRoutes } from '@/modules/experiences/experiences.routes';
+import { registerKnowledgeRoutes } from '@/modules/knowledge/knowledge.routes';
 import { registerUsersRoutes } from '@/modules/users/users.routes';
 import { registerVersionsRoutes } from '@/modules/versions/versions.routes';
 import { probeReadiness, readinessResponse, type ReadinessSnapshot } from '@/health/readiness';
@@ -20,6 +21,7 @@ export function createApp(options: AppOptions = {}): Hono {
   app.get('/ready', honoHandler(ready));
   registerAuthRoutes(app);
   registerExperiencesRoutes(app);
+  registerKnowledgeRoutes(app);
   registerUsersRoutes(app);
   registerVersionsRoutes(app);
   return app;

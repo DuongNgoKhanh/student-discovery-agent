@@ -297,6 +297,9 @@ paths:
         max_chunks_per_doc chunk. Điểm từ khoá là tỉ lệ từ (không dấu) của câu hỏi có trong chunk, kể cả heading.
         degraded=true khi không embed được câu hỏi (chỉ dùng điểm từ khoá).
         Ví dụ đầy đủ ở contracts/fixtures/knowledge-retrieval.json.
+        Callers: the Product BFF as a student (`X-Internal-Caller: sda-product-bff`) or Studio as a service
+        (`X-Internal-Caller: sda-studio-api`, claims `caller_type=studio_service`, `purpose=knowledge.retrieval`,
+        no `owner_id`, keyring `RUNTIME_STUDIO_KEYRING`). Studio tokens are rejected with 403 on every other route.
       requestBody:
         required: true
         content:
