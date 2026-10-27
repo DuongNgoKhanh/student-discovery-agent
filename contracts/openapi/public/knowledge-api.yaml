@@ -365,7 +365,7 @@ components:
       minProperties: 1
       description: name/type chỉ được gửi nếu bằng giá trị hiện tại; khác → 422.
       properties:
-        name: {type: string}
+        name: {type: string, pattern: "^[a-z][a-z0-9_]{0,63}$"}
         type: {$ref: "#/components/schemas/FieldType"}
         label: {type: string, maxLength: 200}
         filterable: {type: boolean}
@@ -387,9 +387,9 @@ components:
       additionalProperties: false
       required: [title, body, source_url, metadata]
       properties:
-        title: {type: string, minLength: 1, maxLength: 300}
+        title: {type: string, minLength: 1, maxLength: 300, pattern: "\\S"}
         body: {type: string, description: "Markdown, tối đa 262144 byte UTF-8"}
-        source_url: {type: string, nullable: true, maxLength: 2000}
+        source_url: {type: string, nullable: true, maxLength: 2000, pattern: "^https?://"}
         metadata: {$ref: "#/components/schemas/Metadata"}
     DocumentRevision:
       type: object
@@ -427,9 +427,9 @@ components:
       additionalProperties: false
       required: [title, body, expected_revision]
       properties:
-        title: {type: string, minLength: 1, maxLength: 300}
+        title: {type: string, minLength: 1, maxLength: 300, pattern: "\\S"}
         body: {type: string}
-        source_url: {type: string, nullable: true, maxLength: 2000}
+        source_url: {type: string, nullable: true, maxLength: 2000, pattern: "^https?://"}
         metadata: {$ref: "#/components/schemas/Metadata"}
         expected_revision: {type: integer, minimum: 0, description: 0 khi tạo mới}
     DocumentWriteResult:
@@ -493,7 +493,7 @@ components:
         action: {type: string, enum: [create, update, unchanged, invalid]}
         expected_revision: {type: integer, nullable: true}
         errors: {type: array, items: {type: string}}
-        payload: {type: object, allOf: [{$ref: "#/components/schemas/DocumentContent"}], nullable: true}
+        payload: {anyOf: [{$ref: "#/components/schemas/DocumentContent"}, {type: object, nullable: true, enum: [null]}]}
     ImportPreview:
       type: object
       additionalProperties: false
