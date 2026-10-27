@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api/errors';
 import { mapErrorMessage } from '@/lib/api/error-map';
 import { queryKeys } from '@/lib/query/keys';
-import { DEMO_NOTICE_TEXT } from '../fixtures';
+import { DEMO_NOTICE_TEXT, GREETING_TEXT } from '../fixtures';
 import {
   newIdempotencyKey,
   useConversation,
@@ -18,6 +19,7 @@ import type { CreatedConversation, TurnResult } from '../schemas/conversation';
 import { ActivityControls, type SendFn } from './activity-controls';
 import { BlockRenderer } from './block-renderer';
 import { ChatHeader } from './chat-header';
+import { ChatInputBar } from './chat-input-bar';
 import { ChatSidebar, type ChatThreadItem } from './chat-sidebar';
 import { ErrorPanel, LoadingPanel, NotConfiguredPanel } from './status-panels';
 
@@ -150,6 +152,7 @@ export function ChatShell() {
       : null;
 
   const retryInitial = createConversation.error ? retryCreate : () => void conversation.refetch();
+  const isInitial = !activity && !entries.some((e) => e.role === 'user');
 
   return (
     <div className="relative flex h-screen w-full gap-3 overflow-hidden bg-gray-bg p-3 font-sans text-slate-800 antialiased transition-colors duration-300 selection:bg-emerald-500/20 selection:text-white dark:bg-ink dark:text-gray-100 md:gap-4 md:p-4">
@@ -178,71 +181,122 @@ export function ChatShell() {
 
         <div
           id="thread"
-          className="no-scrollbar flex-1 space-y-6 overflow-y-auto px-4 py-6 md:px-8 md:py-8 lg:px-10"
+          className="no-scrollbar flex flex-1 flex-col space-y-6 overflow-y-auto px-4 py-6 md:px-8 md:py-8 lg:px-10"
         >
           {activity?.is_demo && (
-            <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              {DEMO_NOTICE_TEXT}
-            </p>
+            <div className="mx-auto w-full max-w-2xl md:max-w-3xl">
+              <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                {DEMO_NOTICE_TEXT}
+              </p>
+            </div>
           )}
 
           {isNotConfigured ? (
-            <NotConfiguredPanel />
+            <div className="mx-auto w-full max-w-2xl md:max-w-3xl">
+              <NotConfiguredPanel />
+            </div>
           ) : isInitialLoadingOrError ? (
-            initialError ? (
-              <ErrorPanel
-                message={initialError.message || mapErrorMessage('SYS_500')}
-                onRetry={retryInitial}
-              />
-            ) : (
-              <LoadingPanel />
-            )
-          ) : (
-            <ol aria-label="Hội thoại" className="flex flex-col gap-4">
-              {entries.map((entry) => (
-                <li
-                  key={entry.id}
-                  className={entry.role === 'user' ? 'max-w-[85%] self-end' : 'max-w-full'}
+            <div className="mx-auto w-full max-w-2xl md:max-w-3xl">
+              {initialError ? (
+                <ErrorPanel
+                  message={initialError.message || mapErrorMessage('SYS_500')}
+                  onRetry={retryInitial}
+                />
+              ) : (
+                <LoadingPanel />
+              )}
+            </div>
+          ) : isInitial ? (
+            <div className="mx-auto flex h-full min-h-[460px] w-full max-w-2xl flex-1 flex-col items-center justify-center py-10 text-center">
+              <h1 className="mb-2 text-2xl font-medium tracking-tight text-slate-800 dark:text-slate-100 sm:text-3xl">
+                Chúng ta nên bắt đầu từ đâu?
+              </h1>
+              <p className="mb-8 max-w-md text-sm text-slate-500 dark:text-slate-400 sm:text-base">
+                {GREETING_TEXT}
+              </p>
+
+              <div className="mb-4 w-full">
+                <ChatInputBar
+                  disabled={busy}
+                  placeholder="Hỏi ChatGPT"
+                  onSend={(text) => send({ type: 'message', content: { text } }, text)}
+                />
+              </div>
+
+              {turns.isPending && (
+                <p role="status" className="mb-3 text-xs text-muted-foreground">
+                  Đang gửi...
+                </p>
+              )}
+              {turnError && (
+                <div className="mb-3 w-full">
+                  <ErrorPanel
+                    message={turnError.message}
+                    onRetry={turnErrorRetryable ? retryTurn : undefined}
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-center">
+                <Button
+                  disabled={busy}
+                  onClick={() => send({ type: 'message', content: { text: 'Bắt đầu' } }, 'Bắt đầu')}
+                  className="rounded-full bg-slate-900 px-6 py-2 text-sm font-medium text-white shadow-xs transition-all hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
                 >
-                  {entry.role === 'user' ? (
-                    <div className="shadow-xs break-words rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm text-white dark:bg-emerald-500">
-                      {entry.text}
-                    </div>
-                  ) : entry.block ? (
-                    <BlockRenderer block={entry.block} />
-                  ) : null}
-                </li>
-              ))}
-            </ol>
+                  Bắt đầu
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto w-full max-w-2xl md:max-w-3xl">
+              <ol aria-label="Hội thoại" className="flex flex-col gap-4">
+                {entries.map((entry) => (
+                  <li
+                    key={entry.id}
+                    className={entry.role === 'user' ? 'max-w-[85%] self-end' : 'max-w-full'}
+                  >
+                    {entry.role === 'user' ? (
+                      <div className="shadow-xs break-words rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm text-white dark:bg-emerald-500">
+                        {entry.text}
+                      </div>
+                    ) : entry.block ? (
+                      <BlockRenderer block={entry.block} />
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            </div>
           )}
         </div>
 
-        <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur-md dark:border-white/5 dark:bg-panel/90 md:px-8 lg:px-10">
-          <div className="mx-auto max-w-2xl">
-            {turns.isPending && (
-              <p role="status" className="mb-2 text-xs text-muted-foreground">
-                Đang gửi...
-              </p>
-            )}
-            {turnError && (
-              <div className="mb-2">
-                <ErrorPanel
-                  message={turnError.message}
-                  onRetry={turnErrorRetryable ? retryTurn : undefined}
+        {!isInitial && (
+          <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur-md dark:border-white/5 dark:bg-panel/90 md:px-8 lg:px-10">
+            <div className="mx-auto max-w-2xl md:max-w-3xl">
+              {turns.isPending && (
+                <p role="status" className="mb-2 text-xs text-muted-foreground">
+                  Đang gửi...
+                </p>
+              )}
+              {turnError && (
+                <div className="mb-2">
+                  <ErrorPanel
+                    message={turnError.message}
+                    onRetry={turnErrorRetryable ? retryTurn : undefined}
+                  />
+                </div>
+              )}
+              {view && (
+                <ActivityControls
+                  conversation={view}
+                  activity={activity}
+                  disabled={busy}
+                  send={send}
+                  onNewSession={startSession}
                 />
-              </div>
-            )}
-            {view && (
-              <ActivityControls
-                conversation={view}
-                activity={activity}
-                disabled={busy}
-                send={send}
-                onNewSession={startSession}
-              />
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );
