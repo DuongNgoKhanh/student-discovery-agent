@@ -35,9 +35,19 @@ Indexer trong lab chạy bằng role `kb_indexer`, nên lỗi phân quyền sẽ
 
 Knowledge base demo được tạo theo model của lab. Nếu đổi giữa có key và không có key, chạy `start.sh reset` rồi nạp demo lại.
 
+## Giao diện
+
+- **Tab Tài liệu**:
+  - kéo-thả hoặc chọn nhiều file `.md`/`.txt` (tối đa 1 MB mỗi file);
+  - `document_id` lấy từ tên file, tiêu đề lấy từ heading `#` đầu tiên, metadata nhập thêm cho từng file nếu cần;
+  - tải lại file trùng tên tạo revision mới;
+  - bảng tài liệu có trạng thái index, revision active so với mới nhất; bấm *Sửa* để mở bảng chỉnh sửa hoặc archive.
+- **Tab Tìm kiếm**: ô câu hỏi, mục *Nâng cao* chứa đường gọi, tham số và điều kiện lọc.
+- **Log**: ngăn kéo ở đáy trang, ghi mọi request và response.
+
 ## Kịch bản nên thử
 
-1. **Nạp demo**, rồi **Chạy indexer**. Mọi document chuyển sang `ready`, active r1.
+1. **Nạp demo** (tạo knowledge base), rồi **Chạy indexer**. Mọi document chuyển sang `ready`, active r1. Tải thêm vài file `.md` với "Index ngay" bật.
 2. Tìm "hoc phi" (không dấu) và "học phí công nghệ thông tin".
 3. Lọc `houses contains house_s`, rồi thử `province is Đà Nẵng`.
 4. Sửa một document và lưu: latest r2 ở trạng thái `pending`, tìm kiếm vẫn trả nội dung r1. Chạy indexer: chuyển sang r2.

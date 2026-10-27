@@ -12,103 +12,199 @@
 :root{
   --blue:#123493; --red:#e9282b; --green:#047857; --green-bg:#ecfdf5; --amber:#8a5a09; --amber-bg:#fffaf0;
   --dark:#101828; --text:#344054; --muted:#667085; --light:#f6f9ff; --bd:#dfe8f8; --white:#fff; --tint:#eef3ff;
-  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --mono:"IBM Plex Mono",ui-monospace,monospace; --shadow:0 12px 34px rgba(18,52,147,.08);
 }
 *{box-sizing:border-box}
-html,body{height:100%}
-body{margin:0;background:var(--light);color:var(--text);font:14px/1.5 "Be Vietnam Pro",system-ui,sans-serif}
+body{margin:0;background:var(--light);color:var(--text);font:14px/1.5 "Be Vietnam Pro",system-ui,sans-serif;padding-bottom:52px}
 button,input,textarea,select{font:inherit}
-header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 18px;background:var(--white);border-bottom:1px solid var(--bd)}
-header h1{font-size:1rem;margin:0;color:var(--dark)}
-.app{display:grid;grid-template-columns:minmax(300px,1fr) minmax(380px,1.3fr) minmax(320px,1fr);height:calc(100vh - 58px)}
-@media (max-width:1100px){.app{grid-template-columns:1fr;height:auto}}
-section{overflow:auto;padding:14px 16px;border-right:1px solid var(--bd)}
-section:last-child{border-right:0;background:var(--white)}
-h2{font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:4px 0 10px}
-.btn{cursor:pointer;border-radius:7px;padding:6px 11px;font-size:.78rem;font-weight:700;background:var(--white);color:var(--blue);border:2px solid rgba(18,52,147,.3)}
-.btn:hover:not(:disabled){background:var(--blue);color:#fff;border-color:var(--blue)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.mono{font-family:var(--mono);font-size:.75rem}
+.muted{color:var(--muted);font-size:.8rem}
+
+/* top bar */
+.top{background:var(--white);border-bottom:1px solid var(--bd);padding:12px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+.mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#071d73,#123493);color:#fff;display:grid;place-items:center;font-weight:800;font-size:.62rem}
+.top h1{margin:0;font-size:1rem;color:var(--dark)}
+.stats{display:flex;gap:6px;flex-wrap:wrap}
+.actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;padding:0 24px;background:var(--white);border-bottom:1px solid var(--bd)}
+.tab{border:0;background:none;padding:12px 16px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent}
+.tab[aria-selected="true"]{color:var(--blue);border-bottom-color:var(--blue)}
+main{max-width:1180px;margin:0 auto;padding:22px 24px}
+[hidden]{display:none!important}
+
+.btn{cursor:pointer;border-radius:8px;padding:7px 13px;font-size:.8rem;font-weight:700;background:var(--white);color:var(--blue);border:2px solid rgba(18,52,147,.25);white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--blue)}
 .btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
-.btn.danger{color:var(--red);border-color:rgba(233,40,43,.35)}
-.btn:disabled{opacity:.4;cursor:default}
-.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.pill{font-family:var(--mono);font-size:.7rem;padding:2px 8px;border-radius:99px;background:var(--tint);color:var(--blue);white-space:nowrap}
+.btn.primary:hover:not(:disabled){background:#0b2577}
+.btn.danger{color:var(--red);border-color:rgba(233,40,43,.3)}
+.btn.ghost{border-color:transparent;padding:5px 8px}
+.btn:disabled{opacity:.45;cursor:default}
+.pill{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:.7rem;padding:2px 9px;border-radius:99px;background:var(--tint);color:var(--blue);white-space:nowrap}
 .pill.ok{background:var(--green-bg);color:var(--green)}.pill.warn{background:var(--amber-bg);color:var(--amber)}
 .pill.err{background:#fef2f2;color:var(--red)}.pill.off{background:#f2f4f7;color:var(--muted)}
-.card{background:var(--white);border:1px solid var(--bd);border-radius:9px;padding:10px 12px;margin-bottom:8px}
-.doc{cursor:pointer}.doc:hover,.doc.sel{border-color:var(--blue)}
-.doc b{color:var(--dark);font-size:.86rem}
-.small{font-size:.75rem;color:var(--muted)}
-.mono{font-family:var(--mono);font-size:.74rem}
-label{display:flex;flex-direction:column;gap:3px;font-size:.74rem;color:var(--muted);margin-bottom:8px}
-input,select,textarea{border:1px solid var(--bd);border-radius:7px;padding:6px 8px;color:var(--dark);background:var(--white);min-width:0}
-textarea{min-height:120px;font-family:var(--mono);font-size:.76rem;resize:vertical}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.cond{display:grid;grid-template-columns:1fr 1fr 1.3fr auto;gap:6px;margin-bottom:6px}
-.result .content{white-space:pre-wrap;color:var(--dark);margin:6px 0}
-.log{border-bottom:1px solid var(--bd);padding:7px 0}
-.log summary{cursor:pointer;display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:.74rem}
-.log pre{white-space:pre-wrap;word-break:break-word;font-size:.7rem;background:var(--light);padding:8px;border-radius:6px;max-height:280px;overflow:auto}
-.status-2{color:var(--green)}.status-4{color:var(--amber)}.status-5{color:var(--red)}
-.empty{color:var(--muted);font-size:.8rem;padding:10px 0}
+
+.panel{background:var(--white);border:1px solid var(--bd);border-radius:12px;box-shadow:var(--shadow);padding:18px 20px;margin-bottom:20px}
+.panel h2{margin:0 0 4px;font-size:.95rem;color:var(--dark)}
+.panel .sub{margin:0 0 14px}
+
+/* upload */
+.drop{border:2px dashed #b9c8ea;border-radius:12px;padding:26px;text-align:center;background:var(--light);cursor:pointer;transition:background .15s,border-color .15s}
+.drop.over{background:var(--tint);border-color:var(--blue)}
+.drop b{color:var(--dark)}
+.queue{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.qitem{border:1px solid var(--bd);border-radius:10px;padding:10px 12px}
+.qrow{display:grid;grid-template-columns:minmax(140px,1fr) minmax(160px,1.5fr) auto auto auto;gap:8px;align-items:center}
+@media (max-width:760px){.qrow{grid-template-columns:1fr 1fr}}
+.qitem input{width:100%}
+.qmeta{margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.qstate{font-size:.75rem}
+.uploadbar{display:flex;gap:12px;align-items:center;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+
+input,select,textarea{border:1px solid var(--bd);border-radius:8px;padding:7px 9px;color:var(--dark);background:var(--white);min-width:0}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.75rem;color:var(--muted)}
+textarea{min-height:240px;font-family:var(--mono);font-size:.78rem;resize:vertical;width:100%}
+
+/* documents table */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--bd)}
+td{padding:10px;border-bottom:1px solid var(--bd);vertical-align:top}
+td b{color:var(--dark)}
+tr.archived td{opacity:.55}
+.empty{color:var(--muted);text-align:center;padding:26px}
+
+/* search */
+.searchbar{display:flex;gap:10px}
+.searchbar input{flex:1;font-size:1rem;padding:11px 14px;border-radius:10px}
+details.adv{margin-top:12px}
+details.adv summary{cursor:pointer;color:var(--blue);font-weight:700;font-size:.82rem}
+.advgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:12px 0}
+.cond{display:grid;grid-template-columns:1fr 1fr 1.4fr auto;gap:6px;margin-bottom:6px}
+.result{border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--white)}
+.result h3{margin:0;font-size:.92rem;color:var(--dark)}
+.score{height:6px;border-radius:99px;background:var(--tint);margin:8px 0;overflow:hidden}
+.score i{display:block;height:100%;background:var(--blue)}
+.content{white-space:pre-wrap;color:var(--dark);margin:6px 0 8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+
+/* editor drawer */
+.scrim{position:fixed;inset:0;background:rgba(16,24,40,.35);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--white);z-index:21;box-shadow:-12px 0 34px rgba(16,24,40,.15);display:flex;flex-direction:column}
+.drawer header{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px}
+.drawer header h2{margin:0;font-size:1rem;color:var(--dark);flex:1}
+.drawer .body{padding:16px 20px;overflow:auto;display:flex;flex-direction:column;gap:10px;flex:1}
+.drawer footer{padding:12px 20px;border-top:1px solid var(--bd);display:flex;gap:8px;justify-content:flex-end}
+
+/* log drawer */
+.logbar{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--white);border-top:1px solid var(--bd);box-shadow:0 -8px 24px rgba(16,24,40,.06)}
+.logbar > summary{cursor:pointer;padding:12px 24px;font-weight:700;color:var(--dark);font-size:.82rem;list-style:none;display:flex;gap:8px;align-items:center}
+.logbar[open] > summary{border-bottom:1px solid var(--bd)}
+.logs{max-height:42vh;overflow:auto;padding:4px 24px 12px}
+.log{border-bottom:1px solid var(--bd);padding:6px 0}
+.log summary{cursor:pointer;display:flex;gap:10px;align-items:center;font-family:var(--mono);font-size:.74rem}
+.log pre{white-space:pre-wrap;word-break:break-word;font-size:.7rem;background:var(--light);padding:8px;border-radius:6px;max-height:260px;overflow:auto}
+.s2{color:var(--green)}.s4{color:var(--amber)}.s5,.s0{color:var(--red)}
+.toast{position:fixed;right:24px;bottom:64px;background:var(--dark);color:#fff;padding:10px 14px;border-radius:9px;font-size:.82rem;z-index:30;max-width:420px}
 </style>
 </head>
 <body>
-<header>
-  <h1>Knowledge Lab</h1>
+<div class="top">
+  <div class="mark">KB</div>
+  <div><h1>Knowledge Lab</h1><div class="muted" id="kbName">…</div></div>
   <span id="mode" class="pill">…</span>
-  <span id="kb" class="small"></span>
-  <span class="row" style="margin-left:auto">
+  <div class="stats" id="stats"></div>
+  <div class="actions">
     <button class="btn" id="seed">Nạp demo</button>
     <button class="btn primary" id="index">Chạy indexer</button>
     <button class="btn" id="retry">Retry lỗi</button>
-    <button class="btn" id="refresh">Làm mới</button>
-  </span>
-</header>
-<div class="app">
-  <section>
-    <h2>Documents</h2>
-    <div id="docs"></div>
-    <h2 style="margin-top:16px">Thêm / sửa document</h2>
-    <form id="docForm">
-      <label>document_id<input name="document_id" required pattern="[A-Za-z0-9][A-Za-z0-9._-]*" placeholder="demo_school_d"></label>
-      <label>title<input name="title" required></label>
-      <label>source_url<input name="source_url" placeholder="https://…"></label>
-      <label>body (markdown)<textarea name="body" placeholder="# Giới thiệu&#10;…"></textarea></label>
-      <div id="metaFields"></div>
-      <div class="row"><button class="btn primary" type="submit">Lưu (tạo revision)</button>
-        <button class="btn" type="button" id="newDoc">Document mới</button>
-        <button class="btn danger" type="button" id="archive">Archive</button></div>
-    </form>
-  </section>
-  <section>
-    <h2>Tìm kiếm</h2>
-    <label>Đường gọi
-      <select id="route">
-        <option value="/rt/knowledge/retrieval">Endpoint runtime thật (ký như Product BFF)</option>
-        <option value="/lab/search">In-process trong lab (embedding của lab)</option>
-      </select></label>
-    <label>knowledge_id<input id="kbId" value="kb_ihrd_demo"></label>
-    <label>query<input id="query" value="học phí công nghệ thông tin"></label>
-    <div class="grid3">
-      <label>top_k<input id="topK" type="number" min="1" max="20" value="4"></label>
-      <label>score_threshold<input id="threshold" type="number" min="0" max="1" step="0.05" value="0"></label>
-      <label>semantic_weight<input id="weight" type="number" min="0" max="1" step="0.1" value="0.7"></label>
-    </div>
-    <div class="row" style="margin-bottom:6px"><span class="small">Điều kiện lọc</span>
-      <select id="logical"><option>and</option><option>or</option></select>
-      <button class="btn" type="button" id="addCond">+ điều kiện</button></div>
-    <div id="conds"></div>
-    <div class="row" style="margin:8px 0 14px"><button class="btn primary" id="search">Tìm</button>
-      <span class="small">Thử: gõ không dấu, lọc houses contains house_s, field không tồn tại (422), knowledge_id sai (404).</span></div>
-    <div id="results"></div>
-  </section>
-  <section>
-    <h2>Log request</h2>
-    <div class="row" style="margin-bottom:8px"><button class="btn" id="clearLog">Xoá log</button></div>
-    <div id="log"></div>
-  </section>
+  </div>
 </div>
+<nav class="tabs" role="tablist">
+  <button class="tab" role="tab" id="tabDocs" aria-selected="true" aria-controls="viewDocs">Tài liệu</button>
+  <button class="tab" role="tab" id="tabSearch" aria-selected="false" aria-controls="viewSearch">Tìm kiếm</button>
+</nav>
+
+<main>
+  <div id="viewDocs" role="tabpanel">
+    <section class="panel">
+      <h2>Tải tài liệu lên</h2>
+      <p class="sub muted">Nhận .md và .txt, tối đa 1 MB mỗi file. Tải lại file trùng tên tạo revision mới cho cùng tài liệu.</p>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Chọn hoặc kéo thả file">
+        <b>Kéo thả file vào đây</b><div class="muted">hoặc bấm để chọn nhiều file</div>
+      </div>
+      <input type="file" id="files" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple hidden>
+      <div class="queue" id="queue"></div>
+      <div class="uploadbar" id="uploadbar" hidden>
+        <label class="muted"><input type="checkbox" id="autoIndex" checked> Index ngay sau khi tải</label>
+        <button class="btn" id="clearQueue">Bỏ hết</button>
+        <button class="btn primary" id="upload">Tải lên</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <h2 style="flex:1">Tài liệu trong knowledge base</h2>
+        <button class="btn" id="newDoc">+ Soạn tay</button>
+        <button class="btn ghost" id="refresh">Làm mới</button>
+      </div>
+      <table>
+        <thead><tr><th>Tài liệu</th><th>Trạng thái</th><th>Revision</th><th>Metadata</th><th></th></tr></thead>
+        <tbody id="docs"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <div id="viewSearch" role="tabpanel" hidden>
+    <section class="panel">
+      <div class="searchbar">
+        <input id="query" value="học phí ngành công nghệ thông tin" aria-label="Câu hỏi">
+        <button class="btn primary" id="search">Tìm</button>
+      </div>
+      <details class="adv">
+        <summary>Nâng cao</summary>
+        <div class="advgrid">
+          <label class="f">Đường gọi<select id="route">
+            <option value="/rt/knowledge/retrieval">Endpoint runtime thật</option>
+            <option value="/lab/search">In-process trong lab</option></select></label>
+          <label class="f">knowledge_id<input id="kbId" value="kb_ihrd_demo"></label>
+          <label class="f">top_k<input id="topK" type="number" min="1" max="20" value="4"></label>
+          <label class="f">score_threshold<input id="threshold" type="number" min="0" max="1" step="0.05" value="0"></label>
+          <label class="f">semantic_weight<input id="weight" type="number" min="0" max="1" step="0.1" value="0.7"></label>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <span class="muted">Điều kiện lọc</span>
+          <select id="logical" aria-label="Cách gộp điều kiện"><option>and</option><option>or</option></select>
+          <button class="btn" id="addCond">+ điều kiện</button>
+        </div>
+        <div id="conds"></div>
+      </details>
+    </section>
+    <div id="results"></div>
+  </div>
+</main>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-labelledby="drawerTitle">
+  <header><h2 id="drawerTitle">Tài liệu</h2><button class="btn ghost" id="closeDrawer" aria-label="Đóng">✕</button></header>
+  <form class="body" id="docForm">
+    <label class="f">document_id<input name="document_id" required pattern="[A-Za-z0-9][A-Za-z0-9._-]*"></label>
+    <label class="f">Tiêu đề<input name="title" required></label>
+    <label class="f">source_url<input name="source_url" placeholder="https://…"></label>
+    <div id="formMeta" class="qmeta"></div>
+    <label class="f">Nội dung (markdown)<textarea name="body"></textarea></label>
+    <div class="muted" id="formInfo"></div>
+  </form>
+  <footer>
+    <button class="btn danger" id="archive">Archive</button>
+    <button class="btn primary" id="save">Lưu revision</button>
+  </footer>
+</aside>
+
+<details class="logbar" id="logbar">
+  <summary>▸ Log <span class="pill" id="logCount">0</span><span class="muted">mọi request tới lab và runtime</span></summary>
+  <div class="logs" id="log"></div>
+</details>
+
 <script>
 const OPERATORS = {
   string: ["is", "is not", "contains", "not contains", "start with", "end with", "empty", "not empty"],
@@ -117,9 +213,17 @@ const OPERATORS = {
   string_list: ["contains", "not contains", "empty", "not empty"],
 };
 const VALUELESS = new Set(["empty", "not empty"]);
-let STATE = {fields: [], documents: []}, selected = null;
+const MAX_BYTES = 1024 * 1024;
+let STATE = {fields: [], documents: []}, QUEUE = [], logCount = 0;
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+
+function toast(message) {
+  const el = document.createElement("div");
+  el.className = "toast"; el.textContent = message;
+  document.body.append(el);
+  setTimeout(() => el.remove(), 3500);
+}
 
 async function call(method, path, body) {
   const started = performance.now();
@@ -131,60 +235,95 @@ async function call(method, path, body) {
     const raw = await response.text();
     try { data = JSON.parse(raw); } catch { data = raw; }
   } catch (error) { data = {error: String(error)}; }
-  log(method, path, status, Math.round(performance.now() - started), body, data);
+  if (path !== "/lab/state") log(method, path, status, Math.round(performance.now() - started), body, data);
   return {status, data};
 }
 
 function log(method, path, status, ms, request, response) {
-  if (path === "/lab/state") return;  // refreshed after every action; keep the log readable
   const item = document.createElement("details");
   item.className = "log";
-  item.innerHTML = `<summary><b class="status-${String(status)[0]}">${status || "ERR"}</b>${esc(method)} ${esc(path)}<span class="small">${ms} ms</span></summary>` +
-    (request ? `<div class="small">request</div><pre>${esc(JSON.stringify(request, null, 2))}</pre>` : "") +
-    `<div class="small">response</div><pre>${esc(typeof response === "string" ? response : JSON.stringify(response, null, 2))}</pre>`;
+  item.innerHTML = `<summary><b class="s${String(status)[0]}">${status || "ERR"}</b>${esc(method)} ${esc(path)}<span class="muted">${ms} ms</span></summary>` +
+    (request ? `<div class="muted">request</div><pre>${esc(JSON.stringify(request, null, 2))}</pre>` : "") +
+    `<div class="muted">response</div><pre>${esc(typeof response === "string" ? response : JSON.stringify(response, null, 2))}</pre>`;
   $("log").prepend(item);
+  $("logCount").textContent = ++logCount;
 }
 
+/* ---------- tabs ---------- */
+function showTab(name) {
+  const docs = name === "docs";
+  $("tabDocs").setAttribute("aria-selected", docs); $("tabSearch").setAttribute("aria-selected", !docs);
+  $("viewDocs").hidden = !docs; $("viewSearch").hidden = docs;
+}
+$("tabDocs").onclick = () => showTab("docs");
+$("tabSearch").onclick = () => showTab("search");
+
+/* ---------- state ---------- */
 function statusPill(doc) {
   if (doc.status === "archived") return `<span class="pill off">archived</span>`;
   const cls = {ready: "ok", pending: "warn", indexing: "warn", error: "err"}[doc.index_status] || "";
   return `<span class="pill ${cls}">${esc(doc.index_status)}</span>`;
 }
 
-function renderDocs() {
-  const docs = STATE.documents;
-  $("docs").innerHTML = docs.length ? docs.map((doc) => `
-    <div class="card doc ${doc.id === selected ? "sel" : ""}" data-id="${esc(doc.id)}">
-      <div class="row">${statusPill(doc)}<span class="pill">active r${doc.active_revision ?? "–"} / latest r${doc.latest_revision}</span></div>
-      <b>${esc(doc.title)}</b><div class="small mono">${esc(doc.id)}</div>
-      ${doc.error ? `<div class="small" style="color:var(--red)">${esc(doc.error)}</div>` : ""}
-    </div>`).join("") : `<div class="empty">Chưa có document. Bấm "Nạp demo".</div>`;
-  document.querySelectorAll(".doc").forEach((el) => el.onclick = () => editDoc(el.dataset.id));
+function metaChips(metadata) {
+  return Object.entries(metadata || {}).map(([key, value]) =>
+    `<span class="pill">${esc(key)}: ${esc(Array.isArray(value) ? value.join(", ") : value)}</span>`).join(" ");
 }
 
-function renderMetaFields(values = {}) {
-  $("metaFields").innerHTML = STATE.fields.map((field) => {
+function render() {
+  const docs = STATE.documents;
+  const count = (status) => docs.filter((doc) => doc.status === "active" && doc.index_status === status).length;
+  $("stats").innerHTML = `<span class="pill">${docs.length} tài liệu</span><span class="pill ok">${count("ready")} ready</span>` +
+    `<span class="pill warn">${count("pending") + count("indexing")} pending</span><span class="pill err">${count("error")} lỗi</span>` +
+    `<span class="pill off">${STATE.active_chunks ?? 0} chunk active</span>`;
+  $("docs").innerHTML = docs.length ? docs.map((doc) => `
+    <tr class="${doc.status === "archived" ? "archived" : ""}">
+      <td><b>${esc(doc.title)}</b><div class="mono muted">${esc(doc.id)}</div></td>
+      <td>${statusPill(doc)}${doc.error ? `<div class="muted" style="color:var(--red)">${esc(doc.error)}</div>` : ""}</td>
+      <td class="mono">active r${doc.active_revision ?? "–"}<br><span class="muted">mới nhất r${doc.latest_revision}</span></td>
+      <td><div class="chips">${metaChips(doc.metadata)}</div></td>
+      <td><button class="btn" data-edit="${esc(doc.id)}">Sửa</button></td>
+    </tr>`).join("") : `<tr><td colspan="5" class="empty">Chưa có tài liệu. Tải file lên hoặc bấm "Nạp demo".</td></tr>`;
+  document.querySelectorAll("[data-edit]").forEach((button) => button.onclick = () => openDrawer(button.dataset.edit));
+}
+
+async function refresh() {
+  const {status, data} = await call("GET", "/lab/state");
+  if (status !== 200) { $("mode").textContent = "lab lỗi"; $("mode").className = "pill err"; return; }
+  STATE = data;
+  $("mode").textContent = `${data.mode === "gemini" ? "gemini" : "fake"} · ${data.lab_embedding_model}`;
+  $("mode").className = `pill ${data.mode === "gemini" ? "ok" : "warn"}`;
+  $("kbName").textContent = data.knowledge_base
+    ? `${data.knowledge_base.name} · model ${data.knowledge_base.embedding_model}`
+    : "Chưa có knowledge base, bấm \"Nạp demo\" để tạo";
+  render();
+  if (!$("conds").children.length && data.fields.length) addCondition();
+}
+
+async function action(path, label) {
+  const {status, data} = await call("POST", path, {});
+  toast(status === 200 ? `${label}: ${JSON.stringify(data)}` : `${label} lỗi: ${JSON.stringify(data)}`);
+  await refresh();
+}
+$("seed").onclick = () => action("/lab/seed", "Nạp demo");
+$("index").onclick = () => action("/lab/index", "Indexer");
+$("retry").onclick = () => action("/lab/retry", "Retry");
+$("refresh").onclick = refresh;
+
+/* ---------- metadata inputs ---------- */
+function metaInputs(values = {}) {
+  return STATE.fields.map((field) => {
     const value = values[field.name];
     const shown = Array.isArray(value) ? value.join(", ") : (value ?? "");
-    const hint = field.type === "string_list" ? " (cách nhau bằng dấu phẩy)" : field.type === "time" ? " (YYYY-MM-DD)" : "";
-    return `<label>${esc(field.label || field.name)} · <span class="mono">${esc(field.name)}: ${field.type}${field.filterable ? ", filterable" : ""}</span>${hint}
-      <input data-field="${esc(field.name)}" data-type="${field.type}" value="${esc(shown)}"></label>`;
+    const hint = {string_list: "phân tách bằng dấu phẩy", time: "YYYY-MM-DD", number: "số"}[field.type] || "";
+    return `<label class="f">${esc(field.label || field.name)} <span class="mono">${esc(field.name)}</span>
+      <input data-field="${esc(field.name)}" data-type="${field.type}" value="${esc(shown)}" placeholder="${hint}"></label>`;
   }).join("");
 }
 
-function editDoc(id) {
-  const doc = STATE.documents.find((item) => item.id === id);
-  selected = id;
-  const form = $("docForm");
-  form.document_id.value = doc.id; form.title.value = doc.title || ""; form.source_url.value = doc.source_url || "";
-  form.body.value = doc.body || "";
-  renderMetaFields(doc.metadata);
-  renderDocs();
-}
-
-function readMetadata() {
+function readMeta(container) {
   const metadata = {};
-  document.querySelectorAll("#metaFields input").forEach((input) => {
+  container.querySelectorAll("input[data-field]").forEach((input) => {
     const raw = input.value.trim();
     if (!raw) return;
     const type = input.dataset.type;
@@ -194,32 +333,148 @@ function readMetadata() {
   return metadata;
 }
 
-function addCondition(preset = {}) {
-  const row = document.createElement("div");
-  row.className = "cond";
-  const fieldOptions = STATE.fields.map((field) => `<option value="${esc(field.name)}">${esc(field.name)}${field.filterable ? "" : " (không filterable)"}</option>`).join("");
-  row.innerHTML = `<select class="f">${fieldOptions}<option value="khong_ton_tai">khong_ton_tai (test 422)</option></select>
-    <select class="op"></select><input class="v" placeholder="giá trị"><button class="btn danger" type="button">×</button>`;
-  const fieldSelect = row.querySelector(".f"), opSelect = row.querySelector(".op"), valueInput = row.querySelector(".v");
-  const syncOps = () => {
-    const type = STATE.fields.find((field) => field.name === fieldSelect.value)?.type || "string";
-    opSelect.innerHTML = OPERATORS[type].map((op) => `<option>${esc(op)}</option>`).join("");
-    row.dataset.type = type;
-  };
-  fieldSelect.onchange = syncOps;
-  opSelect.onchange = () => valueInput.disabled = VALUELESS.has(opSelect.value);
-  row.querySelector("button").onclick = () => row.remove();
-  if (preset.name) fieldSelect.value = preset.name;
-  syncOps();
-  if (preset.op) opSelect.value = preset.op;
-  if (preset.value) valueInput.value = preset.value;
-  $("conds").append(row);
+/* ---------- upload ---------- */
+function slug(name) {
+  const base = name.replace(/\.(md|markdown|txt)$/i, "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[đĐ]/g, "d").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-._]+|[-._]+$/g, "");
+  return (base || "tai-lieu").slice(0, 80);
 }
 
+async function addFiles(fileList) {
+  for (const file of fileList) {
+    const item = {name: file.name, size: file.size, id: slug(file.name), title: file.name, body: "", state: "", error: ""};
+    if (!/\.(md|markdown|txt)$/i.test(file.name)) item.error = "Chỉ nhận .md / .txt";
+    else if (file.size > MAX_BYTES) item.error = "Lớn hơn 1 MB";
+    else {
+      item.body = await file.text();
+      const heading = item.body.match(/^#\s+(.+?)\s*#*\s*$/m);
+      item.title = heading ? heading[1] : file.name.replace(/\.(md|markdown|txt)$/i, "");
+    }
+    QUEUE.push(item);
+  }
+  renderQueue();
+}
+
+function renderQueue() {
+  $("uploadbar").hidden = !QUEUE.length;
+  $("upload").textContent = `Tải lên ${QUEUE.filter((item) => !item.error && item.state !== "ok").length} file`;
+  $("queue").innerHTML = QUEUE.map((item, index) => `
+    <div class="qitem" data-index="${index}">
+      <div class="qrow">
+        <input class="mono" data-key="id" value="${esc(item.id)}" aria-label="document_id" ${item.error ? "disabled" : ""}>
+        <input data-key="title" value="${esc(item.title)}" aria-label="Tiêu đề" ${item.error ? "disabled" : ""}>
+        <span class="muted">${esc(item.name)} · ${(item.size / 1024).toFixed(1)} KB</span>
+        <span class="qstate">${item.error ? `<span class="pill err">${esc(item.error)}</span>`
+          : item.state === "ok" ? `<span class="pill ok">${esc(item.result)}</span>`
+          : item.state === "fail" ? `<span class="pill err">${esc(item.result)}</span>` : ""}</span>
+        <span><button class="btn ghost" data-toggle aria-expanded="false" ${item.error ? "disabled" : ""}>Metadata ▸</button>
+          <button class="btn ghost" data-remove aria-label="Bỏ file">✕</button></span>
+      </div>
+      <div class="qmeta" hidden>${metaInputs()}</div>
+    </div>`).join("");
+  document.querySelectorAll(".qitem").forEach((row) => {
+    const item = QUEUE[Number(row.dataset.index)];
+    row.querySelectorAll("input[data-key]").forEach((input) => input.oninput = () => item[input.dataset.key] = input.value);
+    row.querySelector("[data-remove]").onclick = () => { QUEUE.splice(Number(row.dataset.index), 1); renderQueue(); };
+    const toggle = row.querySelector("[data-toggle]");
+    toggle.onclick = () => {
+      const meta = row.querySelector(".qmeta");
+      meta.hidden = !meta.hidden; toggle.setAttribute("aria-expanded", !meta.hidden);
+    };
+    item.metaEl = row.querySelector(".qmeta");
+  });
+}
+
+$("drop").onclick = () => $("files").click();
+$("drop").onkeydown = (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); $("files").click(); } };
+$("files").onchange = (event) => { addFiles(event.target.files); event.target.value = ""; };
+$("drop").ondragover = (event) => { event.preventDefault(); $("drop").classList.add("over"); };
+$("drop").ondragleave = () => $("drop").classList.remove("over");
+$("drop").ondrop = (event) => { event.preventDefault(); $("drop").classList.remove("over"); addFiles(event.dataTransfer.files); };
+$("clearQueue").onclick = () => { QUEUE = []; renderQueue(); };
+
+$("upload").onclick = async () => {
+  if (!STATE.knowledge_base) { toast("Chưa có knowledge base: bấm \"Nạp demo\" trước."); return; }
+  $("upload").disabled = true;
+  let uploaded = 0;
+  for (const item of QUEUE) {
+    if (item.error || item.state === "ok") continue;
+    const {status, data} = await call("POST", "/lab/documents", {document_id: item.id.trim(), title: item.title.trim(),
+      body: item.body, metadata: readMeta(item.metaEl)});
+    item.state = status === 200 ? "ok" : "fail";
+    item.result = status === 200 ? (data.created ? `r${data.revision} mới` : `không đổi (r${data.revision})`) : (data.error || `HTTP ${status}`);
+    if (status === 200) uploaded++;
+  }
+  renderQueue();
+  if (uploaded && $("autoIndex").checked) await call("POST", "/lab/index", {});
+  $("upload").disabled = false;
+  toast(`Đã tải ${uploaded} file${uploaded && $("autoIndex").checked ? " và chạy indexer" : ""}.`);
+  await refresh();
+};
+
+/* ---------- editor drawer ---------- */
+function openDrawer(id) {
+  const doc = STATE.documents.find((item) => item.id === id);
+  const form = $("docForm");
+  form.reset();
+  form.document_id.readOnly = Boolean(doc);
+  form.document_id.value = doc?.id || ""; form.title.value = doc?.title || "";
+  form.source_url.value = doc?.source_url || ""; form.body.value = doc?.body || "";
+  $("formMeta").innerHTML = metaInputs(doc?.metadata);
+  $("drawerTitle").textContent = doc ? "Sửa tài liệu" : "Soạn tài liệu mới";
+  $("formInfo").textContent = doc ? `Lưu sẽ tạo revision r${doc.latest_revision + 1} nếu nội dung đổi; bản active r${doc.active_revision ?? "–"} vẫn được tìm thấy tới khi index xong.` : "";
+  $("archive").hidden = !doc || doc.status === "archived";
+  $("drawer").hidden = $("scrim").hidden = false;
+  form.title.focus();
+}
+function closeDrawer() { $("drawer").hidden = $("scrim").hidden = true; }
+$("newDoc").onclick = () => openDrawer(null);
+$("closeDrawer").onclick = closeDrawer;
+$("scrim").onclick = closeDrawer;
+document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !$("drawer").hidden) closeDrawer(); });
+$("save").onclick = async () => {
+  const form = $("docForm");
+  if (!form.reportValidity()) return;
+  const {status, data} = await call("POST", "/lab/documents", {document_id: form.document_id.value.trim(),
+    title: form.title.value.trim(), body: form.body.value, source_url: form.source_url.value.trim(), metadata: readMeta($("formMeta"))});
+  if (status !== 200) { toast(`Lưu lỗi: ${data.error || status}`); return; }
+  toast(data.created ? `Đã lưu revision r${data.revision} (pending, cần chạy indexer)` : "Nội dung không đổi, không tạo revision.");
+  closeDrawer(); await refresh();
+};
+$("archive").onclick = async () => {
+  await call("POST", "/lab/archive", {document_id: $("docForm").document_id.value});
+  toast("Đã archive: tài liệu biến mất khỏi tìm kiếm ngay.");
+  closeDrawer(); await refresh();
+};
+
+/* ---------- search ---------- */
+function addCondition() {
+  const row = document.createElement("div");
+  row.className = "cond";
+  row.innerHTML = `<select class="fld" aria-label="Field">${STATE.fields.map((field) =>
+      `<option value="${esc(field.name)}">${esc(field.name)}${field.filterable ? "" : " (không lọc được)"}</option>`).join("")}
+      <option value="khong_ton_tai">khong_ton_tai (thử 422)</option></select>
+    <select class="op" aria-label="Phép so sánh"></select><input class="val" placeholder="giá trị" aria-label="Giá trị">
+    <button class="btn ghost" aria-label="Bỏ điều kiện">✕</button>`;
+  const field = row.querySelector(".fld"), op = row.querySelector(".op"), value = row.querySelector(".val");
+  const sync = () => {
+    row.dataset.type = STATE.fields.find((item) => item.name === field.value)?.type || "string";
+    op.innerHTML = OPERATORS[row.dataset.type].map((item) => `<option>${esc(item)}</option>`).join("");
+    value.disabled = VALUELESS.has(op.value);
+  };
+  field.onchange = sync;
+  op.onchange = () => value.disabled = VALUELESS.has(op.value);
+  row.querySelector("button").onclick = () => row.remove();
+  sync();
+  $("conds").append(row);
+}
+$("addCond").onclick = addCondition;
+
 function readConditions() {
-  const conditions = [...document.querySelectorAll("#conds .cond")].map((row) => {
-    const op = row.querySelector(".op").value, raw = row.querySelector(".v").value.trim();
-    const condition = {name: row.querySelector(".f").value, comparison_operator: op};
+  const conditions = [...document.querySelectorAll("#conds .cond")].filter((row) =>
+    VALUELESS.has(row.querySelector(".op").value) || row.querySelector(".val").value.trim()).map((row) => {
+    const op = row.querySelector(".op").value, raw = row.querySelector(".val").value.trim();
+    const condition = {name: row.querySelector(".fld").value, comparison_operator: op};
     if (!VALUELESS.has(op)) condition.value = row.dataset.type === "number" ? Number(raw) : raw;
     return condition;
   });
@@ -228,64 +483,39 @@ function readConditions() {
 
 function renderResults(status, data) {
   if (status !== 200) {
-    const error = data?.error?.code ? `${data.error.code}: ${data.error.message}` : JSON.stringify(data?.error ?? data);
-    $("results").innerHTML = `<div class="card" style="border-color:var(--red)"><b>HTTP ${status}</b><div class="mono">${esc(error)}</div></div>`;
+    const error = data?.error?.code ? `${data.error.code} — ${data.error.message}` : JSON.stringify(data?.error ?? data);
+    $("results").innerHTML = `<div class="panel" style="border-color:var(--red)"><h2>HTTP ${status}</h2><div class="mono">${esc(error)}</div></div>`;
     return;
   }
   const result = data.data ?? data;  // the runtime wraps it in an envelope, the lab path does not
   const records = result.records || [];
-  $("results").innerHTML = `<div class="row" style="margin-bottom:8px"><span class="pill">${records.length} record</span>
+  $("results").innerHTML = `<div style="display:flex;gap:8px;margin-bottom:10px"><span class="pill">${records.length} kết quả</span>
     ${result.degraded ? `<span class="pill warn">degraded: chỉ tìm theo từ khoá</span>` : `<span class="pill ok">vector + từ khoá</span>`}</div>` +
-    (records.length ? records.map((record) => `<div class="card result">
-      <div class="row"><span class="pill ok">score ${record.score}</span><b>${esc(record.title)}</b></div>
-      <div class="content">${esc(record.content)}</div>
-      <div class="small mono">${esc(JSON.stringify(record.metadata))}</div></div>`).join("")
-     : `<div class="empty">Không có kết quả vượt ngưỡng.</div>`);
+    (records.length ? records.map((record) => {
+      const {document_id, revision, updated_at, source_url, ...fields} = record.metadata;
+      return `<article class="result">
+        <div style="display:flex;gap:10px;align-items:baseline"><h3 style="flex:1">${esc(record.title)}</h3><span class="pill ok">${record.score.toFixed(3)}</span></div>
+        <div class="score"><i style="width:${Math.max(2, record.score * 100)}%"></i></div>
+        <div class="content">${esc(record.content)}</div>
+        <div class="chips">${metaChips(fields)}</div>
+        <div class="mono muted" style="margin-top:6px">${esc(document_id)} · r${esc(revision)} · ${esc(updated_at)}${source_url ? ` · ${esc(source_url)}` : ""}</div>
+      </article>`;
+    }).join("") : `<div class="panel empty">Không có kết quả vượt ngưỡng.</div>`);
 }
 
-async function refresh() {
-  const {status, data} = await call("GET", "/lab/state");
-  if (status !== 200) { $("mode").textContent = "lab lỗi"; $("mode").className = "pill err"; return; }
-  STATE = data;
-  $("mode").textContent = `embedding ${data.mode}: ${data.lab_embedding_model}`;
-  $("mode").className = `pill ${data.mode === "gemini" ? "ok" : "warn"}`;
-  $("kb").textContent = data.knowledge_base
-    ? `${data.knowledge_base.name} · model ${data.knowledge_base.embedding_model} · ${data.active_chunks} chunk active`
-    : "Chưa có knowledge base";
-  renderDocs();
-  if (!selected) renderMetaFields();
-  if (!$("conds").children.length && data.fields.length) addCondition({name: "houses", op: "contains", value: "house_s"});
-}
-
-$("seed").onclick = async () => { await call("POST", "/lab/seed", {}); refresh(); };
-$("index").onclick = async () => { await call("POST", "/lab/index", {}); refresh(); };
-$("retry").onclick = async () => { await call("POST", "/lab/retry", {}); refresh(); };
-$("refresh").onclick = refresh;
-$("clearLog").onclick = () => $("log").innerHTML = "";
-$("addCond").onclick = () => addCondition();
-$("newDoc").onclick = () => { selected = null; $("docForm").reset(); renderMetaFields(); renderDocs(); };
-$("archive").onclick = async () => {
-  const id = $("docForm").document_id.value.trim();
-  if (id) { await call("POST", "/lab/archive", {document_id: id}); refresh(); }
-};
-$("docForm").onsubmit = async (event) => {
-  event.preventDefault();
-  const form = event.target;
-  const {status} = await call("POST", "/lab/documents", {document_id: form.document_id.value.trim(), title: form.title.value,
-    body: form.body.value, source_url: form.source_url.value.trim(), metadata: readMetadata()});
-  if (status === 200) selected = form.document_id.value.trim();
-  refresh();
-};
 $("search").onclick = async () => {
   const body = {knowledge_id: $("kbId").value.trim(), query: $("query").value,
     retrieval_setting: {top_k: Number($("topK").value), score_threshold: Number($("threshold").value),
                         semantic_weight: Number($("weight").value)}};
   const condition = readConditions();
   if (condition) body.metadata_condition = condition;
+  $("search").disabled = true;
   const {status, data} = await call("POST", $("route").value, body);
+  $("search").disabled = false;
   renderResults(status, data);
 };
 $("query").onkeydown = (event) => { if (event.key === "Enter") $("search").click(); };
+
 refresh();
 </script>
 </body>
