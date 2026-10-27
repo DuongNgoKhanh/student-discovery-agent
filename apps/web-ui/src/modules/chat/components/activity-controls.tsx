@@ -264,7 +264,7 @@ function FreeTextComposer({
     <ChatInputBar
       disabled={disabled}
       onSend={onSend}
-      placeholder="Hỏi ChatGPT"
+      placeholder="Nhập vào"
     />
   );
 }
