@@ -17,6 +17,8 @@ import type { RenderableBlock } from '../schemas/blocks';
 import type { CreatedConversation, TurnResult } from '../schemas/conversation';
 import { ActivityControls, type SendFn } from './activity-controls';
 import { BlockRenderer } from './block-renderer';
+import { ChatHeader } from './chat-header';
+import { ChatSidebar, type ChatThreadItem } from './chat-sidebar';
 import { ErrorPanel, LoadingPanel, NotConfiguredPanel } from './status-panels';
 
 interface Entry {
@@ -28,7 +30,7 @@ interface Entry {
 
 const NOT_CONFIGURED_CODES = new Set(['EXPERIENCE_NOT_CONFIGURED', 'ACTIVE_RELEASE_CONFLICT']);
 
-/** Màn hình chat của học sinh (M-UI). Phiên được khôi phục từ server, không tự tạo phiên khi tải lại. */
+/** Màn hình chat của học sinh (M-UI) theo cấu trúc LKP ChatPage. */
 export function ChatShell() {
   const queryClient = useQueryClient();
   const createConversation = useCreateConversation();
@@ -38,6 +40,10 @@ export function ChatShell() {
   const createKey = useRef<string | null>(null);
   const pendingEcho = useRef('');
   const started = useRef(false);
+
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+  const [threads, setThreads] = useState<ChatThreadItem[]>([]);
 
   const conversation = useConversation(conversationId);
   const turns = useSendTurn(conversationId ?? '');
@@ -60,6 +66,18 @@ export function ChatShell() {
       setConversationId(created.conversation.id);
       setEntries([]);
       appendEntries(created.blocks.map((block) => ({ role: 'bot' as const, block })));
+
+      setThreads((prev) => {
+        if (prev.some((t) => t.id === created.conversation.id)) return prev;
+        return [
+          {
+            id: created.conversation.id,
+            title: 'Trò chuyện hướng nghiệp',
+            time: 'Vừa xong',
+          },
+          ...prev,
+        ];
+      });
     },
     [appendEntries, queryClient],
   );
@@ -80,6 +98,20 @@ export function ChatShell() {
     started.current = true;
     startSession();
   }, [startSession]);
+
+  useEffect(() => {
+    const thread = document.getElementById('thread');
+    if (thread) {
+      if (typeof thread.scrollTo === 'function') {
+        thread.scrollTo({
+          top: thread.scrollHeight,
+          behavior: 'smooth',
+        });
+      } else {
+        thread.scrollTop = thread.scrollHeight;
+      }
+    }
+  }, [entries, turns.isPending]);
 
   const send: SendFn = useCallback(
     (draft: TurnDraft, echo: string) => {
@@ -104,92 +136,114 @@ export function ChatShell() {
     });
 
   const busy = turns.isPending || createConversation.isPending;
-
-  if (
-    createConversation.error instanceof ApiError &&
-    NOT_CONFIGURED_CODES.has(createConversation.error.code)
-  ) {
-    return (
-      <Shell>
-        <NotConfiguredPanel />
-      </Shell>
-    );
-  }
-
-  if (!view) {
-    if (createConversation.error || conversation.error) {
-      const error = (createConversation.error ?? conversation.error) as Error;
-      const retry = createConversation.error ? retryCreate : () => void conversation.refetch();
-      return (
-        <Shell>
-          <ErrorPanel message={error.message || mapErrorMessage('SYS_500')} onRetry={retry} />
-        </Shell>
-      );
-    }
-    return (
-      <Shell>
-        <LoadingPanel />
-      </Shell>
-    );
-  }
-
   const turnError = turns.error instanceof ApiError ? turns.error : null;
   const turnErrorRetryable = turnError?.retryable ?? false;
 
+  const isNotConfigured =
+    createConversation.error instanceof ApiError &&
+    NOT_CONFIGURED_CODES.has(createConversation.error.code);
+
+  const isInitialLoadingOrError = !view && !isNotConfigured;
+  const initialError =
+    isInitialLoadingOrError && (createConversation.error || conversation.error)
+      ? ((createConversation.error ?? conversation.error) as Error)
+      : null;
+
+  const retryInitial = createConversation.error ? retryCreate : () => void conversation.refetch();
+
   return (
-    <Shell>
-      {activity?.is_demo && (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          {DEMO_NOTICE_TEXT}
-        </p>
-      )}
+    <div className="relative flex h-screen w-full gap-3 overflow-hidden bg-gray-bg p-3 font-sans text-slate-800 antialiased transition-colors duration-300 selection:bg-emerald-500/20 selection:text-white dark:bg-ink dark:text-gray-100 md:gap-4 md:p-4">
+      <ChatSidebar
+        threads={threads}
+        activeThreadId={conversationId ?? 'new'}
+        isMobileSidebarOpen={isMobileSidebarOpen}
+        isDesktopSidebarOpen={isDesktopSidebarOpen}
+        userName="Học sinh"
+        onNewChat={() => {
+          startSession();
+          setIsMobileSidebarOpen(false);
+        }}
+        onCloseMobileSidebar={() => setIsMobileSidebarOpen(false)}
+        onToggleDesktopSidebar={() => setIsDesktopSidebarOpen((prev) => !prev)}
+      />
 
-      <ol aria-label="Hội thoại" className="flex flex-1 flex-col gap-3 overflow-y-auto py-2">
-        {entries.map((entry) => (
-          <li
-            key={entry.id}
-            className={entry.role === 'user' ? 'max-w-[85%] self-end' : 'max-w-full'}
-          >
-            {entry.role === 'user' ? (
-              <p className="break-words rounded-2xl bg-primary px-4 py-2 text-primary-foreground">
-                {entry.text}
-              </p>
-            ) : entry.block ? (
-              <BlockRenderer block={entry.block} />
-            ) : null}
-          </li>
-        ))}
-      </ol>
-
-      <div className="flex flex-col gap-3 border-t pt-3">
-        {turns.isPending && (
-          <p role="status" className="text-xs text-muted-foreground">
-            Đang gửi...
-          </p>
-        )}
-        {turnError && (
-          <ErrorPanel
-            message={turnError.message}
-            onRetry={turnErrorRetryable ? retryTurn : undefined}
-          />
-        )}
-        <ActivityControls
-          conversation={view}
-          activity={activity}
-          disabled={busy}
-          send={send}
-          onNewSession={startSession}
+      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-slate-200/50 bg-white shadow-2xl dark:border-white/5 dark:bg-panel">
+        <ChatHeader
+          title="Trò chuyện hướng nghiệp"
+          subtitle="Đang hoạt động"
+          isDesktopSidebarOpen={isDesktopSidebarOpen}
+          onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
+          onToggleDesktopSidebar={() => setIsDesktopSidebarOpen((prev) => !prev)}
         />
-      </div>
-    </Shell>
-  );
-}
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 py-4">
-      <h1 className="text-lg font-semibold">Trò chuyện hướng nghiệp</h1>
-      {children}
-    </main>
+        <div
+          id="thread"
+          className="no-scrollbar flex-1 space-y-6 overflow-y-auto px-4 py-6 md:px-8 md:py-8 lg:px-10"
+        >
+          {activity?.is_demo && (
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {DEMO_NOTICE_TEXT}
+            </p>
+          )}
+
+          {isNotConfigured ? (
+            <NotConfiguredPanel />
+          ) : isInitialLoadingOrError ? (
+            initialError ? (
+              <ErrorPanel
+                message={initialError.message || mapErrorMessage('SYS_500')}
+                onRetry={retryInitial}
+              />
+            ) : (
+              <LoadingPanel />
+            )
+          ) : (
+            <ol aria-label="Hội thoại" className="flex flex-col gap-4">
+              {entries.map((entry) => (
+                <li
+                  key={entry.id}
+                  className={entry.role === 'user' ? 'max-w-[85%] self-end' : 'max-w-full'}
+                >
+                  {entry.role === 'user' ? (
+                    <div className="shadow-xs break-words rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm text-white dark:bg-emerald-500">
+                      {entry.text}
+                    </div>
+                  ) : entry.block ? (
+                    <BlockRenderer block={entry.block} />
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+
+        <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur-md dark:border-white/5 dark:bg-panel/90 md:px-8 lg:px-10">
+          <div className="mx-auto max-w-2xl">
+            {turns.isPending && (
+              <p role="status" className="mb-2 text-xs text-muted-foreground">
+                Đang gửi...
+              </p>
+            )}
+            {turnError && (
+              <div className="mb-2">
+                <ErrorPanel
+                  message={turnError.message}
+                  onRetry={turnErrorRetryable ? retryTurn : undefined}
+                />
+              </div>
+            )}
+            {view && (
+              <ActivityControls
+                conversation={view}
+                activity={activity}
+                disabled={busy}
+                send={send}
+                onNewSession={startSession}
+              />
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }

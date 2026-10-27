@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { ArrowUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { ActivityView, ActivityAnswer } from '../schemas/activity';
 import type { ConversationView } from '../schemas/conversation';
@@ -265,7 +266,7 @@ function FreeTextComposer({
 
   return (
     <form
-      className="flex gap-2 border-t pt-3"
+      className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-inner transition-all focus-within:border-emerald-500/50 dark:border-line dark:bg-ink"
       onSubmit={(e) => {
         e.preventDefault();
         if (!trimmed || disabled) return;
@@ -281,10 +282,15 @@ function FreeTextComposer({
         value={text}
         onChange={(e) => setText(e.target.value)}
         disabled={disabled}
-        placeholder="Nhập câu trả lời bằng chữ"
-        className="min-w-0 flex-1 rounded-md border px-3 py-2 text-base"
+        placeholder="Nhập câu trả lời bằng chữ..."
+        className="min-w-0 flex-1 bg-transparent px-2 text-sm text-slate-800 placeholder-slate-400 outline-none dark:text-gray-100 dark:placeholder-fog/50"
       />
-      <Button type="submit" disabled={disabled || !trimmed}>
+      <Button
+        type="submit"
+        disabled={disabled || !trimmed}
+        className="h-9 shrink-0 rounded-xl bg-emerald-600 px-3 font-semibold text-white shadow-md shadow-emerald-600/20 transition-colors hover:bg-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+      >
+        <ArrowUp className="mr-1 h-4 w-4" />
         Gửi
       </Button>
     </form>
