@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import { ChevronDown, FilePlus, Plus, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useDocumentFilters } from '../hooks/use-document-filters';
+import { DocumentDetailSheet } from './document-detail-sheet';
 import { DocumentsTable } from './documents-table';
 import { DocumentsToolbar } from './documents-toolbar';
 import { kbHref } from './kb-routes';
@@ -27,12 +28,21 @@ export function AddDocumentMenu({ kb }: { kb: string }) {
 }
 
 function DocumentsView({ kb }: { kb: string }) {
-  const { q, state, filters, isFiltered, setQ, setState, clear } = useDocumentFilters();
+  const { q, state, doc, filters, isFiltered, setQ, setState, setDoc, clear } = useDocumentFilters();
+  // One sheet for the whole table. The id stays after closing so the content doesn't vanish mid-animation.
+  const [sheet, setSheet] = useState<{ docId: string | null; open: boolean; focus?: 'error' }>(() => ({ docId: doc, open: doc !== null }));
+  const openDocument = (docId: string, focus?: 'error') => { setSheet({ docId, open: true, focus }); setDoc(docId); };
+  const onSheetOpenChange = (open: boolean) => {
+    setSheet(current => ({ ...current, open }));
+    if (!open) setDoc(null);
+  };
   return (
     <>
       <DocumentsToolbar q={q} state={state} onQChange={setQ} onStateChange={setState}
         actions={<><MetadataSheet kb={kb} /><AddDocumentMenu kb={kb} /></>} />
-      <DocumentsTable key={JSON.stringify(filters)} kb={kb} filters={filters} isFiltered={isFiltered} onClearFilters={clear} />
+      <DocumentsTable key={JSON.stringify(filters)} kb={kb} filters={filters} isFiltered={isFiltered} onClearFilters={clear}
+        onOpenDocument={openDocument} />
+      <DocumentDetailSheet kb={kb} docId={sheet.docId} open={sheet.open} onOpenChange={onSheetOpenChange} focus={sheet.focus} />
     </>
   );
 }
