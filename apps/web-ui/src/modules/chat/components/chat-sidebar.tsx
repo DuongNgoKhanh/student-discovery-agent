@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Compass, Plus, X, MessageSquare, ChevronsRight, User } from 'lucide-react';
+import Image from 'next/image';
+import { Plus, X, MessageSquare, ChevronsRight, User } from 'lucide-react';
 
 export interface ChatThreadItem {
   id: string;
@@ -65,10 +66,16 @@ export function ChatSidebar({
             </button>
 
             <div
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 shadow-sm transition-all hover:bg-emerald-600 hover:text-white dark:text-emerald-400"
+              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm transition-transform hover:scale-105 dark:border-white/10 dark:bg-white"
               title="Trang chủ"
             >
-              <Compass className="h-5 w-5" />
+              <Image
+                src="/Logo-IHRD.png"
+                alt="IHRD Logo"
+                width={36}
+                height={36}
+                className="h-full w-full object-contain"
+              />
             </div>
 
             <div className="my-1 h-px w-full bg-slate-200 dark:bg-line/60" />
@@ -115,15 +122,21 @@ export function ChatSidebar({
             {/* Brand Logo */}
             <div className="border-b border-slate-200 p-4 dark:border-line/40">
               <div className="group flex cursor-pointer items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 shadow-md shadow-emerald-500/10 transition-all group-hover:bg-emerald-600 group-hover:text-white dark:border-emerald-500/30 dark:text-emerald-400">
-                  <Compass className="h-5 w-5" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm transition-transform group-hover:scale-105 dark:border-white/10 dark:bg-white">
+                  <Image
+                    src="/Logo-IHRD.png"
+                    alt="IHRD Logo"
+                    width={36}
+                    height={36}
+                    className="h-full w-full object-contain"
+                  />
                 </div>
                 <div className="leading-tight">
                   <div className="text-sm font-bold tracking-tight text-slate-900 dark:text-white">
-                    Localis-AI
+                    localis-ai
                   </div>
-                  <div className="font-mono text-[10px] uppercase tracking-widest text-slate-500 dark:text-fog/70">
-                    Vietnam Local Intelligence
+                  <div className="font-mono text-[10px] tracking-wider text-slate-500 dark:text-fog/70">
+                    student-discovery-agent
                   </div>
                 </div>
               </div>

@@ -21,6 +21,7 @@ FROM node:22-alpine AS runner
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
 WORKDIR /app
 COPY --from=build --chown=node:node /repo/apps/web-ui/.next/standalone ./
+COPY --from=build --chown=node:node /repo/apps/web-ui/public ./public
 COPY --from=build --chown=node:node /repo/apps/web-ui/.next/static ./.next/static
 USER node
 EXPOSE 3000

@@ -30,7 +30,9 @@ describe('ChatSidebar', () => {
       />,
     );
 
-    expect(screen.getByText('Localis-AI')).toBeInTheDocument();
+    expect(screen.getByText('localis-ai')).toBeInTheDocument();
+    expect(screen.getByText('student-discovery-agent')).toBeInTheDocument();
+    expect(screen.getByAltText('IHRD Logo')).toBeInTheDocument();
     expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
     expect(screen.getByText('Cuộc trò chuyện 1')).toBeInTheDocument();
     expect(screen.getByText('Cuộc trò chuyện 2')).toBeInTheDocument();
@@ -64,6 +66,7 @@ describe('ChatSidebar', () => {
 
     fireEvent.click(screen.getByTitle('Mở sidebar'));
     expect(onToggleDesktop).toHaveBeenCalledTimes(1);
+    expect(screen.getByAltText('IHRD Logo')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle('Cuộc trò chuyện mới'));
     expect(onNewChat).toHaveBeenCalledTimes(1);
