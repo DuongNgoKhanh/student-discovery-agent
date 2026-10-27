@@ -205,3 +205,27 @@ def test_deadline_falls_back_to_templates():
     result = run_agent_turn(SNAPSHOT, model, Executor(), IN_PROGRESS, [], "hi", new_id=ids(), deadline=10.0,
                             clock=lambda: next(now))
     assert result.fallback == "deadline" and len(model.calls) == 1
+
+
+COMPLETED = AgentContext(today=date(2026, 10, 26), phase="completed")
+
+
+def test_lead_in_written_with_a_tool_call_survives_an_empty_final_reply():
+    model = FakeModel(ModelReply(text="Đây nhé", tool_calls=(call("result.explain", {}),)), ModelReply(text=""))
+    result = turn(model, context=COMPLETED)
+    (block,) = result.blocks
+    assert (block.type, block.content, result.fallback) == ("markdown", "Đây nhé", None)
+
+
+def test_a_non_empty_final_reply_wins_over_the_lead_in():
+    model = FakeModel(ModelReply(text="A", tool_calls=(call("result.explain", {}),)), ModelReply(text="B"))
+    result = turn(model, context=COMPLETED)
+    assert [b.content for b in result.blocks] == ["B"]
+
+
+def test_lead_in_precedes_a_handoff_that_has_no_text():
+    executor = Executor(**{"assessment.propose_answer": {"proposal_id": "p1"}})
+    model = FakeModel(ModelReply(text="A", tool_calls=(call("result.explain", {}),)),
+                      ModelReply(text="", tool_calls=(call("assessment.propose_answer", {"option_id": "o2"}),)))
+    result = turn(model, executor)
+    assert [b.content for b in result.blocks] == ["A"] and result.handoff.name == "assessment.propose_answer"

@@ -9,7 +9,7 @@
   },
   "model": {"ref": "gemini/gemini-3.5-flash-lite", "temperature": 0.4, "max_output_tokens": 800,
             "timeout_ms": 10000, "max_retries": 1},
-  "limits": {"max_tool_steps": 4, "turn_timeout_ms": 25000, "history_messages": 20, "max_input_chars": 1000},
+  "limits": {"max_tool_steps": 6, "turn_timeout_ms": 25000, "history_messages": 20, "max_input_chars": 1000},
   "tools": [
     {"name": "assessment.start", "version": 1, "params": {"experiences": [
       {"experience_id": "exp_riasec", "algorithm_profile": "riasec.mean.bounds.v2", "label": "Bài khám phá tính cách"}]}},

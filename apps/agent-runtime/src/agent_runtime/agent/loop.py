@@ -144,6 +144,7 @@ def run_agent_turn(snapshot: AgentSnapshotV1, model: ModelPort, executor: ToolEx
                                    UserMessage(user_text[:limits.max_input_chars])]
     definitions = [item.definition for item in offered.values()]
     suggestions: SuggestRepliesArguments | None = None
+    lead_in = ""  # the last text written alongside tool calls; used when the finishing reply has none
     for step in range(1, limits.max_tool_steps + 1):
         if stop():
             return AgentTurn((), cancelled=True, steps=step - 1, usage=usage)
@@ -177,7 +178,9 @@ def run_agent_turn(snapshot: AgentSnapshotV1, model: ModelPort, executor: ToolEx
                 break  # later calls in the same reply are dropped: the server owns what happens next
             results.append(ToolResultMessage(call.id, call.name, result))
         if handoff is not None or not reply.tool_calls:
-            return _finish(snapshot, reply.text, suggestions, handoff, new_id, step, usage, domains)
+            return _finish(snapshot, reply.text if reply.text.strip() else lead_in, suggestions, handoff, new_id, step, usage, domains)
+        if reply.text.strip():
+            lead_in = reply.text
         messages += [AssistantMessage(reply.text or None, reply.tool_calls), *results]
     return _fallback(snapshot, "max_tool_steps", new_id, limits.max_tool_steps, usage)
 
