@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import uuid4
 
+from pydantic import ValidationError
+
 from agent_runtime.agent.catalog import (
     KnowledgeSearchArguments,
     KnowledgeSearchParams,
@@ -116,6 +118,8 @@ class KnowledgeTools:
         return {"results": [_view(ref, self._records[ref]) for ref in refs], "degraded": result.degraded}
 
     def show(self, arguments: KnowledgeShowArguments) -> dict[str, Any]:
+        if self._show is None:
+            return {"error": "knowledge_unavailable"}
         if any(ref not in self._records for ref in arguments.refs):
             return {"error": "unknown_ref", "refs": list(self._records)}
         by_document: dict[str, Record] = {}
@@ -123,7 +127,7 @@ class KnowledgeTools:
             record = self._records[ref]
             by_document.setdefault(record.metadata["document_id"], record)
         chosen = list(by_document.values())[:self._show.max_cards]
-        self._cards = tuple(card for record in chosen if (card := self._card(record)) is not None)
+        self._cards = tuple(card for record in chosen if (card := self._build_card(record)) is not None)
         return {"shown": len(self._cards)}
 
     def cards(self) -> tuple[KnowledgeCardBlock, ...]:
@@ -151,6 +155,13 @@ class KnowledgeTools:
     def _elapsed(self, started: float) -> int:
         return max(0, int((self._clock() - started) * 1000))
 
+    def _build_card(self, record: Record) -> KnowledgeCardBlock | None:
+        try:
+            return self._card(record)
+        except ValidationError as error:  # a malformed record is skipped, it never fails the turn
+            logger.warning("knowledge card skipped: %s", type(error).__name__)
+            return None
+
     def _card(self, record: Record) -> KnowledgeCardBlock | None:
         metadata = record.metadata
         fields = []
@@ -164,6 +175,6 @@ class KnowledgeTools:
         url = metadata.get("source_url")
         return KnowledgeCardBlock(block_id=self._new_id(), type="knowledge_card", schema_version=1,
                                   title=record.title[:TITLE_CHARS], fields=fields,
-                                  source_url=url if url and link_allowed(url, self._domains) else None,
+                                  source_url=url if isinstance(url, str) and link_allowed(url, self._domains) else None,
                                   document_id=metadata["document_id"], revision=metadata["revision"],
                                   updated_at=metadata["updated_at"])

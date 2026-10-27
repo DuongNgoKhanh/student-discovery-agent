@@ -147,3 +147,33 @@ def test_trace_names_hits_and_shown_documents_but_never_the_question():
 ])
 def test_format_value_uses_vietnamese_conventions(value, kind, text):
     assert format_value(value, kind) == text
+
+
+def test_non_string_source_url_drops_only_the_link():
+    tools = make(Port(RetrievalResult(records=(record("n", tuition=1, source_url=123),))))
+    ask(tools)
+    assert tools.show(KnowledgeShowArguments(refs=("k1",))) == {"shown": 1}
+    assert tools.cards()[0].source_url is None
+
+
+def test_blank_title_is_skipped_and_the_rest_still_shown():
+    blank = Record(content="x", score=0.9, title="   ", metadata={
+        "tuition": 1, "document_id": "t", "revision": 1, "chunk": 0, "updated_at": "2026-10-27T03:00:00Z"})
+    tools = make(Port(RetrievalResult(records=(blank, A1))))
+    ask(tools)
+    assert tools.show(KnowledgeShowArguments(refs=("k1", "k2"))) == {"shown": 1}
+    assert tools.cards()[0].document_id == "a"
+
+
+def test_link_with_whitespace_skips_its_card_and_the_rest_still_shown():
+    broken = record("w", tuition=1, source_url="https://ihrd.vn/a b")
+    tools = make(Port(RetrievalResult(records=(broken, A1))))
+    ask(tools)
+    assert tools.show(KnowledgeShowArguments(refs=("k1", "k2"))) == {"shown": 1}
+    assert tools.cards()[0].document_id == "a"
+
+
+def test_show_without_a_show_declaration_is_unavailable():
+    tools = make(Port(RetrievalResult(records=(A1,))), show=None)
+    ask(tools)
+    assert tools.show(KnowledgeShowArguments(refs=("k1",))) == {"error": "knowledge_unavailable"}
