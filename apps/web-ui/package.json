@@ -16,7 +16,7 @@
     "test:server": "vitest run --project server",
     "test:watch": "vitest",
     "format": "prettier --write .",
-    "gen:api": "openapi-typescript ../../contracts/openapi/public/user-api.yaml -o src/generated/api/user-api.d.ts && openapi-typescript ../../contracts/openapi/public/admin-api.yaml -o src/generated/api/admin-api.d.ts",
+    "gen:api": "openapi-typescript ../../contracts/openapi/public/user-api.yaml -o src/generated/api/user-api.d.ts && openapi-typescript ../../contracts/openapi/public/admin-api.yaml -o src/generated/api/admin-api.d.ts && openapi-typescript ../../contracts/openapi/public/knowledge-api.yaml -o src/generated/api/knowledge-api.d.ts",
     "prepare": "husky"
   },
   "dependencies": {
