@@ -14,6 +14,18 @@ DB_CONTAINER=sda-knowledge-lab-db
 DB_PORT="${LAB_DB_PORT:-15434}"
 RUNTIME_PORT="${LAB_RUNTIME_PORT:-18101}"
 
+# No key in the shell: take GOOGLE_API_KEY from the local stack's .local-docker/.env (this checkout, else the main
+# checkout when running from a git worktree). Only that one variable is read; the value is never printed.
+if [[ -z "${GOOGLE_API_KEY:-}" ]]; then
+  MAIN_ROOT="$(cd "$(git -C "$ROOT" rev-parse --git-common-dir)/.." && pwd)"
+  for candidate in "$ROOT/.local-docker/.env" "$MAIN_ROOT/.local-docker/.env"; do
+    if [[ -f "$candidate" ]]; then
+      value="$(sed -n -E 's/^GOOGLE_API_KEY=(.*)$/\1/p' "$candidate" | tail -n 1)"
+      if [[ -n "$value" ]]; then export GOOGLE_API_KEY="$value"; echo "GOOGLE_API_KEY lấy từ $candidate"; break; fi
+    fi
+  done
+fi
+
 if [[ "${1:-}" == "reset" ]]; then
   docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
   echo "Removed $DB_CONTAINER."

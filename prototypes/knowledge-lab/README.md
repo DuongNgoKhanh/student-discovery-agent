@@ -10,8 +10,9 @@ trình duyệt ──> lab.py :8788 ──┬─ /rt/knowledge/retrieval ──(
 ## Chạy
 
 ```bash
-# Tuỳ chọn: key Gemini để dùng gemini-embedding-2 thật
-export GOOGLE_API_KEY=...            # hoặc ghi vào apps/agent-runtime/.env
+# Tuỳ chọn: key Gemini để dùng gemini-embedding-2 thật. start.sh lấy theo thứ tự:
+# biến môi trường, rồi GOOGLE_API_KEY trong .local-docker/.env (kể cả của checkout chính khi chạy từ worktree)
+export GOOGLE_API_KEY=...
 
 bash prototypes/knowledge-lab/start.sh        # mở http://127.0.0.1:8788, Ctrl+C để dừng
 bash prototypes/knowledge-lab/start.sh reset  # xoá container DB (mất mọi document)
