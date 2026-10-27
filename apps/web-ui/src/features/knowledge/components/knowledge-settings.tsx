@@ -16,7 +16,7 @@ import { QueryState } from './shared/query-state';
 
 type SettingsForm = { name: string; description: string };
 
-const ROW = 'grid gap-1.5 md:grid-cols-[200px_minmax(0,1fr)] md:gap-6';
+const ROW = 'grid gap-1.5 py-4 md:grid-cols-[200px_minmax(0,1fr)] md:gap-6';
 
 function SettingsForm({ kb }: { kb: KnowledgeBase }) {
   const update = useUpdateKnowledgeBase();
@@ -37,7 +37,7 @@ function SettingsForm({ kb }: { kb: KnowledgeBase }) {
   });
 
   return (
-    <form onSubmit={submit} className="space-y-5" noValidate>
+    <form onSubmit={submit} className="divide-y border-t" noValidate>
       <div className={ROW}>
         <Label htmlFor="kb-settings-name" className="md:pt-2.5">Tên</Label>
         <div className="space-y-1">
@@ -80,10 +80,14 @@ export function KnowledgeSettings({ kb }: { kb: string }) {
   return (
     <div className="max-w-3xl">
       <PageTitle title="Cài đặt" description="Thông tin của knowledge base và cách gắn vào agent." />
-      <QueryState query={base}>{data => <SettingsForm kb={data} />}</QueryState>
-      <section aria-labelledby="kb-agent-heading" className="mt-8 border-t pt-6">
-        <h2 id="kb-agent-heading" className="mb-1 text-base font-semibold">Dùng cho agent</h2>
-        <AgentTab kb={kb} />
+      <section aria-labelledby="kb-info-heading">
+        <h2 id="kb-info-heading" className="mb-3 text-base font-semibold">Thông tin chung</h2>
+        <QueryState query={base}>{data => <SettingsForm kb={data} />}</QueryState>
+      </section>
+      <section aria-labelledby="kb-agent-heading" className="mt-10">
+        <h2 id="kb-agent-heading" className="text-base font-semibold">Dùng cho agent</h2>
+        <p className="mb-4 text-13 text-muted-foreground">Agent đọc knowledge base này qua hai tool trong cấu hình release.</p>
+        <div className="border-t pt-4"><AgentTab kb={kb} /></div>
       </section>
     </div>
   );

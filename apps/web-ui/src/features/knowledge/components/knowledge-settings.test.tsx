@@ -30,4 +30,17 @@ describe('KnowledgeSettings', () => {
     await waitFor(() => expect(mocked.patchBase).toHaveBeenCalledWith({ kb: 'kb1', body: { description: 'Mới' } }));
     expect(screen.getByRole('heading', { name: 'Dùng cho agent' })).toBeInTheDocument();
   });
+
+  it('copies each tool object on its own', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<QueryClientProvider client={new QueryClient()}><KnowledgeSettings kb="kb1" /></QueryClientProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy knowledge.show' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(writeText.mock.calls[0]![0] as string)).toEqual({ display: [] });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy knowledge.search' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(writeText.mock.calls[1]![0] as string)).toEqual({ knowledge_base_id: 'kb1' });
+    expect(screen.getByText(/Mở hội thoại mới/)).toBeInTheDocument();
+  });
 });
