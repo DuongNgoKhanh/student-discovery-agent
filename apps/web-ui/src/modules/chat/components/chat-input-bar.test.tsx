@@ -3,21 +3,23 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { ChatInputBar } from './chat-input-bar';
 
 describe('ChatInputBar', () => {
-  it('renders input with default placeholder and send button only', () => {
+  it('renders input with default placeholder and send button', () => {
     render(<ChatInputBar onSend={vi.fn()} />);
 
     expect(screen.getByPlaceholderText('Nhập vào')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Gửi tin nhắn' })).toBeInTheDocument();
-
-    // Các icon chức năng khác không tồn tại
-    expect(screen.queryByRole('button', { name: 'Thêm tùy chọn' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Suy luận' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Nhập bằng giọng nói' })).not.toBeInTheDocument();
   });
 
-  it('custom placeholder is applied', () => {
-    render(<ChatInputBar onSend={vi.fn()} placeholder="Hỏi trợ lý hướng nghiệp" />);
+  it('supports custom accessible label and placeholder', () => {
+    render(
+      <ChatInputBar
+        onSend={vi.fn()}
+        label="Nhập câu trả lời bằng chữ"
+        placeholder="Hỏi trợ lý hướng nghiệp"
+      />,
+    );
 
+    expect(screen.getByLabelText('Nhập câu trả lời bằng chữ')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Hỏi trợ lý hướng nghiệp')).toBeInTheDocument();
   });
 

@@ -21,7 +21,21 @@ export function ChatHeader({
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    setIsDark(document.documentElement.classList.contains('dark'));
+    try {
+      const savedTheme = localStorage.getItem('theme');
+      if (
+        savedTheme === 'dark' ||
+        (!savedTheme && window.matchMedia?.('(prefers-color-scheme: dark)').matches)
+      ) {
+        document.documentElement.classList.add('dark');
+        setIsDark(true);
+      } else {
+        document.documentElement.classList.remove('dark');
+        setIsDark(false);
+      }
+    } catch {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    }
   }, []);
 
   const toggleTheme = () => {
@@ -31,6 +45,11 @@ export function ChatHeader({
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+    }
+    try {
+      localStorage.setItem('theme', nextDark ? 'dark' : 'light');
+    } catch {
+      // ignore
     }
   };
 
@@ -79,8 +98,10 @@ export function ChatHeader({
         </button>
         <button
           type="button"
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 dark:border-line dark:text-fog dark:hover:bg-edge/40"
+          disabled
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors opacity-40 cursor-not-allowed dark:border-line dark:text-fog"
           aria-label="Tùy chọn khác"
+          title="Tùy chọn khác (chưa khả dụng)"
         >
           <MoreVertical className="h-4 w-4" />
         </button>

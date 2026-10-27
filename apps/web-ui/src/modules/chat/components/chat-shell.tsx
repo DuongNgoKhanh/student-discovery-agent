@@ -1,13 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api/errors';
 import { mapErrorMessage } from '@/lib/api/error-map';
 import { queryKeys } from '@/lib/query/keys';
-import { cn } from '@/lib/utils/cn';
 import { DEMO_NOTICE_TEXT, GREETING_TEXT } from '../fixtures';
 import {
   newIdempotencyKey,
@@ -38,51 +36,66 @@ export function ChatShell() {
   const queryClient = useQueryClient();
   const createConversation = useCreateConversation();
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [entries, setEntries] = useState<Entry[]>([]);
+  const [entriesByConversation, setEntriesByConversation] = useState<Record<string, Entry[]>>({});
   const nextEntryId = useRef(0);
   const createKey = useRef<string | null>(null);
-  const pendingEcho = useRef('');
   const started = useRef(false);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const activeConvIdRef = useRef<string | null>(null);
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
   const [threads, setThreads] = useState<ChatThreadItem[]>([]);
-  const [isStarting, setIsStarting] = useState(false);
-  const startTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (startTimerRef.current) clearTimeout(startTimerRef.current);
-    };
-  }, []);
+  activeConvIdRef.current = conversationId;
 
   const conversation = useConversation(conversationId);
   const turns = useSendTurn(conversationId ?? '');
   const view = conversation.data ?? null;
   const activity = view?.active_activity ?? null;
 
-  const appendEntries = useCallback((items: Omit<Entry, 'id'>[]) => {
-    setEntries((prev) => [
-      ...prev,
-      ...items.map((item) => ({ ...item, id: nextEntryId.current++ })),
-    ]);
+  const entries = useMemo(
+    () => (conversationId ? entriesByConversation[conversationId] : undefined) ?? [],
+    [conversationId, entriesByConversation],
+  );
+
+  const appendEntries = useCallback((items: Omit<Entry, 'id'>[], targetConvId?: string) => {
+    const convId = targetConvId ?? activeConvIdRef.current;
+    if (!convId) return;
+    setEntriesByConversation((prev) => {
+      const existing = prev[convId] ?? [];
+      return {
+        ...prev,
+        [convId]: [
+          ...existing,
+          ...items.map((item) => ({ ...item, id: nextEntryId.current++ })),
+        ],
+      };
+    });
   }, []);
 
   const handleCreated = useCallback(
     (created: CreatedConversation) => {
+      const newId = created.conversation.id;
       queryClient.setQueryData(
-        queryKeys.chat.conversation(created.conversation.id),
+        queryKeys.chat.conversation(newId),
         created.conversation,
       );
-      setConversationId(created.conversation.id);
-      setEntries([]);
-      appendEntries(created.blocks.map((block) => ({ role: 'bot' as const, block })));
+      setConversationId(newId);
+      setEntriesByConversation((prev) => ({
+        ...prev,
+        [newId]: created.blocks.map((block) => ({
+          id: nextEntryId.current++,
+          role: 'bot' as const,
+          block,
+        })),
+      }));
 
       setThreads((prev) => {
-        if (prev.some((t) => t.id === created.conversation.id)) return prev;
+        if (prev.some((t) => t.id === newId)) return prev;
         return [
           {
-            id: created.conversation.id,
+            id: newId,
             title: 'Trò chuyện hướng nghiệp',
             time: 'Vừa xong',
           },
@@ -90,12 +103,11 @@ export function ChatShell() {
         ];
       });
     },
-    [appendEntries, queryClient],
+    [queryClient],
   );
 
   /** Bắt đầu phiên mới với key mới. Retry lỗi tạo phiên dùng lại key cũ. */
   const startSession = useCallback(() => {
-    setIsStarting(false);
     createKey.current = newIdempotencyKey('create');
     createConversation.mutate(createKey.current, { onSuccess: handleCreated });
   }, [createConversation, handleCreated]);
@@ -112,7 +124,7 @@ export function ChatShell() {
   }, [startSession]);
 
   useEffect(() => {
-    const thread = document.getElementById('thread');
+    const thread = threadRef.current;
     if (thread) {
       if (typeof thread.scrollTo === 'function') {
         thread.scrollTo({
@@ -128,36 +140,74 @@ export function ChatShell() {
   const send: SendFn = useCallback(
     (draft: TurnDraft, echo: string) => {
       if (!view) return;
-      pendingEcho.current = echo;
-      appendEntries([{ role: 'user', text: echo }]);
+      const turnConvId = view.id;
+      appendEntries([{ role: 'user', text: echo }], turnConvId);
       turns.submit(draft, view.revision, (result: TurnResult) => {
-        appendEntries(result.blocks.map((block) => ({ role: 'bot' as const, block })));
+        appendEntries(
+          result.blocks.map((block) => ({ role: 'bot' as const, block })),
+          turnConvId,
+        );
       });
     },
     [appendEntries, turns, view],
   );
 
-  const retryTurn = () =>
+  const retryTurn = () => {
+    if (!view) return;
+    const turnConvId = view.id;
     turns.retry((result: TurnResult) => {
-      appendEntries(result.blocks.map((block) => ({ role: 'bot' as const, block })));
+      appendEntries(
+        result.blocks.map((block) => ({ role: 'bot' as const, block })),
+        turnConvId,
+      );
     });
+  };
 
   const busy = turns.isPending || createConversation.isPending;
 
-  const handleStart = useCallback(() => {
-    if (isStarting || busy) return;
-    setIsStarting(true);
-    startTimerRef.current = setTimeout(() => {
-      send({ type: 'message', content: { text: 'Bắt đầu' } }, 'Bắt đầu');
-      setIsStarting(false);
-    }, 150);
-  }, [busy, isStarting, send]);
+  const handleNewChat = useCallback(() => {
+    if (busy) return;
+    startSession();
+    setIsMobileSidebarOpen(false);
+  }, [busy, startSession]);
+
+  const handleSelectChat = useCallback(
+    (id: string) => {
+      if (busy || id === conversationId) return;
+      setConversationId(id);
+      setIsMobileSidebarOpen(false);
+    },
+    [busy, conversationId],
+  );
+
+  const handleDeleteChat = useCallback(
+    (id: string) => {
+      setThreads((prev) => prev.filter((t) => t.id !== id));
+      setEntriesByConversation((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      if (conversationId === id) {
+        const remaining = threads.filter((t) => t.id !== id);
+        if (remaining.length > 0 && remaining[0]) {
+          setConversationId(remaining[0].id);
+        } else {
+          startSession();
+        }
+      }
+    },
+    [conversationId, startSession, threads],
+  );
+
   const turnError = turns.error instanceof ApiError ? turns.error : null;
   const turnErrorRetryable = turnError?.retryable ?? false;
 
   const isNotConfigured =
     createConversation.error instanceof ApiError &&
     NOT_CONFIGURED_CODES.has(createConversation.error.code);
+
+  const hasCreateError = Boolean(createConversation.error && !isNotConfigured);
 
   const isInitialLoadingOrError = !view && !isNotConfigured;
   const initialError =
@@ -166,20 +216,33 @@ export function ChatShell() {
       : null;
 
   const retryInitial = createConversation.error ? retryCreate : () => void conversation.refetch();
-  const isInitial = !activity && !entries.some((e) => e.role === 'user');
+
+  const isInitial =
+    view?.status === 'active' && !activity && !entries.some((e) => e.role === 'user');
+
+  const initialBotText =
+    entries
+      .filter((e) => e.role === 'bot')
+      .map((e) =>
+        e.block && e.block.kind === 'known' && e.block.block.type === 'text'
+          ? e.block.block.content
+          : e.text ?? '',
+      )
+      .filter(Boolean)
+      .join('\n\n') || GREETING_TEXT;
 
   return (
-    <div className="relative flex h-screen w-full gap-3 overflow-hidden bg-gray-bg p-3 font-sans text-slate-800 antialiased transition-colors duration-300 selection:bg-emerald-500/20 selection:text-white dark:bg-ink dark:text-gray-100 md:gap-4 md:p-4">
+    <div className="relative flex h-dvh w-full gap-3 overflow-hidden bg-gray-bg p-3 font-sans text-slate-800 antialiased transition-colors duration-300 selection:bg-emerald-500/20 selection:text-slate-900 dark:selection:text-white dark:bg-ink dark:text-gray-100 md:gap-4 md:p-4">
       <ChatSidebar
         threads={threads}
         activeThreadId={conversationId ?? 'new'}
         isMobileSidebarOpen={isMobileSidebarOpen}
         isDesktopSidebarOpen={isDesktopSidebarOpen}
         userName="Học sinh"
-        onNewChat={() => {
-          startSession();
-          setIsMobileSidebarOpen(false);
-        }}
+        disabled={busy}
+        onNewChat={handleNewChat}
+        onSelectChat={handleSelectChat}
+        onDeleteChat={handleDeleteChat}
         onCloseMobileSidebar={() => setIsMobileSidebarOpen(false)}
         onToggleDesktopSidebar={() => setIsDesktopSidebarOpen((prev) => !prev)}
       />
@@ -194,9 +257,19 @@ export function ChatShell() {
         />
 
         <div
+          ref={threadRef}
           id="thread"
           className="no-scrollbar flex flex-1 flex-col space-y-6 overflow-y-auto px-4 py-6 md:px-8 md:py-8 lg:px-10"
         >
+          {view && hasCreateError && (
+            <div className="mx-auto w-full max-w-2xl md:max-w-3xl">
+              <ErrorPanel
+                message={createConversation.error?.message || mapErrorMessage('SYS_500')}
+                onRetry={retryCreate}
+              />
+            </div>
+          )}
+
           {activity?.is_demo && (
             <div className="mx-auto w-full max-w-2xl md:max-w-3xl animate-in fade-in duration-300">
               <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -221,15 +294,10 @@ export function ChatShell() {
               )}
             </div>
           ) : isInitial ? (
-            <div
-              className={cn(
-                'mx-auto flex h-full min-h-[460px] w-full max-w-2xl flex-1 flex-col items-center justify-center py-10 text-center transition-all duration-300 ease-out',
-                isStarting && 'scale-95 -translate-y-6 opacity-0 pointer-events-none',
-              )}
-            >
-              <h1 className="mb-8 max-w-lg text-2xl font-medium tracking-tight text-slate-800 dark:text-slate-100 sm:text-3xl animate-in fade-in duration-500">
-                {GREETING_TEXT}
-              </h1>
+            <div className="mx-auto flex h-full min-h-[460px] w-full max-w-2xl flex-1 flex-col items-center justify-center py-10 text-center transition-all duration-300 ease-out">
+              <h2 className="mb-8 max-w-lg text-2xl font-medium tracking-tight text-slate-800 dark:text-slate-100 sm:text-3xl animate-in fade-in duration-500 whitespace-pre-wrap">
+                {initialBotText}
+              </h2>
 
               {turns.isPending && (
                 <p role="status" className="mb-3 text-xs text-muted-foreground animate-pulse">
@@ -246,13 +314,15 @@ export function ChatShell() {
               )}
 
               <div className="flex items-center justify-center">
-                <Button
-                  disabled={busy || isStarting}
-                  onClick={handleStart}
-                  className="rounded-full bg-slate-900 px-6 py-2 text-sm font-medium text-white shadow-xs transition-all hover:bg-slate-800 active:scale-95 hover:scale-105 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
-                >
-                  Bắt đầu
-                </Button>
+                {view && (
+                  <ActivityControls
+                    conversation={view}
+                    activity={activity}
+                    disabled={busy}
+                    send={send}
+                    onNewSession={startSession}
+                  />
+                )}
               </div>
             </div>
           ) : (
@@ -283,7 +353,7 @@ export function ChatShell() {
                 {turns.isPending && (
                   <li className="w-full animate-message-pop animation-delay-150" aria-label="Trợ lý đang trả lời">
                     <div className="flex w-full items-start justify-start gap-3">
-                      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white shadow-xs dark:border-slate-700 dark:bg-slate-800">
+                      <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                         <Image
                           src="/bot-avatar.png"
                           alt="Avatar trợ lý"
@@ -292,7 +362,7 @@ export function ChatShell() {
                           className="h-6 w-6 object-contain"
                         />
                       </div>
-                      <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-xs dark:border-slate-800 dark:bg-slate-800">
+                      <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800">
                         <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0ms' }} />
                         <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '150ms' }} />
                         <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '300ms' }} />

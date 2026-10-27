@@ -1,29 +1,40 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Check, Copy, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Check, Copy, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import type { RenderableBlock } from '../schemas/blocks';
 import { BlockRenderer } from './block-renderer';
 
 export interface ChatMessageItemProps {
+  id?: string;
   role: 'bot' | 'user';
   text?: string;
   block?: RenderableBlock;
   showAvatar?: boolean;
   className?: string;
+  onReact?: (id: string | undefined, reaction: 'up' | 'down') => void;
 }
 
 export function ChatMessageItem({
+  id,
   role,
   text,
   block,
   showAvatar = true,
   className,
+  onReact,
 }: ChatMessageItemProps) {
-  const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [reaction, setReaction] = useState<'up' | 'down' | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   const isUser = role === 'user';
 
@@ -37,25 +48,53 @@ export function ChatMessageItem({
 
   const handleCopy = async () => {
     if (!textToCopy) return;
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+
+    let success = false;
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(textToCopy);
+        success = true;
+      } else if (typeof document !== 'undefined' && typeof document.execCommand === 'function') {
+        const textarea = document.createElement('textarea');
+        textarea.value = textToCopy;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        textarea.setAttribute('readonly', '');
+        document.body.appendChild(textarea);
+        textarea.select();
+        success = document.execCommand('copy');
+        document.body.removeChild(textarea);
       }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     } catch {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      success = false;
+    }
+
+    if (success) {
+      setCopyStatus('copied');
+      copyTimerRef.current = setTimeout(() => setCopyStatus('idle'), 2000);
+    } else {
+      setCopyStatus('failed');
+      copyTimerRef.current = setTimeout(() => setCopyStatus('idle'), 2000);
+    }
+  };
+
+  const handleReaction = (type: 'up' | 'down') => {
+    const next = reaction === type ? null : type;
+    setReaction(next);
+    if (next && onReact) {
+      onReact(id, next);
     }
   };
 
   if (isUser) {
     return (
       <div className={cn('flex w-full items-start justify-end gap-3 animate-message-pop', className)}>
-        <div className="max-w-[85%] rounded-2xl border border-slate-200/90 bg-white px-5 py-3.5 text-sm leading-relaxed text-slate-800 shadow-xs dark:border-slate-700/60 dark:bg-slate-800 dark:text-slate-100 sm:max-w-xl whitespace-pre-wrap break-words">
+        <div className="max-w-[85%] rounded-2xl border border-slate-200/90 bg-white px-5 py-3.5 text-sm leading-relaxed text-slate-800 shadow-sm dark:border-slate-700/60 dark:bg-slate-800 dark:text-slate-100 sm:max-w-xl whitespace-pre-wrap break-words">
           {text}
         </div>
-        <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-slate-200/80 bg-slate-100 shadow-xs dark:border-slate-700">
+        <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-slate-200/80 bg-slate-100 shadow-sm dark:border-slate-700">
           <Image
             src="/user-avatar.png"
             alt="Avatar người dùng"
@@ -71,7 +110,7 @@ export function ChatMessageItem({
   return (
     <div className={cn('flex w-full items-start justify-start gap-3 animate-message-pop', className)}>
       {showAvatar ? (
-        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white shadow-xs dark:border-slate-700 dark:bg-slate-800">
+        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <Image
             src="/bot-avatar.png"
             alt="Avatar trợ lý"
@@ -94,18 +133,33 @@ export function ChatMessageItem({
               type="button"
               onClick={handleCopy}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-slate-100 hover:text-slate-600 transition-colors dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              title={copied ? 'Đã sao chép' : 'Sao chép'}
-              aria-label={copied ? 'Đã sao chép' : 'Sao chép'}
+              title={
+                copyStatus === 'copied'
+                  ? 'Đã sao chép'
+                  : copyStatus === 'failed'
+                    ? 'Không thể sao chép'
+                    : 'Sao chép'
+              }
+              aria-label={
+                copyStatus === 'copied'
+                  ? 'Đã sao chép'
+                  : copyStatus === 'failed'
+                    ? 'Không thể sao chép'
+                    : 'Sao chép'
+              }
             >
-              {copied ? (
+              {copyStatus === 'copied' ? (
                 <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              ) : copyStatus === 'failed' ? (
+                <X className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
               ) : (
                 <Copy className="h-3.5 w-3.5" />
               )}
             </button>
             <button
               type="button"
-              onClick={() => setReaction((prev) => (prev === 'up' ? null : 'up'))}
+              onClick={() => handleReaction('up')}
+              aria-pressed={reaction === 'up'}
               className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                 reaction === 'up'
                   ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
@@ -118,7 +172,8 @@ export function ChatMessageItem({
             </button>
             <button
               type="button"
-              onClick={() => setReaction((prev) => (prev === 'down' ? null : 'down'))}
+              onClick={() => handleReaction('down')}
+              aria-pressed={reaction === 'down'}
               className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                 reaction === 'down'
                   ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'

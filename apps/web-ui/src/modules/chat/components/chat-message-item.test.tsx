@@ -1,9 +1,23 @@
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { ChatMessageItem } from './chat-message-item';
 import { parseBlock } from '../schemas/blocks';
 
 describe('ChatMessageItem', () => {
+  const originalClipboard = navigator.clipboard;
+  const originalExecCommand = document.execCommand;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    document.execCommand = originalExecCommand;
+    Object.defineProperty(navigator, 'clipboard', {
+      value: originalClipboard,
+      writable: true,
+      configurable: true,
+    });
+  });
+
   it('hiển thị tin nhắn người dùng với bubble trắng và avatar người dùng ở bên phải', () => {
     render(<ChatMessageItem role="user" text="Chào trợ lý, mình muốn tìm hiểu ngành CNTT" />);
 
@@ -13,7 +27,7 @@ describe('ChatMessageItem', () => {
     expect(avatar).toHaveAttribute('src', expect.stringContaining('user-avatar.png'));
   });
 
-  it('hiển thị tin nhắn trợ lý với avatar bot và các nút tương tác', async () => {
+  it('hiển thị tin nhắn trợ lý với avatar bot và các nút tương tác', () => {
     const text = 'Chào bạn! Mình sẵn sàng hỗ trợ bạn.';
     const block = parseBlock({
       block_id: 'b-test-1',
@@ -29,34 +43,9 @@ describe('ChatMessageItem', () => {
     expect(avatar).toBeInTheDocument();
     expect(avatar).toHaveAttribute('src', expect.stringContaining('bot-avatar.png'));
 
-    // Các nút Copy, Hài lòng, Chưa hài lòng
-    const copyBtn = screen.getByRole('button', { name: 'Sao chép' });
-    const thumbsUpBtn = screen.getByRole('button', { name: 'Hài lòng' });
-    const thumbsDownBtn = screen.getByRole('button', { name: 'Chưa hài lòng' });
-
-    expect(copyBtn).toBeInTheDocument();
-    expect(thumbsUpBtn).toBeInTheDocument();
-    expect(thumbsDownBtn).toBeInTheDocument();
-
-    // Test sao chép
-    Object.assign(navigator, {
-      clipboard: {
-        writeText: vi.fn().mockResolvedValue(undefined),
-      },
-    });
-
-    fireEvent.click(copyBtn);
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(text);
-    expect(await screen.findByRole('button', { name: 'Đã sao chép' })).toBeInTheDocument();
-
-    // Test toggle phản hồi hài lòng
-    fireEvent.click(thumbsUpBtn);
-    expect(thumbsUpBtn).toHaveClass('text-emerald-600');
-
-    // Test chuyển sang chưa hài lòng
-    fireEvent.click(thumbsDownBtn);
-    expect(thumbsDownBtn).toHaveClass('text-rose-600');
-    expect(thumbsUpBtn).not.toHaveClass('text-emerald-600');
+    expect(screen.getByRole('button', { name: 'Sao chép' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hài lòng' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chưa hài lòng' })).toBeInTheDocument();
   });
 
   it('hỗ trợ ẩn avatar khi là block tiếp nối của cùng một lượt bot', () => {
@@ -64,5 +53,104 @@ describe('ChatMessageItem', () => {
 
     expect(screen.getByText('Nội dung nối tiếp')).toBeInTheDocument();
     expect(screen.queryByAltText('Avatar trợ lý')).not.toBeInTheDocument();
+  });
+
+  it('sao chép thành công qua navigator.clipboard và tự động hoàn tác sau 2 giây', async () => {
+    vi.useFakeTimers();
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: writeTextMock },
+      writable: true,
+      configurable: true,
+    });
+
+    const text = 'Nội dung cần sao chép';
+    render(<ChatMessageItem role="bot" text={text} />);
+
+    const copyBtn = screen.getByRole('button', { name: 'Sao chép' });
+    fireEvent.click(copyBtn);
+
+    expect(writeTextMock).toHaveBeenCalledWith(text);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: 'Đã sao chép' })).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(screen.getByRole('button', { name: 'Sao chép' })).toBeInTheDocument();
+  });
+
+  it('fallback sang document.execCommand khi navigator.clipboard không hỗ trợ', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+    const execCommandSpy = vi.fn().mockReturnValue(true);
+    document.execCommand = execCommandSpy;
+
+    const text = 'Fallback execCommand copy';
+    render(<ChatMessageItem role="bot" text={text} />);
+
+    const copyBtn = screen.getByRole('button', { name: 'Sao chép' });
+    fireEvent.click(copyBtn);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(execCommandSpy).toHaveBeenCalledWith('copy');
+    expect(screen.getByRole('button', { name: 'Đã sao chép' })).toBeInTheDocument();
+  });
+
+  it('hiển thị trạng thái lỗi khi cả clipboard và fallback đều thất bại', async () => {
+    const writeTextMock = vi.fn().mockRejectedValue(new Error('Permission denied'));
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: writeTextMock },
+      writable: true,
+      configurable: true,
+    });
+
+    render(<ChatMessageItem role="bot" text="Thất bại sao chép" />);
+
+    const copyBtn = screen.getByRole('button', { name: 'Sao chép' });
+    fireEvent.click(copyBtn);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: 'Không thể sao chép' })).toBeInTheDocument();
+  });
+
+  it('toggle phản hồi hài lòng và chưa hài lòng cập nhật aria-pressed và gọi onReact', () => {
+    const onReact = vi.fn();
+    render(<ChatMessageItem id="msg-1" role="bot" text="Nội dung bot" onReact={onReact} />);
+
+    const thumbsUpBtn = screen.getByRole('button', { name: 'Hài lòng' });
+    const thumbsDownBtn = screen.getByRole('button', { name: 'Chưa hài lòng' });
+
+    expect(thumbsUpBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(thumbsDownBtn).toHaveAttribute('aria-pressed', 'false');
+
+    // Click thumbs up
+    fireEvent.click(thumbsUpBtn);
+    expect(thumbsUpBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(thumbsDownBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(onReact).toHaveBeenCalledWith('msg-1', 'up');
+
+    // Click thumbs down
+    fireEvent.click(thumbsDownBtn);
+    expect(thumbsUpBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(thumbsDownBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(onReact).toHaveBeenCalledWith('msg-1', 'down');
+
+    // Click thumbs down again to unselect
+    fireEvent.click(thumbsDownBtn);
+    expect(thumbsDownBtn).toHaveAttribute('aria-pressed', 'false');
   });
 });

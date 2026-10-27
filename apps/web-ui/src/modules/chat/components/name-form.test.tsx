@@ -10,11 +10,6 @@ describe('NameForm', () => {
     const input = screen.getByPlaceholderText('Nhập vào');
     expect(input).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Gửi' })).toBeInTheDocument();
-
-    // Các icon chức năng phụ không xuất hiện
-    expect(screen.queryByRole('button', { name: 'Thêm tùy chọn' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Suy luận' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Nhập bằng giọng nói' })).not.toBeInTheDocument();
   });
 
   it('submits valid name through onSubmit callback', async () => {

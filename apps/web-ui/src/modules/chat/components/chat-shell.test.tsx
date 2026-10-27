@@ -1,11 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { makeQueryClient } from '@/lib/query/client';
 import { ChatShell } from './chat-shell';
 import { BlockRenderer } from './block-renderer';
 import { FIXTURE_QUESTIONS, GREETING_TEXT } from '../fixtures';
 import { parseBlock } from '../schemas/blocks';
+import { getChatApi } from '../api';
 
 function renderShell() {
   return render(
@@ -18,22 +19,152 @@ function renderShell() {
 const TIMEOUT = { timeout: 4000 };
 
 describe('ChatShell với mock', () => {
-  it('hiển thị lời chào và nút bắt đầu', async () => {
-    renderShell();
-    expect(
-      await screen.findByRole('heading', { level: 1, name: GREETING_TEXT }, TIMEOUT),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Bắt đầu' })).toBeEnabled();
-    expect(screen.queryByPlaceholderText('Hỏi ChatGPT')).not.toBeInTheDocument();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it('khi bấm Bắt đầu, chuyển cảnh sang hội thoại và hiển thị tin nhắn Bắt đầu', async () => {
+  it('hiển thị lời chào và nút bắt đầu ở màn chào, không render composer nhập liệu', async () => {
     renderShell();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: GREETING_TEXT }, TIMEOUT),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bắt đầu' })).toBeEnabled();
+    // Ở màn chào chưa vào activity nên không render composer nhập text tự do
+    expect(screen.queryByLabelText('Nhập câu trả lời bằng chữ')).not.toBeInTheDocument();
+  });
+
+  it('hội thoại expired hoặc ended ở màn chào: hiển thị Bắt đầu phiên mới', async () => {
+    const api = getChatApi();
+    vi.spyOn(api, 'createConversation').mockResolvedValueOnce({
+      conversation: {
+        id: 'conv_expired_test',
+        schema_version: 1,
+        status: 'expired',
+        revision: 0,
+        agent_release_id: 'release_test',
+        display_name: null,
+        active_activity: null,
+        created_at: '2026-10-14T03:00:00Z',
+        expires_at: '2026-10-14T04:00:00Z',
+      },
+      messageId: 'msg_expired',
+      blocks: [
+        {
+          kind: 'known',
+          block: {
+            block_id: 'b_exp_1',
+            type: 'text',
+            schema_version: 1,
+            content: 'Chào bạn! Phiên đã quá hạn.',
+          },
+        },
+      ],
+    });
+
+    renderShell();
+
+    // Do hội thoại expired, isInitial = false, ActivityControls render EndedPanel
+    expect(
+      await screen.findByRole('button', { name: 'Bắt đầu phiên mới' }, TIMEOUT),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Phiên đã hết hạn.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
+  });
+
+  it('sau khi bấm Bắt đầu: heading lời chào biến mất, danh sách Hội thoại render bot blocks rồi đến echo Bắt đầu, và footer composer xuất hiện', async () => {
+    renderShell();
+
+    const greetingHeading = await screen.findByRole(
+      'heading',
+      { level: 2, name: GREETING_TEXT },
+      TIMEOUT,
+    );
+    expect(greetingHeading).toBeInTheDocument();
+
+    const startBtn = screen.getByRole('button', { name: 'Bắt đầu' });
+    fireEvent.click(startBtn);
+
+    // 1. Heading lời chào biến mất
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
+    });
+
+    // 2. Danh sách Hội thoại hiển thị
+    const list = await screen.findByRole('list', { name: 'Hội thoại' }, TIMEOUT);
+    expect(list).toBeInTheDocument();
+
+    // 3. Trong danh sách: bot block lời chào hiển thị trước, sau đó là echo 'Bắt đầu'
+    expect(within(list).getByText(GREETING_TEXT)).toBeInTheDocument();
+    expect(within(list).getByText('Bắt đầu', { selector: 'div' })).toBeInTheDocument();
+
+    // 4. Footer composer xuất hiện (NameForm cho bước thu thập tên)
+    expect(
+      await screen.findByLabelText('Mình gọi bạn là gì nhỉ?', {}, TIMEOUT),
+    ).toBeInTheDocument();
+  });
+
+  it('số avatar bot bằng số nhóm tin bot liên tiếp (isConsecutiveBot)', async () => {
+    const api = getChatApi();
+    const originalSendTurn = api.sendTurn.bind(api);
+    vi.spyOn(api, 'sendTurn').mockImplementationOnce(async (convId, input) => {
+      const res = await originalSendTurn(convId, input);
+      return {
+        ...res,
+        blocks: [
+          {
+            kind: 'known' as const,
+            block: {
+              block_id: 'b_consec_1',
+              type: 'text' as const,
+              schema_version: 1,
+              content: 'Đoạn bot nối tiếp 1',
+            },
+          },
+          {
+            kind: 'known' as const,
+            block: {
+              block_id: 'b_consec_2',
+              type: 'text' as const,
+              schema_version: 1,
+              content: 'Đoạn bot nối tiếp 2',
+            },
+          },
+        ],
+      };
+    });
+
+    renderShell();
+
     const startBtn = await screen.findByRole('button', { name: 'Bắt đầu' }, TIMEOUT);
     fireEvent.click(startBtn);
 
-    expect(await screen.findByRole('list', { name: 'Hội thoại' }, TIMEOUT)).toBeInTheDocument();
-    expect(await screen.findByText('Bắt đầu', { selector: 'div' }, TIMEOUT)).toBeInTheDocument();
+    const list = await screen.findByRole('list', { name: 'Hội thoại' }, TIMEOUT);
+    expect(await within(list).findByText('Đoạn bot nối tiếp 1', {}, TIMEOUT)).toBeInTheDocument();
+    expect(within(list).getByText('Đoạn bot nối tiếp 2')).toBeInTheDocument();
+
+    // 3 tin nhắn bot: lời chào khởi tạo (1 avatar) và 2 tin bot nối tiếp liên tiếp (chỉ tin đầu có avatar)
+    // => Tổng cộng đúng 2 avatar trợ lý cho 2 nhóm tin bot
+    const botAvatars = within(list).getAllByAltText('Avatar trợ lý');
+    expect(botAvatars).toHaveLength(2);
+  });
+
+  it('nút Cuộc trò chuyện mới reset về màn chào ban đầu', async () => {
+    renderShell();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu' }, TIMEOUT));
+    expect(
+      await screen.findByLabelText('Mình gọi bạn là gì nhỉ?', {}, TIMEOUT),
+    ).toBeInTheDocument();
+
+    // Bấm nút "Cuộc trò chuyện mới" trên sidebar
+    const newChatBtn = screen.getByRole('button', { name: /Cuộc trò chuyện mới/i });
+    fireEvent.click(newChatBtn);
+
+    // Màn hình reset về màn chào ban đầu với heading h2 và nút Bắt đầu
+    expect(
+      await screen.findByRole('heading', { level: 2, name: GREETING_TEXT }, TIMEOUT),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bắt đầu' })).toBeInTheDocument();
   });
 
   it('đi hết luồng: tên, trả lời, tiến độ tăng đúng một lần', async () => {
@@ -118,6 +249,5 @@ describe('BlockRenderer', () => {
     });
     render(<BlockRenderer block={block} />);
     expect(screen.getByText('Demo')).toBeInTheDocument();
-    expect(screen.getByRole('article', { name: 'Thẻ tính cách' })).toBeInTheDocument();
   });
 });

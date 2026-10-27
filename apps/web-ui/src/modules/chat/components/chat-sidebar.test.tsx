@@ -30,8 +30,8 @@ describe('ChatSidebar', () => {
       />,
     );
 
-    expect(screen.getByText('localis-ai')).toBeInTheDocument();
-    expect(screen.getByText('student-discovery-agent')).toBeInTheDocument();
+    expect(screen.getByText('IHRD')).toBeInTheDocument();
+    expect(screen.getAllByText('Khám phá hướng nghiệp')[0]).toBeInTheDocument();
     expect(screen.getByAltText('IHRD Logo')).toBeInTheDocument();
     expect(screen.getByText('Nguyễn Văn A')).toBeInTheDocument();
     expect(screen.getByText('Cuộc trò chuyện 1')).toBeInTheDocument();
@@ -72,7 +72,29 @@ describe('ChatSidebar', () => {
     expect(onNewChat).toHaveBeenCalledTimes(1);
   });
 
-  it('renders mobile close button when mobile sidebar is open', () => {
+  it('renders mobile close button and full drawer when mobile sidebar is open, even if desktop sidebar is collapsed', () => {
+    const onCloseMobile = vi.fn();
+
+    render(
+      <ChatSidebar
+        threads={mockThreads}
+        activeThreadId="t1"
+        isMobileSidebarOpen={true}
+        isDesktopSidebarOpen={false}
+        onNewChat={vi.fn()}
+        onCloseMobileSidebar={onCloseMobile}
+        onToggleDesktopSidebar={vi.fn()}
+      />,
+    );
+
+    // Close button X must be rendered even when isDesktopSidebarOpen is false
+    const closeBtn = screen.getByRole('button', { name: 'Đóng thanh bên' });
+    expect(closeBtn).toBeInTheDocument();
+    fireEvent.click(closeBtn);
+    expect(onCloseMobile).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes mobile sidebar on Escape key press', () => {
     const onCloseMobile = vi.fn();
 
     render(
@@ -87,7 +109,26 @@ describe('ChatSidebar', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Đóng thanh bên' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
     expect(onCloseMobile).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables new chat and thread buttons when disabled is true', () => {
+    render(
+      <ChatSidebar
+        threads={mockThreads}
+        activeThreadId="t1"
+        isMobileSidebarOpen={false}
+        isDesktopSidebarOpen={true}
+        disabled={true}
+        onNewChat={vi.fn()}
+        onSelectChat={vi.fn()}
+        onCloseMobileSidebar={vi.fn()}
+        onToggleDesktopSidebar={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /Cuộc trò chuyện mới/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Cuộc trò chuyện 1/i })).toBeDisabled();
   });
 });
