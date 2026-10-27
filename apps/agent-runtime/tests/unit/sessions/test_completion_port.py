@@ -5,6 +5,7 @@ import pytest
 
 from agent_runtime.engine.exceptions import MissingMappingError, UnsupportedDefinitionError
 from agent_runtime.engine.projection import SUMMARY_V1_DEMO_LABEL, SUMMARY_V1_TEMPLATE_REF
+from agent_runtime.engine.services.ordering import seeded_order
 from agent_runtime.engine.services.scorer import calculate_scores
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.services.completion import EngineCompletionPort
@@ -51,13 +52,13 @@ def production_handler(port=None):
 @pytest.mark.parametrize("code, house_id", [("r", "house_r"), ("s", "house_s")])
 def test_golden_paths_complete_at_the_definition_cap(valid_v2_doc, code, house_id):
     doc = capped(valid_v2_doc)
-    _, draft, sent = run(production_handler(), doc, favour(code))
+    last, draft, sent = run(production_handler(), doc, favour(code))
     bundle = draft.completion
     assert len(sent) == 12 and draft.next_state.progress.model_dump() == {
         "completed": 12, "min_total": 12, "max_total": 12, "total": 12, "phase": "completed"}
     assert bundle.card.house.house_id == bundle.share.house.house_id == house_id
     assert (bundle.share.template_ref, bundle.share.demo_label) == (SUMMARY_V1_TEMPLATE_REF, SUMMARY_V1_DEMO_LABEL)
-    expected = calculate_scores(sent, doc)
+    expected = calculate_scores(sent, doc, seed=last.activity.id)
     assert bundle.evidence.scoring == expected and expected.primary_house_id == house_id
     assert bundle.evidence.scoring.stopping_reason.value == "question_limit"
 
@@ -69,7 +70,9 @@ def test_evidence_traces_every_answer_to_the_pinned_rules(valid_v2_doc):
     contributions = evidence.scoring.all_contributions
     assert [(c.ordinal, c.question_id, c.option_id) for c in contributions] == [
         (i, a["question_id"], a["option_id"]) for i, a in enumerate(sent, start=1)]
-    assert evidence.scoring.tie_applied and evidence.scoring.primary_house_id == "house_r"  # tie order R first
+    houses = [h["house_id"] for h in doc["houses"]]  # all neutral: the activity seed breaks the tie
+    assert evidence.scoring.tie_applied
+    assert evidence.scoring.primary_house_id == seeded_order(last.activity.id, "house", houses)[0]
     release = last.release
     assert (evidence.experience_release_id, evidence.definition_hash, evidence.engine_version) == (
         release.release_id, release.content_hash, "career-assessment-v1")
@@ -86,10 +89,10 @@ class StubScorer:
     def __init__(self, outcome):
         self.outcome = outcome
 
-    def calculate_scores(self, answers, definition):
+    def calculate_scores(self, answers, definition, seed=None):
         if isinstance(self.outcome, Exception):
             raise self.outcome
-        return self.outcome(calculate_scores(answers, definition))
+        return self.outcome(calculate_scores(answers, definition, seed=seed))
 
 
 @pytest.mark.parametrize("outcome, status, code", [
@@ -123,8 +126,8 @@ def test_harness_guard_rejects_an_engine_that_runs_past_the_cap(valid_v2_doc):
         def __init__(self):
             self.inner = PinnedAssessmentEngine()
 
-        def select(self, release, answers):
-            result = self.inner.select(release, answers)
+        def select(self, release, answers, seed):
+            result = self.inner.select(release, answers, seed)
             if result.status.value != "completed":
                 return result
             asked = {a.question_id for a in answers}

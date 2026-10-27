@@ -1,6 +1,7 @@
 """Name/option transitions with the real adaptive selector and an injected pilot registry."""
 import pytest
 
+from agent_runtime.engine.services.selector import AdaptiveQuestionSelector
 from agent_runtime.evaluations.services.compatibility import PILOT_ENGINE_REGISTRY
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.activity import ActivityClarification
@@ -47,7 +48,17 @@ def test_set_name_uses_first_pinned_question(handler, valid_v2_doc):
     assert draft.next_state.display_name == "Ngân"
     assert draft.next_state.progress.completed == 0
     assert draft.completion is None
-    first = valid_v2_doc["selection_rules"]["payload"]["baseline_order"][0]
+    seen = []
+
+    class Recording(PinnedAssessmentEngine):
+        def select(self, release, answers, seed):
+            seen.append(seed)
+            return super().select(release, answers, seed)
+
+    TurnHandler(Recording(handler.engine.registry)).prepare(snapshot, parse_turn_input(turn_examples()["name_input"]))
+    assert seen == [snapshot.activity.id]  # the activity id seeds this activity's order
+    definition = AdaptiveQuestionSelector._coerce_definition(valid_v2_doc)
+    first = AdaptiveQuestionSelector._baseline_sequence(definition, snapshot.activity.id)[0]
     pinned = next(q for q in valid_v2_doc["questions"] if q["question_id"] == first)
     question = draft.next_state.current_question
     assert question.question_id == first and question.title == pinned["prompt"]
@@ -108,8 +119,8 @@ def test_default_registry_runs_production_engine_and_rejects_others(valid_v2_doc
 
 def test_malformed_engine_output_is_engine_failure(valid_v2_doc):
     class StaleEngine:
-        def select(self, release, answers):
-            result = PinnedAssessmentEngine(PILOT_ENGINE_REGISTRY).select(release, answers)
+        def select(self, release, answers, seed):
+            result = PinnedAssessmentEngine(PILOT_ENGINE_REGISTRY).select(release, answers, seed)
             return result.model_copy(update={"next_question_id": "q_missing"})
 
     snapshot = make_turn_snapshot(valid_v2_doc)
@@ -119,7 +130,7 @@ def test_malformed_engine_output_is_engine_failure(valid_v2_doc):
 
 def test_counter_overflow_rejected_before_engine(valid_v2_doc):
     class ExplodingEngine:
-        def select(self, release, answers):
+        def select(self, release, answers, seed):
             raise AssertionError("engine must not run")
 
     snapshot = make_turn_snapshot(valid_v2_doc)

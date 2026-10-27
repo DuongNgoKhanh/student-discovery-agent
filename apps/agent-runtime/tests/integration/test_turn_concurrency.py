@@ -20,14 +20,14 @@ class GatedEngine:
     def __init__(self, engine, barrier=None, release=None, entered=None):
         self.engine, self.barrier, self.release, self.entered = engine, barrier, release, entered
 
-    def select(self, release, answers):
+    def select(self, release, answers, seed):
         if self.entered:
             self.entered.set()
         if self.barrier:
             self.barrier.wait(timeout=10)
         if self.release:
             assert self.release.wait(timeout=10)
-        return self.engine.select(release, answers)
+        return self.engine.select(release, answers, seed)
 
 
 def test_two_keys_same_revisions_one_commit_one_conflict(turn_rig):

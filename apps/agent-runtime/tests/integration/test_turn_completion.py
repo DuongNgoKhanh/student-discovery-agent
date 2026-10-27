@@ -43,7 +43,7 @@ class CapturingSink:
 
 
 class FailingScorer:
-    def calculate_scores(self, answers, definition):
+    def calculate_scores(self, answers, definition, seed=None):
         raise MissingMappingError("synthetic scorer failure")
 
 
@@ -128,7 +128,8 @@ def test_golden_path_reaches_a_valid_card_at_the_cap(completion_http, capped_def
         assert_no_private_fields(public)
 
     row = stored_result(rig)
-    assert row["evidence"]["scoring"] == calculate_scores(sent, capped_definition).model_dump(mode="json")
+    assert row["evidence"]["scoring"] == calculate_scores(
+        sent, capped_definition, seed=rig.activity_id).model_dump(mode="json")
     assert row["evidence"]["scoring"]["primary_house_id"] == house_id
     final = sink.events[-1]
     assert (final.outcome, final.result_id, final.activity_id) == ("success", result["result_id"], rig.activity_id)
@@ -189,13 +190,15 @@ def test_evidence_traces_contributions_and_matches_the_pure_engine(completion_ht
     _, sent = run_answers(client, rig, neutral, 12)
     selector = AdaptiveQuestionSelector()
     for index, item in enumerate(sent):  # AT-20: identical question order outside the runtime
-        pure = selector.select_next_question(sent[:index], definition=capped_definition, validate_sequence=True)
+        pure = selector.select_next_question(sent[:index], definition=capped_definition, validate_sequence=True,
+                                             seed=rig.activity_id)
         assert pure.next_question_id == item["question_id"]
-    final = selector.select_next_question(sent, definition=capped_definition, validate_sequence=True)
+    final = selector.select_next_question(sent, definition=capped_definition, validate_sequence=True,
+                                          seed=rig.activity_id)
 
     evidence = stored_result(rig)["evidence"]
     scoring = evidence["scoring"]
-    assert scoring == calculate_scores(sent, capped_definition).model_dump(mode="json")
+    assert scoring == calculate_scores(sent, capped_definition, seed=rig.activity_id).model_dump(mode="json")
     assert (scoring["primary_house_id"], scoring["tie_applied"], scoring["stopping_reason"]) == (
         final.primary_house_id, True, "question_limit")
     assert [(c["ordinal"], c["question_id"], c["option_id"]) for c in scoring["all_contributions"]] == [

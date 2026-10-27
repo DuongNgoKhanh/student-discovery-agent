@@ -21,7 +21,7 @@ pytestmark = pytest.mark.integration
 
 
 class ExplodingEngine:
-    def select(self, release, answers):
+    def select(self, release, answers, seed):
         raise AssertionError("replay must never run the engine")
 
 

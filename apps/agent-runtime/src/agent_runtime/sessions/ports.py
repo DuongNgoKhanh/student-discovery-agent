@@ -22,8 +22,8 @@ class ProductReleaseSource(Protocol):
 
 
 class AssessmentEngine(Protocol):
-    """Pinned definition + accepted prefix -> selection. No DB, Product or LLM access."""
-    def select(self, release: ValidatedRelease, answers: tuple[ActivityAnswer, ...]) -> SelectionResult: ...
+    """Pinned definition + accepted prefix + activity seed -> selection. No DB, Product or LLM access."""
+    def select(self, release: ValidatedRelease, answers: tuple[ActivityAnswer, ...], seed: str) -> SelectionResult: ...
 
 
 class CompletionPort(Protocol):

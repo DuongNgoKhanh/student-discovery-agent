@@ -23,7 +23,7 @@ class EngineCompletionPort:
         release, activity = snapshot.release, snapshot.activity
         definition = release.content
         prefix = [{"question_id": answer.question_id, "option_id": answer.option_id} for answer in context.answers]
-        scoring = self.scorer.calculate_scores(prefix, definition)
+        scoring = self.scorer.calculate_scores(prefix, definition, seed=activity.id)
         if scoring.primary_house_id is None:
             # Legacy (v1) definitions report completion without a winning House: no card can be made.
             raise UnsupportedDefinitionError("definition completes without a primary house")

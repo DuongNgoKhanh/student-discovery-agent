@@ -31,7 +31,7 @@ class PinnedAssessmentEngine:
         # Production registers the C-02/C-03 engine; tests/pilots may inject theirs.
         self.registry = registry if registry is not None else DEFAULT_ENGINE_REGISTRY
 
-    def select(self, release: ValidatedRelease, answers: tuple[ActivityAnswer, ...]) -> SelectionResult:
+    def select(self, release: ValidatedRelease, answers: tuple[ActivityAnswer, ...], seed: str) -> SelectionResult:
         profile = self.registry.get(release.engine_version)
         if profile is None or release.definition_schema_version not in profile.supported_schema_versions:
             raise RuntimeSessionError(422, "INCOMPATIBLE_SCHEMA")
@@ -39,7 +39,7 @@ class PinnedAssessmentEngine:
         try:
             # Ratings come from the pinned definition, never from client or stored answers.
             result = AdaptiveQuestionSelector().select_next_question(
-                prefix, definition=release.content, validate_sequence=True)
+                prefix, definition=release.content, validate_sequence=True, seed=seed)
             return SelectionResult.model_validate(result.model_dump())
         except UnsupportedDefinitionError:
             raise RuntimeSessionError(422, "INCOMPATIBLE_SCHEMA") from None
@@ -98,7 +98,7 @@ class TurnHandler:
             if state.status != "collecting_name":
                 raise RuntimeSessionError(422, "INVALID_ACTIVITY_TRANSITION")
             name = validate_display_name(request.payload.display_name)
-            return self._advance(snapshot, name, (), self.engine.select(snapshot.release, ()))
+            return self._advance(snapshot, name, (), self.engine.select(snapshot.release, (), activity.id))
         if state.status != "in_progress" or state.display_name is None or state.current_question is None:
             raise RuntimeSessionError(422, "INVALID_ACTIVITY_TRANSITION")
         payload = request.payload
@@ -114,7 +114,8 @@ class TurnHandler:
                                 ordinal=len(state.answers) + 1, accepted_activity_revision=activity.revision + 1,
                                 source="option", question=question)
         answers = (*state.answers, answer)
-        return self._advance(snapshot, state.display_name, answers, self.engine.select(snapshot.release, answers))
+        return self._advance(snapshot, state.display_name, answers,
+                             self.engine.select(snapshot.release, answers, activity.id))
 
     def _progress(self, state, selection: SelectionResult, count: int) -> JsonObject:
         if selection.progress.completed != count:
