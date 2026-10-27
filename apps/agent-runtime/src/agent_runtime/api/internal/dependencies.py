@@ -14,7 +14,7 @@ from starlette.requests import Request
 
 from agent_runtime.evaluations.services.validator import ExperienceValidator
 from agent_runtime.infrastructure.auth.caller import RawRequestContext
-from agent_runtime.infrastructure.auth.verifier import CallerVerifier
+from agent_runtime.infrastructure.auth.verifier import CallerVerifier, ServiceVerifier
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
 from agent_runtime.infrastructure.db.trace import DatabaseTraceSink
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from agent_runtime.config.settings import Settings
 
 PREFIX = "/api/v1/internal"
+SERVICE_ROUTES = frozenset({("POST", PREFIX + "/knowledge/retrieval")})
 
 
 class SystemClock:
@@ -51,6 +52,7 @@ class SystemClock:
 class RuntimeContainer:
     policy: RuntimePolicy | None
     verifier: CallerVerifier | None = None
+    service_verifier: ServiceVerifier | None = None
     conversations: ConversationService | None = None
     history: HistoryService | None = None
     lifecycle: LifecycleService | None = None
@@ -84,9 +86,16 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         raw_keys = read_strict_json(settings.RUNTIME_INTERNAL_KEYRING.get_secret_value().encode("utf-8"))
         keys = {kid: _decode_key(value) for kid, value in raw_keys.items()}
         verifier = CallerVerifier(keys, SystemClock())
+        service_verifier = None
+        if settings.RUNTIME_STUDIO_KEYRING:
+            raw_service = read_strict_json(settings.RUNTIME_STUDIO_KEYRING.get_secret_value().encode("utf-8"))
+            service_keys = {kid: _decode_key(value) for kid, value in raw_service.items()}
+            if set(service_keys.values()) & set(keys.values()):
+                raise ValueError
+            service_verifier = ServiceVerifier(service_keys, SystemClock())
     except Exception:
         return None
-    unavailable = RuntimeContainer(policy=None, verifier=verifier)
+    unavailable = RuntimeContainer(policy=None, verifier=verifier, service_verifier=service_verifier)
     engine = None
     try:
         if not settings.RUNTIME_DATABASE_URL:
@@ -123,7 +132,8 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         responses = ResponseService(uow, trace_sink=trace_sink)
         turns = TurnService(store, handler, models=functools.cache(build_model_port), responses=responses,
                             knowledge=knowledge, trace_sink=trace_sink)
-        return RuntimeContainer(policy=policy, verifier=verifier, conversations=conversations,
+        return RuntimeContainer(policy=policy, verifier=verifier, service_verifier=service_verifier,
+            conversations=conversations,
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
@@ -194,19 +204,23 @@ class InternalBoundary:
             issuer = request.headers.get("x-internal-caller")
             if token is None or issuer is None:
                 raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_MISSING")
-            if (issuer != "sda-product-bff" or not token
+            if (issuer not in ("sda-product-bff", "sda-studio-api") or not token
                     or len(token.encode("utf-8")) > (policy.max_jwt_bytes if policy else 8192)):
                 raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID")
-            if runtime is None or runtime.verifier is None:
+            service = issuer == "sda-studio-api"
+            verifier = runtime.service_verifier if service and runtime else runtime.verifier if runtime else None
+            if verifier is None:
                 # No configured trust root: never reveal service readiness to an unverified caller.
                 raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID")
+            context = RawRequestContext(scope["method"], target, bytes(raw))
             try:
-                caller = runtime.verifier.verify(token, issuer,
-                    RawRequestContext(scope["method"], target, bytes(raw)))
+                caller = verifier.verify(token, context) if service else verifier.verify(token, issuer, context)
             except RuntimeSessionError as error:
                 if error.status == 401:
                     raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID") from None
                 raise
+            if service and (scope["method"], target) not in SERVICE_ROUTES:
+                raise RuntimeSessionError(403, "FORBIDDEN")
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)
 
             replayed = False

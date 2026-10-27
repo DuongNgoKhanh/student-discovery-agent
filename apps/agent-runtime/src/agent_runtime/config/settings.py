@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     RUNTIME_CONTENT_RETENTION_SECONDS: int = 86400
     RUNTIME_TRACE_RETENTION_SECONDS: int = 86400
     RUNTIME_INTERNAL_KEYRING: SecretStr | None = None
+    # Studio service tokens (issuer sda-studio-api); same JSON {kid: base64} format, keys distinct from students'.
+    RUNTIME_STUDIO_KEYRING: SecretStr | None = None
     RUNTIME_CURSOR_SIGNING_KEY: SecretStr | None = None
     RUNTIME_INTERNAL_TOKEN_MAX_AGE_SECONDS: int = 60
     # Local development only: read active releases from this directory instead of Product.
