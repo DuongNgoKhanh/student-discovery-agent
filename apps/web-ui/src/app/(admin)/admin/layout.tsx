@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { SessionExpired, getSession } from '@/lib/api/session.server';
 
@@ -11,7 +12,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!session?.is_admin) redirect('/admin/login');
   return (
     <div className="mx-auto max-w-5xl p-6">
-      <header className="mb-4 font-bold">Khu vực Admin</header>
+      <header className="mb-4 flex items-center gap-4">
+        <span className="font-bold">Khu vực Admin</span>
+        <nav className="flex gap-3 text-sm">
+          <Link className="underline" href="/admin">Users</Link>
+          <Link className="underline" href="/admin/knowledge">Knowledge</Link>
+        </nav>
+      </header>
       {children}
     </div>
   );
