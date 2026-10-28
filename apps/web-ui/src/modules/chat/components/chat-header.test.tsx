@@ -6,7 +6,7 @@ describe('ChatHeader', () => {
   it('renders title and subtitle', () => {
     render(
       <ChatHeader
-        title="Trò chuyện hướng nghiệp"
+        title="IHRD Mentor"
         subtitle="Đang hoạt động"
         isDesktopSidebarOpen={true}
         onToggleMobileSidebar={vi.fn()}
@@ -14,7 +14,7 @@ describe('ChatHeader', () => {
       />,
     );
 
-    expect(screen.getByText('Trò chuyện hướng nghiệp')).toBeInTheDocument();
+    expect(screen.getByText('IHRD Mentor')).toBeInTheDocument();
     expect(screen.getByText('Đang hoạt động')).toBeInTheDocument();
   });
 
@@ -24,7 +24,7 @@ describe('ChatHeader', () => {
 
     render(
       <ChatHeader
-        title="Trò chuyện hướng nghiệp"
+        title="IHRD Mentor"
         isDesktopSidebarOpen={true}
         onToggleMobileSidebar={onToggleMobile}
         onToggleDesktopSidebar={onToggleDesktop}
@@ -41,7 +41,7 @@ describe('ChatHeader', () => {
   it('toggles theme between dark and light', () => {
     render(
       <ChatHeader
-        title="Trò chuyện hướng nghiệp"
+        title="IHRD Mentor"
         isDesktopSidebarOpen={false}
         onToggleMobileSidebar={vi.fn()}
         onToggleDesktopSidebar={vi.fn()}
