@@ -24,7 +24,7 @@ docker compose -f docker-compose.runtime-local.yaml down
 
 Proxy build dùng biến `http_proxy`/`https_proxy` hiện có trong shell. Không đưa credential Product vào UI/runtime.
 
-Nếu sửa `infra/nginx/default.conf` khi gateway đang chạy, bind mount không tự reload nginx. Sau khi `up` thành công, kiểm tra và reload cấu hình:
+`up` tự kiểm tra (`nginx -t`) và reload cấu hình gateway sau khi các service lên, nên gateway đang chạy sẵn cũng nhận `infra/nginx/default.conf` mới. Nếu sửa file này giữa chừng mà không chạy lại `up`, bind mount không tự reload nginx; kiểm tra và reload thủ công:
 
 ```bash
 docker compose --project-name sda-full-local --env-file .local-docker/.env -f docker-compose.full-local.yaml exec gateway nginx -t

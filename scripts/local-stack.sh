@@ -87,6 +87,8 @@ case "${1:-help}" in
     compose --profile tools run --rm --no-deps minio-init
     compose --profile tools run --rm --no-deps runtime-provision
     compose up -d --no-build --wait --wait-timeout 60
+    # A gateway that was already running keeps its old nginx config; the conf is bind-mounted, so check and reload it.
+    compose exec -T gateway nginx -t -q && compose exec -T gateway nginx -s reload
     compose ps
     ;;
   down) compose down ;;
