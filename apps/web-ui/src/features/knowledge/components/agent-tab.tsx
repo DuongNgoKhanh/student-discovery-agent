@@ -17,7 +17,7 @@ export function AgentTab({ kb }: { kb: string }) {
   return (
     <div className="space-y-4 text-sm">
       <ol className="list-inside list-decimal space-y-1 text-13">
-        <li>Mở <code className="font-mono">prototypes/agent-chat/releases/agent.json</code>.</li>
+        <li>Mở <code className="font-mono">infra/local-releases/agent.json</code>.</li>
         <li>Thay params của <code className="font-mono">knowledge.search</code> và <code className="font-mono">knowledge.show</code> trong mảng <code className="font-mono">tools</code>.</li>
         <li>Mở hội thoại mới để thấy thay đổi.</li>
       </ol>
