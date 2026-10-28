@@ -27,10 +27,10 @@ export const useAgentAudit = (cursor: string | null) =>
 
 function useAgentWrite<V, R>(fn: (vars: V) => Promise<R>) {
   const client = useQueryClient();
-  return useMutation({ mutationFn: fn, onSuccess: () => client.invalidateQueries({ queryKey: agentKeys.all }) });
+  return useMutation({ mutationFn: (vars: V) => fn(vars), onSuccess: () => client.invalidateQueries({ queryKey: agentKeys.all }) });
 }
 export const useSaveDraft = () => useAgentWrite(agentApi.saveDraft);
 export const usePublish = () => useAgentWrite(agentApi.publish);
 export const useRestore = () => useAgentWrite(agentApi.restore);
 // Validation reads only; it must not refetch the draft the admin is editing.
-export const useValidateDraft = () => useMutation({ mutationFn: agentApi.validate });
+export const useValidateDraft = () => useMutation({ mutationFn: () => agentApi.validate() });
