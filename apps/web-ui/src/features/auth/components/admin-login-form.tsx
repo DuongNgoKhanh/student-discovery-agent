@@ -18,9 +18,9 @@ const studioInput =
 
 /** Chỉ quay lại trang trong khu vực admin; mọi đích khác về trang chủ Studio. */
 export function adminNext(next: string | null): string {
-  const path = safeNext(next, '/admin');
+  const path = safeNext(next, '/admin/agent');
   const inAdmin = path === '/admin' || path.startsWith('/admin/') || path.startsWith('/admin?');
-  return inAdmin && !path.startsWith('/admin/login') ? path : '/admin';
+  return inAdmin && !path.startsWith('/admin/login') ? path : '/admin/agent';
 }
 
 function loginErrorMessage(error: unknown): string {

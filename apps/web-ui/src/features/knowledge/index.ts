@@ -14,3 +14,5 @@ export { DocumentEditor } from './components/document-editor';
 export * from './components/shared';
 // Both `./types` and the shared component export `IndexStatus` (type vs type + component); this one wins.
 export { IndexStatus } from './components/shared/index-status';
+export { TagInput, type TagInputProps } from './components/tag-input';
+export { useUnsavedGuard } from './components/use-unsaved-guard';

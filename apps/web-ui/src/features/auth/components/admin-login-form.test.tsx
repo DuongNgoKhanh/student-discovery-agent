@@ -69,12 +69,12 @@ describe('AdminLoginForm', () => {
 
 describe('adminNext', () => {
   it.each([
-    [null, '/admin'],
+    [null, '/admin/agent'],
     ['/admin/knowledge/kb-1', '/admin/knowledge/kb-1'],
-    ['/dashboard', '/admin'],
-    ['/admin/login', '/admin'],
-    ['/administrator', '/admin'],
-    ['//evil.com', '/admin'],
+    ['/dashboard', '/admin/agent'],
+    ['/admin/login', '/admin/agent'],
+    ['/administrator', '/admin/agent'],
+    ['//evil.com', '/admin/agent'],
   ])('%s → %s', (input, expected) => {
     expect(adminNext(input)).toBe(expected);
   });

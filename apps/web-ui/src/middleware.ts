@@ -17,7 +17,7 @@ export function middleware(req: NextRequest) {
   if (pathname === '/admin/login') {
     if (!isAdmin) return NextResponse.next();
     const url = req.nextUrl.clone();
-    url.pathname = '/admin';
+    url.pathname = '/admin/agent';
     url.search = '';
     return NextResponse.redirect(url);
   }
