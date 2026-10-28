@@ -20,6 +20,18 @@ export function setIn<T extends AgentConfig>(value: T, path: Path, next: unknown
   return copy as T;
 }
 
+/** JSON with recursively sorted object keys, so jsonb key reordering does not look like an edit. */
+export function canonical(value: unknown): string {
+  const sort = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(sort);
+    if (node !== null && typeof node === 'object') {
+      return Object.fromEntries(Object.keys(node).sort().map(key => [key, sort((node as Record<string, unknown>)[key])]));
+    }
+    return node;
+  };
+  return JSON.stringify(sort(value));
+}
+
 export const fieldId = (path: Path | string) => `field-${(typeof path === 'string' ? parsePath(path) : path).join('.')}`;
 
 /** Focus the most specific rendered field for a runtime issue path (falls back to its parents). */

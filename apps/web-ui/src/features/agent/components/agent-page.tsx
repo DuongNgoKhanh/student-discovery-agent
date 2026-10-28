@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ConfirmDialog, PageTitle, QueryState, errorMessage, useUnsavedGuard } from '@/features/knowledge';
+import { ConfirmDialog, PageTitle, QueryState, errorMessage, knowledgeApi, useUnsavedGuard } from '@/features/knowledge';
 import { ApiError } from '@/lib/api/errors';
-import { setIn, type Path } from '../model/config';
+import { canonical, setIn, type Path } from '../model/config';
+import { bindKnowledge, type ToolBinding } from '../model/tools';
 import type { SectionId } from '../model/sections';
 import { useAgentActive, useAgentDraft, useSaveDraft, useValidateDraft } from '../hooks/use-agent';
 import type { AgentConfig, AgentDraft } from '../types';
@@ -39,7 +40,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
   const [conflict, setConflict] = useState<AgentDraft | null>(null);
   const [publishing, setPublishing] = useState(false);
 
-  const dirty = JSON.stringify(config) !== JSON.stringify(base.content);
+  const dirty = canonical(config) !== canonical(base.content);
   const guard = useUnsavedGuard(dirty);
   const draftState: DraftState = dirty ? 'unsaved' : base.content_hash === active.data?.content_hash ? 'same' : 'differs';
 
@@ -48,11 +49,30 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     setValidation(v => (v ? { ...v, stale: true } : v));
   }, []);
 
+  const bindKb = useCallback(async (kb: string) => {
+    try {
+      const suggested = await knowledgeApi.agentParams(kb);
+      // Applied to the current config at apply time, not a pre-await copy.
+      setConfig(current => setIn(current, ['tools'], bindKnowledge(((current.tools as ToolBinding[] | undefined) ?? []), suggested as unknown as Record<string, unknown>)));
+      setValidation(v => (v ? { ...v, stale: true } : v));
+    } catch (error) { toast.error(errorMessage(error)); }
+  }, []);
+
+  // "Gắn vào agent" from a knowledge base: bind once per page open.
+  const appliedKb = useRef(false);
+  const kbParam = params.get('kb');
+  useEffect(() => {
+    if (kbParam && !appliedKb.current) { appliedKb.current = true; void bindKb(kbParam); }
+  }, [kbParam, bindKb]);
+
   const persist = async (): Promise<AgentDraft | null> => {
+    if (save.isPending || jsonError) return null;
     if (!dirty) return base;
     try {
       const saved = await save.mutateAsync({ content: config, expected_revision: base.revision });
       setBase(saved); setConflict(null);
+      // The server stores jsonb (key order differs); keep local state identical to what was saved.
+      setConfig(current => (canonical(current) === canonical(saved.content) ? saved.content : current));
       return saved;
     } catch (error) {
       if (error instanceof ApiError && error.code === 'CONFLICT_REVISION') {
@@ -81,7 +101,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
 
   return (
     <div className="space-y-4">
-      <AgentStatusBar active={active.data} draftState={draftState} busy={save.isPending || validate.isPending || Boolean(jsonError)}
+      <AgentStatusBar active={active.data} draftState={draftState} busy={save.isPending || validate.isPending || Boolean(jsonError)} canPublish={Boolean(active.data)}
         onSave={() => void persist()} onValidate={() => void runValidation()} onPublish={() => setPublishing(true)} />
 
       {conflict && (
@@ -94,7 +114,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
 
       <div role="tablist" className="flex gap-4 border-b text-sm">
         {(['config', 'versions'] as const).map(id => (
-          <button key={id} role="tab" aria-selected={tab === id} type="button" onClick={() => setTab(id)}
+          <button key={id} role="tab" aria-selected={tab === id} type="button" onClick={() => { if (!jsonError) setTab(id); }}
             className={tab === id ? 'border-b-2 border-primary pb-2 font-medium' : 'pb-2 text-muted-foreground'}>
             {id === 'config' ? 'Cấu hình' : 'Phiên bản'}
           </button>
@@ -104,9 +124,9 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
       {tab === 'config' ? (
         <ConfigTab config={config} onChange={change} onReplace={next => { setConfig(next); setValidation(v => (v ? { ...v, stale: true } : v)); }}
           section={section} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
-          validation={validation} preselectKb={params.get('kb')} />
+          validation={validation} onBindKb={kb => void bindKb(kb)} />
       ) : (
-        <VersionsTab active={active.data ?? null} onCopyToDraft={content => { setConfig(content); setTab('config'); }} />
+        <VersionsTab active={active.data ?? null} onCopyToDraft={content => { setConfig(content); setValidation(v => (v ? { ...v, stale: true } : v)); setTab('config'); }} />
       )}
 
       {publishing && active.data && (

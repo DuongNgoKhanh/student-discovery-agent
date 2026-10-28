@@ -12,10 +12,10 @@ import { SectionNav } from './section-nav';
 import { TemplatesSection } from './templates-section';
 import { ToolsSection } from './tools-section';
 
-export function ConfigTab({ config, onChange, onReplace, section, onSection, onJsonValidity, validation, preselectKb }: {
+export function ConfigTab({ config, onChange, onReplace, section, onSection, onJsonValidity, validation, onBindKb }: {
   config: AgentConfig; onChange: (path: Path, value: unknown) => void; onReplace: (next: AgentConfig) => void;
   section: SectionId; onSection: (id: SectionId) => void; onJsonValidity: (error: string | null) => void;
-  validation: ValidationState | null; preselectKb: string | null;
+  validation: ValidationState | null; onBindKb: (kb: string) => void;
 }) {
   const issues = validation?.issues ?? [];
   const props = { config, onChange, issues };
@@ -27,7 +27,7 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
         <div className="max-w-3xl">
           {section === 'persona' && <PersonaSection {...props} />}
           {section === 'model' && <ModelSection {...props} />}
-          {section === 'tools' && <ToolsSection {...props} preselectKb={preselectKb} />}
+          {section === 'tools' && <ToolsSection {...props} onBindKb={onBindKb} />}
           {section === 'limits' && <LimitsSection {...props} />}
           {section === 'templates' && <TemplatesSection {...props} />}
           {section === 'json' && <JsonSection config={config} onReplace={onReplace} onValidity={onJsonValidity} />}

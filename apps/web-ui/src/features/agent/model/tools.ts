@@ -11,3 +11,13 @@ export const TOOL_CATALOG: { name: string; version: 1; label: string; descriptio
   { name: 'knowledge.search', version: 1, label: 'Tìm trong Knowledge Base', description: 'Tra cứu thông tin tuyển sinh trong KB đã chọn.', params: 'knowledge.search' },
   { name: 'knowledge.show', version: 1, label: 'Hiện thẻ thông tin', description: 'Dựng thẻ từ kết quả tìm kiếm (cần bật Tìm trong KB).', params: 'knowledge.show' },
 ];
+
+export type ToolBinding = { name: string; version: number; params?: Record<string, unknown> };
+
+/** Replace the knowledge tools with the params the knowledge base suggests (used at apply time on current state). */
+export function bindKnowledge(tools: ToolBinding[], params: Record<string, unknown>): ToolBinding[] {
+  const rest = tools.filter(t => t.name !== 'knowledge.search' && t.name !== 'knowledge.show');
+  return [...rest,
+    { name: 'knowledge.search', version: 1, params: params['knowledge.search'] as Record<string, unknown> },
+    { name: 'knowledge.show', version: 1, params: params['knowledge.show'] as Record<string, unknown> }];
+}

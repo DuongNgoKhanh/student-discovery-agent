@@ -20,6 +20,8 @@ export function JsonSection({ config, onReplace, onValidity }: {
   const [error, setError] = useState<string | null>(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (!error) setText(JSON.stringify(config, null, 2)); }, [config]);
+  // Leaving the tab must not leave the page believing the JSON is still broken.
+  useEffect(() => () => onValidity(null), []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="space-y-2">
       <Textarea id="field-" aria-label="Cấu hình JSON" rows={28} spellCheck={false} className="font-mono text-xs" value={text}

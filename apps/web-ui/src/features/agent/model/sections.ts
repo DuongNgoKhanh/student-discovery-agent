@@ -1,5 +1,5 @@
 import type { AgentConfig } from '../types';
-import { parsePath } from './config';
+import { canonical, parsePath } from './config';
 
 export type SectionId = 'persona' | 'model' | 'tools' | 'limits' | 'templates' | 'json';
 
@@ -22,6 +22,6 @@ export const sectionOf = (path: string): SectionId => BY_KEY[String(parsePath(pa
 export function changedSections(before: AgentConfig, after: AgentConfig): SectionId[] {
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
   const changed = new Set<SectionId>();
-  for (const key of keys) if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) changed.add(BY_KEY[key] ?? 'json');
+  for (const key of keys) if (canonical(before[key]) !== canonical(after[key])) changed.add(BY_KEY[key] ?? 'json');
   return SECTIONS.map(s => s.id).filter(id => changed.has(id));
 }

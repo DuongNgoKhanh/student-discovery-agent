@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fieldId, getIn, parsePath, setIn } from './config';
+import { canonical, fieldId, getIn, parsePath, setIn } from './config';
 import { changedSections, sectionOf } from './sections';
 
 describe('config paths', () => {
@@ -31,5 +31,12 @@ describe('sections', () => {
   });
   it('lists changed sections by top-level key', () => {
     expect(changedSections({ persona: { name: 'A' }, model: { ref: 'x' } }, { persona: { name: 'B' }, model: { ref: 'x' } })).toEqual(['persona']);
+  });
+});
+
+describe('canonical', () => {
+  it('ignores object key order but not array order', () => {
+    expect(canonical({ a: 1, b: { y: 1, x: [{ n: 1, m: 2 }] } })).toBe(canonical({ b: { x: [{ m: 2, n: 1 }], y: 1 }, a: 1 }));
+    expect(canonical([1, 2])).not.toBe(canonical([2, 1]));
   });
 });

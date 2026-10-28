@@ -3,15 +3,15 @@
 import { useEffect, useState } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { knowledgeApi, useKnowledgeBases } from '@/features/knowledge';
+import { useKnowledgeBases } from '@/features/knowledge';
 import { fieldId, getIn } from '../model/config';
-import { TOOL_CATALOG } from '../model/tools';
+import { TOOL_CATALOG, type ToolBinding } from '../model/tools';
 import { Field, NumberField } from './field';
 import type { SectionProps } from './persona-section';
 
-type Binding = { name: string; version: number; params?: Record<string, unknown> };
+type Binding = ToolBinding;
 
-export function ToolsSection({ config, onChange, issues, preselectKb }: SectionProps & { preselectKb?: string | null }) {
+export function ToolsSection({ config, onChange, issues, onBindKb }: SectionProps & { onBindKb: (kb: string) => void }) {
   const tools = ((getIn(config, ['tools']) as Binding[] | undefined) ?? []);
   const indexOf = (name: string) => tools.findIndex(t => t.name === name);
   const setTools = (next: Binding[]) => onChange(['tools'], next);
@@ -20,17 +20,6 @@ export function ToolsSection({ config, onChange, issues, preselectKb }: SectionP
     if (on) setTools([...tools, { name, version: 1, params: {} }]);
     else setTools(tools.filter(t => t.name !== name));
   };
-
-  const applyKb = async (kb: string) => {
-    const params = await knowledgeApi.agentParams(kb);
-    const rest = tools.filter(t => t.name !== 'knowledge.search' && t.name !== 'knowledge.show');
-    setTools([...rest, { name: 'knowledge.search', version: 1, params: params['knowledge.search'] as Record<string, unknown> },
-      { name: 'knowledge.show', version: 1, params: params['knowledge.show'] as Record<string, unknown> }]);
-  };
-
-  // "Gắn vào agent" from a knowledge base: bind it once when the page opens with ?kb=.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (preselectKb) void applyKb(preselectKb); }, [preselectKb]);
 
   const bases = useKnowledgeBases();
   const unknown = tools.filter(t => !TOOL_CATALOG.some(c => c.name === t.name));
@@ -53,7 +42,7 @@ export function ToolsSection({ config, onChange, issues, preselectKb }: SectionP
               <div className="mt-4 space-y-4">
                 <Field path={['tools', index, 'params', 'knowledge_base_id']} label="Knowledge base" issues={issues}>
                   <select id={fieldId(['tools', index, 'params', 'knowledge_base_id'])} className="h-9 w-full max-w-sm rounded-md border bg-background px-2 text-sm"
-                    value={String(getIn(config, ['tools', index, 'params', 'knowledge_base_id']) ?? '')} onChange={e => void applyKb(e.target.value)}>
+                    value={String(getIn(config, ['tools', index, 'params', 'knowledge_base_id']) ?? '')} onChange={e => onBindKb(e.target.value)}>
                     <option value="" disabled>Chọn knowledge base</option>
                     {bases.data?.map(kb => <option key={kb.id} value={kb.id}>{kb.name}</option>)}
                   </select>

@@ -5,10 +5,10 @@ import { relativeTime } from '@/features/knowledge';
 import type { AgentActive } from '../types';
 
 export type DraftState = 'unsaved' | 'differs' | 'same';
-const LABEL: Record<DraftState, string> = { unsaved: 'Chưa lưu', differs: 'Đã lưu · khác bản đang dùng', same: 'Trùng bản đang dùng' };
+const LABEL: Record<DraftState, string> = { unsaved: 'Chưa lưu', differs: 'Đã lưu – khác bản đang dùng', same: 'Trùng bản đang dùng' };
 
-export function AgentStatusBar({ active, draftState, busy, onSave, onValidate, onPublish }: {
-  active: AgentActive | null | undefined; draftState: DraftState; busy: boolean;
+export function AgentStatusBar({ active, draftState, busy, canPublish, onSave, onValidate, onPublish }: {
+  active: AgentActive | null | undefined; draftState: DraftState; busy: boolean; canPublish: boolean;
   onSave: () => void; onValidate: () => void; onPublish: () => void;
 }) {
   return (
@@ -21,7 +21,7 @@ export function AgentStatusBar({ active, draftState, busy, onSave, onValidate, o
       <div className="flex gap-2">
         <Button variant="outline" size="sm" disabled={busy || draftState !== 'unsaved'} onClick={onSave}>Lưu nháp</Button>
         <Button variant="outline" size="sm" disabled={busy} onClick={onValidate}>Kiểm tra</Button>
-        <Button size="sm" disabled={busy || draftState !== 'differs'} onClick={onPublish}>Phát hành</Button>
+        <Button size="sm" disabled={busy || !canPublish || draftState !== 'differs'} onClick={onPublish}>Phát hành</Button>
       </div>
     </div>
   );

@@ -18,7 +18,7 @@ export function Field({ path, label, hint, issues, children }: FieldProps) {
       <Label htmlFor={id} className="text-13">{label}</Label>
       {children}
       {hint && !mine.length && <p id={`${id}-hint`} className="text-xs text-muted-foreground">{hint}</p>}
-      {mine.map(issue => <p key={issue.code + issue.path} role="alert" className="text-xs text-destructive">{issue.message}</p>)}
+      {mine.map((issue, i) => <p key={`${issue.code}:${issue.path}:${i}`} role="alert" className="text-xs text-destructive">{issue.message}</p>)}
     </div>
   );
 }

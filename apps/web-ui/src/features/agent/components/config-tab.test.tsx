@@ -22,7 +22,7 @@ function Harness({ validation = null, onConfig = () => {} }: { validation?: Vali
   return (
     <ConfigTab config={config} onChange={(path: Path, value) => update(setIn(config, path, value))} onReplace={update}
       section={section} onSection={id => { if (!jsonError) setSection(id); }} onJsonValidity={setJsonError}
-      validation={validation} preselectKb={null} />
+      validation={validation} onBindKb={() => {}} />
   );
 }
 
