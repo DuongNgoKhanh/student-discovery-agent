@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import * as repo from '@/modules/agent/agent.repository';
-import { publish, readDraft, restore, saveDraftContent, seedAgent } from '@/modules/agent/agent.service';
+import { activeDescriptor, publish, readDraft, restore, saveDraftContent, seedAgent } from '@/modules/agent/agent.service';
 import { setAgentValidator } from '@/modules/agent/runtime-validation';
 import { computeContentHash } from '@/modules/experiences/canonical';
 
@@ -32,6 +32,15 @@ describe('agent draft', () => {
     expect(vi.mocked(repo.saveDraft).mock.calls[0]![1]).toMatchObject({ hash: computeContentHash({ greeting_text: 'mine' }) });
   });
 
+  it('writes the save audit inside the save transaction', async () => {
+    const tx = { marker: 'tx' };
+    const txDb = { transaction: (work: (t: unknown) => unknown) => work(tx) } as unknown as ProductDatabase;
+    vi.mocked(repo.saveDraft).mockResolvedValue({ status: 'ok', draft: draftRow({ greeting_text: 'mine' }, 3) });
+    await saveDraftContent(txDb, { content: { greeting_text: 'mine' }, expected_revision: 2 }, 'admin');
+    expect(vi.mocked(repo.saveDraft).mock.calls[0]![0]).toBe(tx);
+    expect(repo.insertAudit).toHaveBeenCalledWith(tx, expect.objectContaining({ action: 'agent.draft.save', after_ref: 'draft@3' }));
+  });
+
   it('seeds draft, v1 and the pointer only once', async () => {
     vi.mocked(repo.countReleases).mockResolvedValueOnce(0).mockResolvedValueOnce(1);
     vi.mocked(repo.insertRelease).mockResolvedValue({ id: 'agr_1', version: 1 } as repo.AgentReleaseRow);
@@ -53,7 +62,7 @@ describe('publish', () => {
   beforeEach(() => {
     vi.mocked(repo.findIdempotencyRecordForAgent).mockResolvedValue(undefined);
     vi.mocked(repo.withAgentLock).mockImplementation((_db, _scope, _key, work) => work(db as never));
-    setAgentValidator(async () => ({ valid: true, content_hash: 'h', issues: [] }));
+    setAgentValidator(async content => ({ valid: true, content_hash: computeContentHash(content), issues: [] }));
   });
 
   it('creates the next version, moves the pointer and audits in one unit', async () => {
@@ -87,6 +96,21 @@ describe('publish', () => {
       .rejects.toMatchObject({ status: 409, code: 'CONFLICT_REVISION' });
   });
 
+  it('never publishes when the report hash does not match the draft', async () => {
+    vi.mocked(repo.getDraft).mockResolvedValue(draftRow({ greeting_text: 'b' }, 2));
+    setAgentValidator(async () => ({ valid: true, content_hash: computeContentHash({ greeting_text: 'other' }), issues: [] }));
+    await expect(publish(db, { expected_draft_revision: 2, expected_active_revision: 1, idempotency_key: 'publish-0005' }, 'admin', ctx))
+      .rejects.toMatchObject({ status: 503, code: 'SYS_UNAVAILABLE', details: { kind: 'hash_mismatch' } });
+    expect(repo.withAgentLock).not.toHaveBeenCalled();
+    expect(repo.insertRelease).not.toHaveBeenCalled();
+  });
+});
+
+describe('activeDescriptor', () => {
+  it('is 422 RES_EXPERIENCE_NOT_CONFIGURED when no release is active', async () => {
+    vi.mocked(repo.getActive).mockResolvedValue(undefined);
+    await expect(activeDescriptor(db, 'demo')).rejects.toMatchObject({ status: 422, code: 'RES_EXPERIENCE_NOT_CONFIGURED' });
+  });
 });
 
 describe('restore', () => {

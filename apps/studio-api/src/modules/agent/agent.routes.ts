@@ -1,5 +1,6 @@
 import type { Hono } from 'hono';
 import { z } from 'zod';
+import { getAgentEnv } from '@/config/env';
 import { getProductDatabase } from '@/infrastructure/db/client';
 import { honoHandler, withHandler } from '@/http/handler';
 import { success } from '@/http/response';
@@ -13,8 +14,8 @@ import {
 } from '@/modules/agent/agent.service';
 
 const ADMIN = '/api/v1/admin/agent';
-// Agent configs carry long system prompts; 256 KB keeps them well inside the body cap.
-const BODY = { maxBytes: 256 * 1024 };
+// 60 KB: the draft is forwarded to the runtime's 64 KB internal boundary wrapped as {"content": …}.
+const BODY = { maxBytes: 60 * 1024 };
 
 export const handleReadDraft = withHandler(async (req, ctx) => {
   await requireAdmin(req);
@@ -82,6 +83,9 @@ export const handleActiveDelivery = withHandler(async (req, ctx) => {
   await verifyDeliveryRequest(req, '');
   const parsed = deliveryQuery.safeParse(queryOf(req));
   if (!parsed.success) throw new ProductError(422, 'VAL_INVALID_REQUEST', 'Only kind=agent is delivered');
+  if (parsed.data.environment !== getAgentEnv().AGENT_DELIVERY_ENVIRONMENT) {
+    throw new ProductError(422, 'VAL_INVALID_REQUEST', 'Unknown delivery environment');
+  }
   return success(await activeDescriptor(getProductDatabase(), parsed.data.environment), ctx);
 });
 

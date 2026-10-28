@@ -4,6 +4,7 @@ import { getAgentEnv } from '@/config/env';
 import { ProductError } from '@/http/errors';
 import { signingKey } from '@/modules/knowledge/runtime-client';
 
+const MAX_CLOCK_SKEW_SECONDS = 30;
 const invalid = () => new ProductError(401, 'AUTH_CALLER_CONTEXT_INVALID', 'Invalid caller context');
 
 /** Runtime -> studio-api only: one key, one purpose, bound to method, raw target and body. */
@@ -24,7 +25,7 @@ export async function verifyDeliveryRequest(req: Request, body: string): Promise
   const url = new URL(req.url);
   const iat = payload.iat as number | undefined;
   const exp = payload.exp as number | undefined;
-  if (typeof iat !== 'number' || typeof exp !== 'number' || exp - iat > 60
+  if (typeof iat !== 'number' || typeof exp !== 'number' || exp - iat > 60 || iat > Math.floor(Date.now() / 1000) + MAX_CLOCK_SKEW_SECONDS
     || payload.method !== req.method || payload.request_target !== url.pathname + url.search
     || payload.body_sha256 !== createHash('sha256').update(body, 'utf8').digest('hex')) throw invalid();
   if (payload.caller_type !== 'runtime_service' || payload.purpose !== 'release.delivery') {

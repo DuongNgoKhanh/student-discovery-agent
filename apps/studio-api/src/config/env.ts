@@ -100,6 +100,8 @@ export function getConversationEnv(): ConversationEnv {
 const agentSchema = z.object({
   PRODUCT_DELIVERY_VERIFY_KEY: z.preprocess(blankToUndefined, z.string().optional()),
   PRODUCT_DELIVERY_VERIFY_KID: z.preprocess(blankToUndefined, z.string().regex(/^[A-Za-z0-9._-]{1,64}$/).default('runtime')),
+  // The only environment this studio delivers releases for.
+  AGENT_DELIVERY_ENVIRONMENT: z.preprocess(blankToUndefined, z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/).default('demo')),
 });
 
 export type AgentEnv = z.infer<typeof agentSchema>;

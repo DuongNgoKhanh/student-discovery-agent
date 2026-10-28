@@ -22,15 +22,19 @@ export async function saveDraftContent(db: ProductDatabase, input: SaveDraftInpu
   } catch {
     throw new ProductError(422, 'VAL_INVALID_INPUT', 'Content is not canonical JSON', false, { kind: 'validation', issues: [] });
   }
-  const result = await repo.saveDraft(db, { expectedRevision: input.expected_revision, content: input.content, hash, actor });
+  // Save and its audit row commit together.
+  const result = await db.transaction(async tx => {
+    const saved = await repo.saveDraft(tx, { expectedRevision: input.expected_revision, content: input.content, hash, actor });
+    if (saved.status === 'ok' && saved.draft.revision !== input.expected_revision) {
+      await repo.insertAudit(tx, { actor, action: 'agent.draft.save', target_kind: 'agent', target_id: 'default',
+        before_ref: `draft@${input.expected_revision}`, after_ref: `draft@${saved.draft.revision}`, outcome: 'success', details: {} });
+    }
+    return saved;
+  });
   if (result.status === 'conflict') {
     throw new ProductError(409, 'CONFLICT_REVISION', 'Agent draft revision conflict', false, {
       kind: 'revision_conflict', expected_revision: input.expected_revision, current: toDraftDTO(result.current),
     });
-  }
-  if (result.draft.revision !== input.expected_revision) {
-    await repo.insertAudit(db, { actor, action: 'agent.draft.save', target_kind: 'agent', target_id: 'default',
-      before_ref: `draft@${input.expected_revision}`, after_ref: `draft@${result.draft.revision}`, outcome: 'success', details: {} });
   }
   return toDraftDTO(result.draft);
 }
@@ -115,6 +119,10 @@ export async function publish(
   // Validate outside the transaction (network call); the hash check inside binds the report to this content.
   const report = await getAgentValidator()(draft.content, ctx);
   if (!report.valid) throw gateFailed(report.issues);
+  // The report must describe exactly this draft; anything else means a broken validator, never a publish.
+  if (report.content_hash !== draft.content_hash) {
+    throw new ProductError(503, 'SYS_UNAVAILABLE', 'Validation report does not match the draft', true, { kind: 'hash_mismatch' });
+  }
   return idempotent(db, 'agent:publish', input.idempotency_key, input, 201, async tx => {
     const pointer = await lockedPointer(tx, input.expected_active_revision);
     const current = await repo.getDraft(tx);

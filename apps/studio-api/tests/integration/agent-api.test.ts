@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { SignJWT } from 'jose';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dispatch } from '../helpers/api';
 import { declaredResponseValidator } from '../helpers/openapi-response';
 import { startPostgres, type PostgresHandle } from '../helpers/postgres';
@@ -10,6 +10,7 @@ import { closeProductDatabase, getProductDatabase } from '@/infrastructure/db/cl
 import { issueAccessToken } from '@/modules/auth/tokens';
 import { seedAgent } from '@/modules/agent/agent.service';
 import { computeContentHash } from '@/modules/experiences/canonical';
+import { ProductError } from '@/http/errors';
 import { setAgentValidator } from '@/modules/agent/runtime-validation';
 
 export const SEED = { greeting_text: 'Chào bạn!', allowed_activity_profiles: ['riasec.mean.bounds.v2'] };
@@ -28,9 +29,12 @@ beforeAll(async () => {
   await seedAgent(getProductDatabase(), SEED);
 });
 afterAll(async () => { try { await closeProductDatabase(); } finally { await pg?.stop(); } });
-beforeEach(async () => {
+const stubBaseEnv = () => {
   vi.stubEnv('DATABASE_URL', pg.url);
   vi.stubEnv('SECRET_KEY', 'integration-test-secret');
+};
+beforeEach(async () => {
+  stubBaseEnv();
   admin = await issueAccessToken('admin', true);
 });
 
@@ -142,6 +146,21 @@ describe('agent releases', () => {
     expectDeclared(res.body, '/admin/agent/releases', 'post', 422);
   });
 
+  it('503s without side effects when the validator is unavailable', async () => {
+    const { draft, active } = await state();
+    await req('PUT', '/admin/agent/draft', { content: { ...SEED, greeting_text: `u${Date.now()}` }, expected_revision: draft.revision });
+    const fresh = (await state()).draft;
+    const count = (await req('GET', '/admin/agent/releases?limit=100')).body.data.items.length;
+    setAgentValidator(async () => { throw new ProductError(503, 'SYS_UNAVAILABLE', 'down', true, { kind: 'dependency_down' }); });
+    const res = await req('POST', '/admin/agent/releases', { expected_draft_revision: fresh.revision, expected_active_revision: active.revision, idempotency_key: 'publish-it-0007' });
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('SYS_UNAVAILABLE');
+    expect((await req('GET', '/admin/agent/releases?limit=100')).body.data.items.length).toBe(count);
+    const after = await state();
+    expect(after.draft).toEqual(fresh);
+    expect(after.active).toEqual(active);
+  });
+
   it('replays a publish after the draft changed without creating a release', async () => {
     const { draft, active } = await state();
     await req('PUT', '/admin/agent/draft', { content: { ...SEED, greeting_text: `r${Date.now()}` }, expected_revision: draft.revision });
@@ -181,17 +200,37 @@ async function runtimeToken(target: string) {
     .sign(new Uint8Array(DELIVERY_KEY));
 }
 
+const deliver = async (target: string) => dispatch(new Request(`http://localhost${target}`, {
+  headers: { 'x-internal-caller': 'sda-agent-runtime', 'x-caller-context': await runtimeToken(target) } }));
+
 describe('internal release delivery', () => {
   beforeEach(() => vi.stubEnv('PRODUCT_DELIVERY_VERIFY_KEY', DELIVERY_KEY.toString('base64')));
+  // Order independence: drop per-test stubs, then restore the file's base env.
+  afterEach(() => { vi.unstubAllEnvs(); stubBaseEnv(); });
 
   it('returns the active agent as a ReleaseDescriptor', async () => {
-    const target = '/api/v1/internal/releases/active?kind=agent&environment=demo';
-    const res = await dispatch(new Request(`http://localhost${target}`, {
-      headers: { 'x-internal-caller': 'sda-agent-runtime', 'x-caller-context': await runtimeToken(target) } }));
+    const res = await deliver('/api/v1/internal/releases/active?kind=agent&environment=demo');
     const body = await res.json();
     expect(res.status).toBe(200);
     expect(body.data).toMatchObject({ environment: 'demo', kind: 'agent', delivery_schema_version: 'agent.snapshot.v1', is_demo: true });
     expect(body.data.content_hash).toBe(computeContentHash(body.data.content));
+  });
+
+  it('is 503 when no verify key is configured', async () => {
+    vi.stubEnv('PRODUCT_DELIVERY_VERIFY_KEY', '');
+    const res = await deliver('/api/v1/internal/releases/active?kind=agent&environment=demo');
+    expect(res.status).toBe(503);
+    expect((await res.json()).error.code).toBe('SYS_UNAVAILABLE');
+  });
+
+  it('delivers only the configured environment', async () => {
+    const other = await deliver('/api/v1/internal/releases/active?kind=agent&environment=prod');
+    expect(other.status).toBe(422);
+    expect((await other.json()).error.code).toBe('VAL_INVALID_REQUEST');
+    vi.stubEnv('AGENT_DELIVERY_ENVIRONMENT', 'prod');
+    const configured = await deliver('/api/v1/internal/releases/active?kind=agent&environment=prod');
+    expect(configured.status).toBe(200);
+    expect((await configured.json()).data.environment).toBe('prod');
   });
 
   it('rejects an admin bearer token', async () => {

@@ -16,7 +16,8 @@ paths:
       operationId: internalReadActiveRelease
       summary: Active agent release descriptor for an environment
       description: |
-        Only kind=agent is delivered; any other kind or a malformed environment returns 422 VAL_INVALID_REQUEST.
+        Only kind=agent is delivered, and only for the environment configured by AGENT_DELIVERY_ENVIRONMENT (default demo);
+        any other kind or environment, or a malformed environment, returns 422 VAL_INVALID_REQUEST.
         No active release returns 422 RES_EXPERIENCE_NOT_CONFIGURED. Missing verification key configuration
         returns 503 SYS_UNAVAILABLE (details.kind not_configured). Bad or missing token returns 401
         AUTH_CALLER_CONTEXT_INVALID; a valid token with another purpose returns 403 AUTHZ_FORBIDDEN.
