@@ -11,4 +11,7 @@ export const queryKeys = {
   admin: {
     users: (page: number) => ['admin', 'users', page] as const,
   },
+  chat: {
+    conversation: (id: string) => ['chat', 'conversation', id] as const,
+  },
 };
