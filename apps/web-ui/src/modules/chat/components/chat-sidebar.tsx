@@ -56,7 +56,7 @@ export function ChatSidebar({
       {isMobileSidebarOpen && (
         <div
           onClick={onCloseMobileSidebar}
-          className="backdrop-blur-sm fixed inset-0 z-40 bg-black/40 md:hidden"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm md:hidden"
         />
       )}
 
@@ -65,7 +65,7 @@ export function ChatSidebar({
         className={`fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col rounded-3xl border border-slate-200/50 bg-slate-50 shadow-lg transition-all duration-300 dark:border-white/5 dark:bg-panel/80 md:static ${
           isMobileSidebarOpen
             ? 'm-4 w-[300px] translate-x-0 md:m-0'
-            : `-translate-x-full invisible md:visible md:translate-x-0 ${isDesktopSidebarOpen ? 'md:w-[300px]' : 'md:w-[60px]'}`
+            : `invisible -translate-x-full md:visible md:translate-x-0 ${isDesktopSidebarOpen ? 'md:w-[300px]' : 'md:w-[60px]'}`
         }`}
       >
         {!isExpanded ? (
@@ -74,7 +74,7 @@ export function ChatSidebar({
             <button
               type="button"
               onClick={onToggleDesktopSidebar}
-              className="cursor-pointer rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-200/50 hover:text-emerald-600 dark:text-fog dark:hover:bg-white/5 dark:hover:text-emerald-400"
+              className="cursor-pointer rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-200/50 hover:text-[#4963a8] dark:text-fog dark:hover:bg-white/5 dark:hover:text-[#7c9bff]"
               title="Mở sidebar"
             >
               <ChevronsRight className="h-5 w-5" />
@@ -96,7 +96,7 @@ export function ChatSidebar({
               type="button"
               disabled={disabled}
               onClick={onNewChat}
-              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-emerald-600/30 text-emerald-600 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400 dark:hover:bg-emerald-600/10"
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-[#4963a8]/30 text-[#4963a8] transition-colors hover:bg-[#4963a8]/10 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#4963a8]/60 dark:text-[#7c9bff] dark:hover:bg-[#4963a8]/20"
               title="Cuộc trò chuyện mới"
             >
               <Plus className="h-5 w-5" />
@@ -111,7 +111,7 @@ export function ChatSidebar({
                       key={item.id}
                       className={`flex h-9 w-9 items-center justify-center rounded-xl ${
                         active
-                          ? 'bg-slate-200 text-emerald-600 dark:bg-edge/80 dark:text-emerald-400'
+                          ? 'bg-[#4963a8]/15 text-[#4963a8] dark:bg-[#4963a8]/25 dark:text-[#7c9bff]'
                           : 'text-slate-500 dark:text-fog'
                       }`}
                       title={item.title}
@@ -129,7 +129,7 @@ export function ChatSidebar({
                     onClick={() => onSelectChat(item.id)}
                     className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                       active
-                        ? 'bg-slate-200 text-emerald-600 dark:bg-edge/80 dark:text-emerald-400'
+                        ? 'bg-[#4963a8]/15 text-[#4963a8] dark:bg-[#4963a8]/25 dark:text-[#7c9bff]'
                         : 'text-slate-500 hover:bg-slate-200 dark:text-fog dark:hover:bg-edge/40'
                     }`}
                     title={item.title}
@@ -187,7 +187,7 @@ export function ChatSidebar({
                 type="button"
                 disabled={disabled}
                 onClick={onNewChat}
-                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-emerald-600/30 py-2.5 text-sm font-semibold text-emerald-600 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-600/80 dark:text-emerald-400 dark:hover:bg-emerald-600/10"
+                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#4963a8]/30 py-2.5 text-sm font-semibold text-[#4963a8] transition-colors hover:bg-[#4963a8]/10 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#4963a8]/70 dark:text-[#7c9bff] dark:hover:bg-[#4963a8]/20"
               >
                 <Plus className="h-4 w-4" /> Cuộc trò chuyện mới
               </button>
@@ -219,7 +219,7 @@ export function ChatSidebar({
                     key={item.id}
                     className={`group/item flex items-center justify-between rounded-xl border px-3 py-2.5 transition-all ${
                       active
-                        ? 'shadow-sm border-slate-200 bg-slate-100 text-slate-900 dark:border-line dark:bg-edge/80 dark:text-white'
+                        ? 'border-[#4963a8]/30 bg-[#4963a8]/5 text-slate-900 shadow-sm dark:border-[#4963a8]/40 dark:bg-[#4963a8]/15 dark:text-white'
                         : 'border-transparent text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-edge/40'
                     }`}
                   >
@@ -233,7 +233,7 @@ export function ChatSidebar({
                         <MessageSquare
                           className={`mt-0.5 h-4 w-4 shrink-0 ${
                             active
-                              ? 'text-emerald-600 dark:text-emerald-400'
+                              ? 'text-[#4963a8] dark:text-[#7c9bff]'
                               : 'text-slate-400 dark:text-fog/50'
                           }`}
                         />
@@ -249,7 +249,7 @@ export function ChatSidebar({
                         <MessageSquare
                           className={`mt-0.5 h-4 w-4 shrink-0 ${
                             active
-                              ? 'text-emerald-600 dark:text-emerald-400'
+                              ? 'text-[#4963a8] dark:text-[#7c9bff]'
                               : 'text-slate-400 dark:text-fog/50'
                           }`}
                         />
@@ -270,7 +270,7 @@ export function ChatSidebar({
                           e.stopPropagation();
                           onDeleteChat(item.id);
                         }}
-                        className="ml-1 shrink-0 cursor-pointer rounded-lg p-1 text-slate-400 opacity-0 transition-all hover:bg-slate-200 hover:text-rose-500 group-hover/item:opacity-100 disabled:invisible dark:text-fog/50 dark:hover:bg-edge dark:hover:text-rose-400"
+                        className="ml-1 shrink-0 cursor-pointer rounded-lg p-1 text-slate-400 opacity-0 transition-all hover:bg-slate-200 hover:text-rose-500 disabled:invisible group-hover/item:opacity-100 dark:text-fog/50 dark:hover:bg-edge dark:hover:text-rose-400"
                         title="Xóa cuộc trò chuyện"
                       >
                         <X className="h-3.5 w-3.5" />

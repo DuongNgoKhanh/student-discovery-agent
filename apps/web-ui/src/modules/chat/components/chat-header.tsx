@@ -80,7 +80,7 @@ export function ChatHeader({
         <div>
           <h1 className="text-sm font-semibold text-slate-900 dark:text-white">{title}</h1>
           <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-fog/60">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 dark:bg-emerald-400" />{' '}
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#4963a8] dark:bg-[#7c9bff]" />{' '}
             {subtitle}
           </div>
         </div>
@@ -99,7 +99,7 @@ export function ChatHeader({
         <button
           type="button"
           disabled
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors opacity-40 cursor-not-allowed dark:border-line dark:text-fog"
+          className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-xl border border-slate-200 text-slate-500 opacity-40 transition-colors dark:border-line dark:text-fog"
           aria-label="Tùy chọn khác"
           title="Tùy chọn khác (chưa khả dụng)"
         >

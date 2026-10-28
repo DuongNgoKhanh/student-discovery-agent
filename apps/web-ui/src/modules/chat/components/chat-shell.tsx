@@ -83,10 +83,7 @@ export function ChatShell() {
   const handleCreated = useCallback(
     (created: CreatedConversation) => {
       const newId = created.conversation.id;
-      queryClient.setQueryData(
-        queryKeys.chat.conversation(newId),
-        created.conversation,
-      );
+      queryClient.setQueryData(queryKeys.chat.conversation(newId), created.conversation);
       setConversationId(newId);
       setEntriesByConversation((prev) => ({
         ...prev,
@@ -265,13 +262,13 @@ export function ChatShell() {
       .map((e) =>
         e.block && e.block.kind === 'known' && e.block.block.type === 'text'
           ? e.block.block.content
-          : e.text ?? '',
+          : (e.text ?? ''),
       )
       .filter(Boolean)
       .join('\n\n') || GREETING_TEXT;
 
   return (
-    <div className="relative flex h-dvh w-full gap-3 overflow-hidden bg-gray-bg p-3 font-sans text-slate-800 antialiased transition-colors duration-300 selection:bg-emerald-500/20 selection:text-slate-900 dark:selection:text-white dark:bg-ink dark:text-gray-100 md:gap-4 md:p-4">
+    <div className="relative flex h-dvh w-full gap-3 overflow-hidden bg-gray-bg p-3 font-sans text-slate-800 antialiased transition-colors duration-300 selection:bg-[#4963a8]/20 selection:text-slate-900 dark:bg-ink dark:text-gray-100 dark:selection:bg-[#7c9bff]/30 dark:selection:text-white md:gap-4 md:p-4">
       <ChatSidebar
         threads={threads}
         activeThreadId={conversationId ?? 'new'}
@@ -310,7 +307,7 @@ export function ChatShell() {
           )}
 
           {activity?.is_demo && (
-            <div className="mx-auto w-full max-w-2xl md:max-w-3xl animate-in fade-in duration-300">
+            <div className="mx-auto w-full max-w-2xl duration-300 animate-in fade-in md:max-w-3xl">
               <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
                 {DEMO_NOTICE_TEXT}
               </p>
@@ -334,12 +331,12 @@ export function ChatShell() {
             </div>
           ) : isInitial ? (
             <div className="mx-auto flex h-full min-h-[460px] w-full max-w-2xl flex-1 flex-col items-center justify-center py-10 text-center transition-all duration-300 ease-out">
-              <h2 className="mb-8 max-w-lg text-2xl font-medium tracking-tight text-slate-800 dark:text-slate-100 sm:text-3xl animate-in fade-in duration-500 whitespace-pre-wrap">
+              <h2 className="mb-8 max-w-lg whitespace-pre-wrap text-2xl font-medium tracking-tight text-slate-800 duration-500 animate-in fade-in dark:text-slate-100 sm:text-3xl">
                 {initialBotText}
               </h2>
 
               {turns.isPending && (
-                <p role="status" className="mb-3 text-xs text-muted-foreground animate-pulse">
+                <p role="status" className="mb-3 animate-pulse text-xs text-muted-foreground">
                   Đang gửi...
                 </p>
               )}
@@ -365,7 +362,7 @@ export function ChatShell() {
               </div>
             </div>
           ) : (
-            <div className="mx-auto w-full max-w-2xl md:max-w-3xl animate-in fade-in duration-300">
+            <div className="mx-auto w-full max-w-2xl duration-300 animate-in fade-in md:max-w-3xl">
               <ol aria-label="Hội thoại" className="flex flex-col gap-6">
                 {entries.map((entry, index) => {
                   const isConsecutiveBot =
@@ -390,7 +387,7 @@ export function ChatShell() {
                 })}
 
                 {turns.isPending && (
-                  <li className="w-full animate-message-pop animation-delay-150">
+                  <li className="animation-delay-150 w-full animate-message-pop">
                     <div className="flex w-full items-start justify-start gap-3">
                       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                         <Image
@@ -403,10 +400,20 @@ export function ChatShell() {
                       </div>
                       <div
                         role="status"
-                        className="flex items-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800">
-                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                        className="flex items-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800"
+                      >
+                        <span
+                          className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"
+                          style={{ animationDelay: '0ms' }}
+                        />
+                        <span
+                          className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"
+                          style={{ animationDelay: '150ms' }}
+                        />
+                        <span
+                          className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"
+                          style={{ animationDelay: '300ms' }}
+                        />
                         <span className="sr-only">Đang gửi...</span>
                       </div>
                     </div>
@@ -418,7 +425,7 @@ export function ChatShell() {
         </div>
 
         {!isInitial && (
-          <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur-md dark:border-white/5 dark:bg-panel/90 md:px-8 lg:px-10 animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out fill-mode-both">
+          <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur-md duration-300 ease-out animate-in fade-in slide-in-from-bottom-4 fill-mode-both dark:border-white/5 dark:bg-panel/90 md:px-8 lg:px-10">
             <div className="mx-auto max-w-2xl md:max-w-3xl">
               {turnError && (
                 <div className="mb-2">

@@ -40,9 +40,7 @@ export function ChatMessageItem({
 
   const textToCopy =
     text ||
-    (block && block.kind === 'known' && block.block.type === 'text'
-      ? block.block.content
-      : '');
+    (block && block.kind === 'known' && block.block.type === 'text' ? block.block.content : '');
 
   const hasActions = !isUser && Boolean(textToCopy);
 
@@ -65,8 +63,10 @@ export function ChatMessageItem({
 
   if (isUser) {
     return (
-      <div className={cn('flex w-full items-start justify-end gap-3 animate-message-pop', className)}>
-        <div className="max-w-[85%] rounded-2xl border border-slate-200/90 bg-white px-5 py-3.5 text-sm leading-relaxed text-slate-800 shadow-sm dark:border-slate-700/60 dark:bg-slate-800 dark:text-slate-100 sm:max-w-xl whitespace-pre-wrap break-words">
+      <div
+        className={cn('flex w-full animate-message-pop items-start justify-end gap-3', className)}
+      >
+        <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl border border-slate-200/90 bg-white px-5 py-3.5 text-sm leading-relaxed text-slate-800 shadow-sm dark:border-slate-700/60 dark:bg-slate-800 dark:text-slate-100 sm:max-w-xl">
           {text}
         </div>
         <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-slate-200/80 bg-slate-100 shadow-sm dark:border-slate-700">
@@ -83,7 +83,9 @@ export function ChatMessageItem({
   }
 
   return (
-    <div className={cn('flex w-full items-start justify-start gap-3 animate-message-pop', className)}>
+    <div
+      className={cn('flex w-full animate-message-pop items-start justify-start gap-3', className)}
+    >
       {showAvatar ? (
         <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <Image
@@ -99,7 +101,11 @@ export function ChatMessageItem({
       )}
       <div className="min-w-0 flex-1 pt-0.5">
         <div className="text-sm leading-relaxed text-slate-800 dark:text-slate-100">
-          {block ? <BlockRenderer block={block} /> : <p className="whitespace-pre-wrap break-words">{text}</p>}
+          {block ? (
+            <BlockRenderer block={block} />
+          ) : (
+            <p className="whitespace-pre-wrap break-words">{text}</p>
+          )}
         </div>
 
         {hasActions && (
@@ -107,7 +113,7 @@ export function ChatMessageItem({
             <button
               type="button"
               onClick={handleCopy}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-slate-100 hover:text-slate-600 transition-colors dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
               title={
                 copyStatus === 'copied'
                   ? 'Đã sao chép'
@@ -124,7 +130,7 @@ export function ChatMessageItem({
               }
             >
               {copyStatus === 'copied' ? (
-                <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <Check className="h-3.5 w-3.5 text-[#4963a8] dark:text-[#7c9bff]" />
               ) : copyStatus === 'failed' ? (
                 <X className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
               ) : (
@@ -137,7 +143,7 @@ export function ChatMessageItem({
               aria-pressed={reaction === 'up'}
               className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                 reaction === 'up'
-                  ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+                  ? 'bg-[#4963a8]/10 text-[#4963a8] dark:bg-[#4963a8]/25 dark:text-[#7c9bff]'
                   : 'hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200'
               }`}
               title="Hài lòng"
