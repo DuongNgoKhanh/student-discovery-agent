@@ -8,6 +8,9 @@ const ACCESS = process.env.AUTH_COOKIE_ACCESS ?? 'sda_access';
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  // Service-to-service routes stay off the public origin even when rewrites proxy /api/* (gateway does the same).
+  if (pathname.startsWith('/api/v1/internal/')) return new NextResponse(null, { status: 404 });
+  if (pathname.startsWith('/api/')) return NextResponse.next();
   const token = req.cookies.get(ACCESS)?.value;
   const payload = token ? decodeJwt(token) : null;
   const authed = !!payload?.sub && !isExpired(payload);
@@ -46,5 +49,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/admin/:path*', '/api/v1/internal/:path*'],
 };

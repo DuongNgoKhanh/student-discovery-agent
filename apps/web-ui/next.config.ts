@@ -1,16 +1,12 @@
 import type { NextConfig } from 'next';
+import { apiProxyRewrites } from './src/config/api-proxy';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
-  // Local development transport only. Production routes UI/API through the gateway.
+  // Development and gateway-less hosts (API_PROXY_ORIGIN); otherwise the gateway routes UI/API.
   async rewrites() {
-    if (process.env.NODE_ENV !== 'development') return [];
-    const api = (process.env.STUDIO_API_ORIGIN ?? 'http://127.0.0.1:3001').replace(/\/$/, '');
-    return [
-      { source: '/api/:path*', destination: `${api}/api/:path*` },
-      { source: '/download', destination: `${api}/download` },
-    ];
+    return apiProxyRewrites(process.env);
   },
 };
 
