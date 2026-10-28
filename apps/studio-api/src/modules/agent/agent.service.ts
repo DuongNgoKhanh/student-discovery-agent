@@ -58,19 +58,27 @@ export async function validateDraft(db: ProductDatabase, ctx: RequestContext): P
 export interface ServiceResult<T> { status: number; data: T; replayed?: boolean }
 export type AgentReleaseDTO = ReturnType<typeof toReleaseDTO>;
 
+function replayOf<T>(existing: { request_hash: string; response_status: number; response_body: unknown } | undefined, requestHash: string): ServiceResult<T> | undefined {
+  if (!existing) return undefined;
+  if (existing.request_hash !== requestHash) {
+    throw new ProductError(409, 'CONFLICT_IDEMPOTENCY_KEY', 'Idempotency key reused with different request payload');
+  }
+  return { status: existing.response_status, data: existing.response_body as T, replayed: true };
+}
+
+/** Unlocked early lookup so a retry replays the stored result regardless of current state. */
+async function earlyReplay<T>(db: ProductDatabase, scope: string, key: string, payload: unknown): Promise<ServiceResult<T> | undefined> {
+  return replayOf<T>(await repo.findIdempotencyRecordForAgent(db, scope, key), computeContentHash(payload));
+}
+
 async function idempotent<T>(
   db: ProductDatabase, scope: string, key: string, payload: unknown, status: number,
   work: (tx: repo.ProductExecutorLike) => Promise<T>,
 ): Promise<ServiceResult<T>> {
   const requestHash = computeContentHash(payload);
   return repo.withAgentLock(db, scope, key, async tx => {
-    const existing = await repo.findIdempotencyRecordForAgent(tx, scope, key);
-    if (existing) {
-      if (existing.request_hash !== requestHash) {
-        throw new ProductError(409, 'CONFLICT_IDEMPOTENCY_KEY', 'Idempotency key reused with different request payload');
-      }
-      return { status: existing.response_status, data: existing.response_body as T, replayed: true };
-    }
+    const replay = replayOf<T>(await repo.findIdempotencyRecordForAgent(tx, scope, key), requestHash);
+    if (replay) return replay;
     const data = await work(tx);
     await repo.saveIdempotencyRecordForAgent(tx, {
       scope, key, request_hash: requestHash, response_status: status, response_body: data as unknown as Record<string, unknown>,
@@ -96,6 +104,8 @@ async function lockedPointer(tx: repo.ProductExecutorLike, expected: number) {
 export async function publish(
   db: ProductDatabase, input: PublishInput, actor: string, ctx: RequestContext,
 ): Promise<ServiceResult<AgentReleaseDTO>> {
+  const replay = await earlyReplay<AgentReleaseDTO>(db, 'agent:publish', input.idempotency_key, input);
+  if (replay) return replay;
   const draft = await repo.getDraft(db);
   if (!draft) throw new ProductError(404, 'RES_NOT_FOUND', 'Agent draft not found');
   if (draft.revision !== input.expected_draft_revision) {
@@ -108,7 +118,7 @@ export async function publish(
   return idempotent(db, 'agent:publish', input.idempotency_key, input, 201, async tx => {
     const pointer = await lockedPointer(tx, input.expected_active_revision);
     const current = await repo.getDraft(tx);
-    if (!current || current.content_hash !== draft.content_hash) {
+    if (!current || current.revision !== input.expected_draft_revision || current.content_hash !== draft.content_hash) {
       throw new ProductError(409, 'CONFLICT_REVISION', 'Agent draft changed during publish', false, { kind: 'revision_conflict' });
     }
     const before = await repo.findRelease(tx, pointer.release_id);
@@ -132,11 +142,14 @@ export async function publish(
 export async function restore(
   db: ProductDatabase, releaseId: string, input: RestoreInput, actor: string, ctx: RequestContext,
 ): Promise<ServiceResult<AgentActiveDTO>> {
+  const payload = { ...input, release_id: releaseId };
+  const replay = await earlyReplay<AgentActiveDTO>(db, 'agent:restore', input.idempotency_key, payload);
+  if (replay) return replay;
   const target = await repo.findRelease(db, releaseId);
   if (!target) throw new ProductError(404, 'RES_NOT_FOUND', 'Agent release not found');
   const report = await getAgentValidator()(target.content, ctx);
   if (!report.valid) throw gateFailed(report.issues);
-  return idempotent(db, `agent:restore:${releaseId}`, input.idempotency_key, input, 200, async tx => {
+  return idempotent(db, 'agent:restore', input.idempotency_key, payload, 200, async tx => {
     const pointer = await lockedPointer(tx, input.expected_active_revision);
     if (pointer.release_id === releaseId) {
       throw new ProductError(409, 'CONFLICT_INVALID_STATE', 'Release is already active', false, { kind: 'no_changes' });

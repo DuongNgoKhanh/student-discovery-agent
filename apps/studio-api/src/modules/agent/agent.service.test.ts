@@ -87,6 +87,15 @@ describe('publish', () => {
       .rejects.toMatchObject({ status: 409, code: 'CONFLICT_REVISION' });
   });
 
+});
+
+describe('restore', () => {
+  beforeEach(() => {
+    vi.mocked(repo.findIdempotencyRecordForAgent).mockResolvedValue(undefined);
+    vi.mocked(repo.withAgentLock).mockImplementation((_db, _scope, _key, work) => work(db as never));
+    setAgentValidator(async () => ({ valid: true, content_hash: 'h', issues: [] }));
+  });
+
   it('restores an older release after re-validating it', async () => {
     vi.mocked(repo.findRelease).mockImplementation(async (_db, id) => (id === 'agr_1' ? release('agr_1', 1, { greeting_text: 'a' }) : release('agr_2', 2, { greeting_text: 'b' })));
     vi.mocked(repo.lockActive).mockResolvedValue(active('agr_2', 2));
@@ -94,5 +103,16 @@ describe('publish', () => {
     const res = await restore(db, 'agr_1', { expected_active_revision: 2, idempotency_key: 'restore-0001' }, 'admin', ctx);
     expect(res.data).toMatchObject({ release_id: 'agr_1', version: 1, revision: 3 });
     expect(repo.insertAudit).toHaveBeenCalledWith(db, expect.objectContaining({ action: 'agent.release.restore', before_ref: 'agr_2', after_ref: 'agr_1' }));
+  });
+
+  it('replays a stored result without touching state, and rejects a reused key for another release', async () => {
+    const stored = { request_hash: computeContentHash({ expected_active_revision: 2, idempotency_key: 'restore-0002', release_id: 'agr_1' }),
+      response_status: 200, response_body: { release_id: 'agr_1' } };
+    vi.mocked(repo.findIdempotencyRecordForAgent).mockResolvedValue(stored as never);
+    const res = await restore(db, 'agr_1', { expected_active_revision: 2, idempotency_key: 'restore-0002' }, 'admin', ctx);
+    expect(res).toMatchObject({ status: 200, replayed: true, data: { release_id: 'agr_1' } });
+    expect(repo.findRelease).not.toHaveBeenCalled();
+    await expect(restore(db, 'agr_2', { expected_active_revision: 2, idempotency_key: 'restore-0002' }, 'admin', ctx))
+      .rejects.toMatchObject({ status: 409, code: 'CONFLICT_IDEMPOTENCY_KEY' });
   });
 });

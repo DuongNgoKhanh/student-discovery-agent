@@ -126,4 +126,32 @@ describe('agent releases', () => {
     expect(res.status).toBe(422);
     expect(res.body.error.details.issues[0].path).toBe('model.ref');
   });
+
+  it('replays a publish after the draft changed without creating a release', async () => {
+    const { draft, active } = await state();
+    await req('PUT', '/admin/agent/draft', { content: { ...SEED, greeting_text: `r${Date.now()}` }, expected_revision: draft.revision });
+    const fresh = (await state()).draft;
+    const body = { expected_draft_revision: fresh.revision, expected_active_revision: active.revision, idempotency_key: 'publish-it-0006' };
+    const first = await req('POST', '/admin/agent/releases', body);
+    expect(first.status).toBe(201);
+    const count = (await req('GET', '/admin/agent/releases?limit=100')).body.data.items.length;
+    await req('PUT', '/admin/agent/draft', { content: { ...SEED, greeting_text: `s${Date.now()}` }, expected_revision: fresh.revision });
+    const again = await req('POST', '/admin/agent/releases', body);
+    expect(again.status).toBe(201);
+    expect(again.body.data.id).toBe(first.body.data.id);
+    expect((await req('GET', '/admin/agent/releases?limit=100')).body.data.items.length).toBe(count);
+  });
+
+  it('409s when restoring the already-active release and when a restore key is reused for another release', async () => {
+    const { active } = await state();
+    const items = (await req('GET', '/admin/agent/releases?limit=100')).body.data.items;
+    const other = items.find((r: { id: string }) => r.id !== active.release_id);
+    const same = await req('POST', `/admin/agent/releases/${active.release_id}:restore`, { expected_active_revision: active.revision, idempotency_key: 'restore-it-0002' });
+    expect(same.status).toBe(409);
+    expect(same.body.error.details.kind).toBe('no_changes');
+    const done = await req('POST', `/admin/agent/releases/${other.id}:restore`, { expected_active_revision: active.revision, idempotency_key: 'restore-it-0003' });
+    expect(done.status).toBe(200);
+    const clash = await req('POST', `/admin/agent/releases/${active.release_id}:restore`, { expected_active_revision: active.revision, idempotency_key: 'restore-it-0003' });
+    expect(clash.body.error.code).toBe('CONFLICT_IDEMPOTENCY_KEY');
+  });
 });
