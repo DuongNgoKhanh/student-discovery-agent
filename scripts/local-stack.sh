@@ -50,6 +50,7 @@ later = {
     'SDA_LOCAL_STUDIO_RUNTIME_KEY': key32,
     'SDA_LOCAL_RUNTIME_INTERNAL_KEY': key32,
     'SDA_LOCAL_RUNTIME_CURSOR_KEY': key32,
+    'SDA_LOCAL_RUNTIME_PRODUCT_KEY': key32,
 }
 present = {line.split('=', 1)[0] for line in path.read_text().splitlines() if '=' in line}
 missing = {key: make() for key, make in later.items() if key not in present}
@@ -82,6 +83,7 @@ case "${1:-help}" in
     if [[ "${2:-}" != --no-build ]]; then build_stack; fi
     compose up -d --no-build --wait --wait-timeout 60 db minio
     compose --profile tools run --rm --no-deps studio-api-migrate
+    compose --profile tools run --rm --no-deps studio-api-seed-agent
     compose --profile tools run --rm --no-deps minio-init
     compose --profile tools run --rm --no-deps runtime-provision
     compose up -d --no-build --wait --wait-timeout 60

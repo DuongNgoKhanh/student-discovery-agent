@@ -72,9 +72,24 @@ Revision kẹt ở `indexing` do indexer bị dừng giữa chừng tự đượ
 
 ## Chat học sinh
 
-`http://localhost:3000/chat` gọi thật qua BFF studio-api (`/api/v1/conversations*`, `/api/v1/responses/{id}`); UI được build với `NEXT_PUBLIC_CHAT_MOCK=false`. Lần tạo hội thoại đầu tiên cấp cookie ẩn danh `sda_owner` (HttpOnly, `Path=/api/v1`); studio-api ký `X-Caller-Context` cho học sinh bằng `SDA_LOCAL_RUNTIME_INTERNAL_KEY` rồi chuyển sang runtime. Runtime đọc release từ `infra/local-releases` (mount read-only); sửa file trong đó rồi `docker compose ... restart agent-runtime` để áp dụng cho hội thoại mới. Model dùng `GOOGLE_API_KEY` và proxy như phần Knowledge Base.
+`http://localhost:3000/chat` gọi thật qua BFF studio-api (`/api/v1/conversations*`, `/api/v1/responses/{id}`); UI được build với `NEXT_PUBLIC_CHAT_MOCK=false`. Lần tạo hội thoại đầu tiên cấp cookie ẩn danh `sda_owner` (HttpOnly, `Path=/api/v1`); studio-api ký `X-Caller-Context` cho học sinh bằng `SDA_LOCAL_RUNTIME_INTERNAL_KEY` rồi chuyển sang runtime. Agent không còn đọc từ `infra/local-releases/agent.json`: runtime lấy release agent đang active từ studio-api (xem mục "Cấu hình agent"). Bộ đánh giá vẫn đọc `infra/local-releases/experiences/` (mount read-only); sửa file trong đó rồi `docker compose ... restart agent-runtime` để áp dụng. Model dùng `GOOGLE_API_KEY` và proxy như phần Knowledge Base.
 
 Giới hạn hiện tại: UI chỉ dùng JSON (chưa stream SSE); sửa đáp án (`edit_answer`) và xác nhận làm rõ chưa được runtime hỗ trợ ở profile adaptive.
+
+## Cấu hình agent
+
+- Agent (lời chào, prompt, model...) được quản lý trong Studio qua `/api/v1/admin/agent/...` (draft, validate, publish, restore, audit). Runtime đọc release đang active từ studio-api (`RUNTIME_AGENT_RELEASE_SOURCE=product`, `RUNTIME_PRODUCT_URL=http://studio-api:3001`); hội thoại mới dùng release mới nhất, hội thoại cũ giữ release đã ghim.
+- `bash scripts/local-stack.sh up` chạy `studio-api-seed-agent` (profile `tools`): nạp draft/v1/pointer từ `infra/local-releases/agent.json` chỉ khi chưa có release agent nào.
+- Khoá `SDA_LOCAL_RUNTIME_PRODUCT_KEY` (tự sinh bởi `init`, base64 32 byte) ký yêu cầu runtime -> studio-api; phải khác mọi khoá runtime khác. Phía studio-api là `PRODUCT_DELIVERY_VERIFY_KEY`.
+- `/api/v1/internal/` bị gateway (nginx) trả 404; chỉ runtime gọi được qua mạng compose.
+- Khi migration 0002 (hoặc baseline) thay đổi, tạo lại DB sản phẩm (không đụng `sda_runtime`):
+
+```bash
+C="docker compose --project-name sda-full-local --env-file .local-docker/.env -f docker-compose.full-local.yaml"
+$C up -d --wait db
+$C exec db psql -U sda_local -d postgres -c "DROP DATABASE IF EXISTS sda_local WITH (FORCE)" -c "CREATE DATABASE sda_local OWNER sda_local"
+bash scripts/local-stack.sh up
+```
 
 ## Test tự động qua gateway
 

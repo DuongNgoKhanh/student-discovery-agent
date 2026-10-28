@@ -47,6 +47,9 @@ services:
       # Student chat BFF: signs caller context with the runtime's RUNTIME_INTERNAL_KEYRING key `local`.
       PRODUCT_RUNTIME_SIGNING_KEY: ${SDA_LOCAL_RUNTIME_INTERNAL_KEY:?Run scripts/local-stack.sh init}
       PRODUCT_RUNTIME_SIGNING_KID: local
+      # Runtime -> studio-api agent delivery (verify side of SDA_LOCAL_RUNTIME_PRODUCT_KEY).
+      PRODUCT_DELIVERY_VERIFY_KEY: ${SDA_LOCAL_RUNTIME_PRODUCT_KEY:?Run scripts/local-stack.sh init}
+      PRODUCT_DELIVERY_VERIFY_KID: runtime
 
   agent-runtime:
     extends:
@@ -67,7 +70,12 @@ services:
       # OpenAI-compatible vLLM / LiteLLM proxy: chat provider `vllm` and the vLLM embedding models.
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       VLLM_BASE_URL: ${VLLM_BASE_URL:-}
-      # Local releases (agent.json, experiences/) instead of Product.
+      # The agent comes from studio-api (signed pull); experiences/ still come from the local releases dir.
+      RUNTIME_AGENT_RELEASE_SOURCE: product
+      RUNTIME_PRODUCT_URL: http://studio-api:3001
+      RUNTIME_PRODUCT_SIGNING_KEY: ${SDA_LOCAL_RUNTIME_PRODUCT_KEY:?Run scripts/local-stack.sh init}
+      RUNTIME_PRODUCT_SIGNING_KID: runtime
+      # Local releases (experiences/) instead of Product.
       RUNTIME_LOCAL_RELEASES_DIR: /releases
       # Outbound proxy for provider calls when the host has no direct route (empty = direct).
       PROXY_HOST: ${SDA_LOCAL_PROXY_HOST:-}
@@ -136,6 +144,20 @@ services:
     image: sda-full-local-studio-api-migrate:local
     environment:
       DATABASE_URL: postgresql://sda_local:${SDA_LOCAL_DB_PASSWORD:?Run scripts/local-stack.sh init}@db:5432/sda_local
+
+  # One-shot (profile tools): seed the agent draft/v1/pointer from infra/local-releases/agent.json when empty.
+  studio-api-seed-agent:
+    extends:
+      file: docker-compose.yaml
+      service: studio-api-migrate
+    image: sda-full-local-studio-api-migrate:local
+    profiles: ["tools"]
+    command: ["pnpm", "db:seed-agent", "/seed/agent.json"]
+    volumes:
+      - ./infra/local-releases/agent.json:/seed/agent.json:ro
+    environment:
+      DATABASE_URL: postgresql://sda_local:${SDA_LOCAL_DB_PASSWORD:?Run scripts/local-stack.sh init}@db:5432/sda_local
+      SECRET_KEY: ${SDA_LOCAL_SECRET_KEY:?Run scripts/local-stack.sh init}
 
   minio-init:
     extends:
