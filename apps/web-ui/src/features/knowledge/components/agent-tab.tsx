@@ -1,37 +1,43 @@
 'use client';
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { AlertTriangle } from 'lucide-react';
 import { useAgentParams } from '../hooks/use-knowledge';
+import type { AgentParams } from '../types';
 import { ErrorText } from './error-text';
+import { JsonCode } from './json-code';
+import { CopyButton } from './shared/copy-button';
+
+const TOOLS = ['knowledge.search', 'knowledge.show'] as const satisfies readonly (keyof AgentParams)[];
 
 export function AgentTab({ kb }: { kb: string }) {
   const { data, error } = useAgentParams(kb);
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
   // `warnings` explains adjustments for the admin; agent.json only takes the two param objects.
   const { warnings = [], ...params } = data ?? {};
   const json = data ? JSON.stringify(params, null, 2) : '';
-  const copy = () => {
-    const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard;
-    if (!clipboard) { setCopyFailed(true); return; }
-    clipboard.writeText(json).then(() => { setCopied(true); setCopyFailed(false); }, () => setCopyFailed(true));
-  };
   return (
-    <div className="space-y-3 text-sm">
-      <p>
-        Dán params dưới đây vào <code>prototypes/agent-chat/releases/agent.json</code>: <code>knowledge.search</code> và{' '}
-        <code>knowledge.show</code> trong mảng <code>tools</code>. Chỉ hội thoại mới thấy thay đổi.
-      </p>
+    <div className="space-y-4 text-sm">
+      <ol className="list-inside list-decimal space-y-1 text-13">
+        <li>Mở <code className="font-mono">prototypes/agent-chat/releases/agent.json</code>.</li>
+        <li>Thay params của <code className="font-mono">knowledge.search</code> và <code className="font-mono">knowledge.show</code> trong mảng <code className="font-mono">tools</code>.</li>
+        <li>Mở hội thoại mới để thấy thay đổi.</li>
+      </ol>
       <ErrorText error={error} />
       {warnings.length > 0 && (
-        <ul role="status" className="list-disc space-y-1 rounded-md bg-amber-50 p-3 pl-6 text-amber-800">
-          {warnings.map(warning => <li key={warning}>{warning}</li>)}
-        </ul>
+        <div role="status" className="flex gap-2 rounded-xl bg-warning-subtle px-4 py-3 text-13 text-warning-foreground">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <ul className="space-y-1">{warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>
+        </div>
       )}
-      <pre className="overflow-auto rounded-md bg-gray-50 p-3 text-xs">{json}</pre>
-      <Button disabled={!data} onClick={copy}>{copied ? 'Đã copy' : 'Copy'}</Button>
-      {copyFailed && <p role="alert" className="text-red-600">Không copy được, hãy chọn và copy thủ công.</p>}
+      {data && TOOLS.map(tool => (
+        <div key={tool} className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-13 font-medium">{tool}</span>
+            <CopyButton value={JSON.stringify(data[tool], null, 2)} iconOnly variant="ghost" label={`Copy ${tool}`} className="h-8 w-8" />
+          </div>
+          <JsonCode value={data[tool]} />
+        </div>
+      ))}
+      <CopyButton value={json} disabled={!data} variant="default" label="Copy cả hai" />
     </div>
   );
 }
