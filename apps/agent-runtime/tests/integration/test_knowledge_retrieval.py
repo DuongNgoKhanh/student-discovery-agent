@@ -194,3 +194,10 @@ def test_fields_are_read_for_several_knowledge_bases_at_once(rig):
     fields = rig.knowledge.fields(["kb1", "missing"])
     assert [field.name for field in fields["kb1"]] == ["houses", "province"]
     assert "missing" not in fields and rig.knowledge.fields([]) == {}
+
+
+def test_base_fields_lists_existing_bases_even_without_fields(rig):
+    rig.writer.create_knowledge_base("empty", "Empty", rig.embedding.model)
+    found = rig.knowledge.base_fields(["kb1", "empty", "missing"])
+    assert found == {"kb1": frozenset({"houses", "province"}), "empty": frozenset()}
+    assert rig.knowledge.base_fields([]) == {}

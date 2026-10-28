@@ -53,8 +53,8 @@ def test_seed_config_is_valid_and_hash_matches():
 @pytest.mark.parametrize("patch,path,code", [
     (lambda c: c.pop("greeting_text"), "greeting_text", "missing"),
     (lambda c: c["model"].update(temperature=5), "model.temperature", "less_than_equal"),
-    (lambda c: c["persona"].update(system_prompt="Chào {{ten}}"), "persona.system_prompt", "value_error"),
-    (lambda c: c["tools"].append({"name": "web.browse", "version": 1}), f"tools[{len(SEED['tools'])}]", "value_error"),
+    (lambda c: c["persona"].update(system_prompt="Chào {{ten}}"), "persona.system_prompt", "unknown_placeholder"),
+    (lambda c: c["tools"].append({"name": "web.browse", "version": 1}), f"tools[{len(SEED['tools'])}]", "tool_not_declared"),
 ])
 def test_schema_problems_map_to_field_paths(patch, path, code):
     content = json.loads(json.dumps(SEED))
@@ -93,3 +93,47 @@ def test_knowledge_database_failure_is_a_service_error_not_a_pass():
     with pytest.raises(RuntimeSessionError) as error:
         validator(bases=Bases(error=OSError("down"))).validate(SEED)
     assert error.value.status == 503
+
+
+def _issues(patch):
+    content = json.loads(json.dumps(SEED))
+    patch(content)
+    return validator().validate(content).issues
+
+
+def _vietnamese(issue):
+    return any(ch in issue.message for ch in "ăâêôơưđáàảãạéèíóòúùýÁÀ") and "must" not in issue.message
+
+
+def test_schema_value_errors_have_specific_codes_and_vietnamese_messages():
+    cases = [
+        (lambda c: c["model"].update(ref="nope/some-model"), "model", "unsupported_provider"),
+        (lambda c: c["tools"].append({"name": "web.browse", "version": 1}), f"tools[{len(SEED['tools'])}]",
+         "tool_not_declared"),
+        (lambda c: c["persona"].update(system_prompt="Chào {{ten}}"), "persona.system_prompt", "unknown_placeholder"),
+        (lambda c: c["persona"].update(system_prompt="Chào {{ten"), "persona.system_prompt", "malformed_placeholder"),
+    ]
+    for patch, path, code in cases:
+        matches = [i for i in _issues(patch) if i.path == path and i.code == code]
+        assert matches, (code, _issues(patch))
+        assert _vietnamese(matches[0]), matches[0]
+    unknown = next(i for i in _issues(cases[2][0]) if i.code == "unknown_placeholder")
+    assert "ten" in unknown.message
+
+
+def test_every_issue_message_is_vietnamese_never_english_fallback():
+    def break_all(c):
+        c["tools"].append(c["tools"][0])
+        c["allowed_activity_profiles"] = []
+    for issue in _issues(break_all):
+        assert issue.message and "must" not in issue.message and "tool " not in issue.message, issue
+
+
+def test_params_errors_get_per_field_paths():
+    def patch(c):
+        next(t for t in c["tools"] if t["name"] == "knowledge.search")["params"]["top_k"] = 99
+    index = next(i for i, t in enumerate(SEED["tools"]) if t["name"] == "knowledge.search")
+    issues = _issues(patch)
+    assert any(i.path == f"tools[{index}].params.top_k" and i.code == "less_than_equal" and _vietnamese(i)
+               for i in issues), issues
+    assert not any(i.path == f"tools[{index}]" for i in issues)
