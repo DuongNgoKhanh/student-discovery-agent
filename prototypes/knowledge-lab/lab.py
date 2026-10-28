@@ -35,6 +35,7 @@ from agent_runtime.cli.knowledge_indexer import drain
 from agent_runtime.config.settings import Settings
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
 from agent_runtime.knowledge.authoring import KnowledgeWriter
+from agent_runtime.knowledge.embedding import by_model
 from agent_runtime.knowledge.fake import FakeEmbedding
 from agent_runtime.knowledge.filters import FilterError
 from agent_runtime.knowledge.fixtures.ihrd_demo import IHRD_DEMO, load_dataset
@@ -55,14 +56,14 @@ OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # the run
 
 SETTINGS = Settings()
 if SETTINGS.GOOGLE_API_KEY:
-    from agent_runtime.infrastructure.llm.gemini_embedding import build_embedding_port
-    EMBEDDING, MODE = build_embedding_port(SETTINGS), "gemini"
+    from agent_runtime.infrastructure.llm.gemini_embedding import GeminiEmbedding
+    EMBEDDING, MODE = GeminiEmbedding(SETTINGS.GOOGLE_API_KEY, proxy_url=SETTINGS.PROXY_URL), "gemini"
 else:
     EMBEDDING, MODE = FakeEmbedding(), "fake"
 OWNER_UOW = RuntimeUnitOfWork(build_engine(os.environ["LAB_OWNER_DATABASE_URL"]))
 WRITER = KnowledgeWriter(OWNER_UOW)
-INDEXER = IndexerService(RuntimeUnitOfWork(build_engine(os.environ["LAB_INDEXER_DATABASE_URL"])), EMBEDDING)
-SEARCH = PgKnowledge(RuntimeUnitOfWork(build_engine(os.environ["LAB_RUNTIME_DATABASE_URL"])), EMBEDDING,
+INDEXER = IndexerService(RuntimeUnitOfWork(build_engine(os.environ["LAB_INDEXER_DATABASE_URL"])), by_model(EMBEDDING))
+SEARCH = PgKnowledge(RuntimeUnitOfWork(build_engine(os.environ["LAB_RUNTIME_DATABASE_URL"])), by_model(EMBEDDING),
                      timeout_ms=SETTINGS.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS)
 
 

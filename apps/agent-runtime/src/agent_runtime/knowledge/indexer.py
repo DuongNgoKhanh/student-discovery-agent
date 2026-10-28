@@ -3,6 +3,7 @@
 An older revision never replaces a newer active one, and a failed revision leaves the active one serving.
 """
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from datetime import datetime
 
@@ -51,10 +52,10 @@ class IndexReport:
 
 
 class IndexerService:
-    def __init__(self, uow, embedding: EmbeddingPort, *, chunk_size: int = CHUNK_SIZE,
+    def __init__(self, uow, embeddings: Mapping[str, EmbeddingPort], *, chunk_size: int = CHUNK_SIZE,
                  stale_after_seconds: int = 600):
         self._uow = uow
-        self._embedding = embedding
+        self._embeddings = embeddings
         self._chunk_size = chunk_size
         self._stale_after_seconds = stale_after_seconds
 
@@ -81,7 +82,8 @@ class IndexerService:
             return IndexReport(failed=1)
 
     def _index(self, job: IndexJob) -> IndexReport:
-        if job.embedding_model != self._embedding.model:
+        embedding = self._embeddings.get(job.embedding_model)
+        if embedding is None:
             self._fail(job, f"embedding model not configured: {job.embedding_model}")
             return IndexReport(failed=1)
         drafts = chunk_document(job.title, job.body, chunk_size=self._chunk_size)
@@ -91,7 +93,7 @@ class IndexerService:
                 "SELECT chunk_hash FROM knowledge.embeddings WHERE embedding_model = :model "
                 "AND chunk_hash = ANY(:hashes)"), {"model": job.embedding_model, "hashes": hashes}).scalars())
         missing = list({draft.chunk_hash: draft for draft in drafts if draft.chunk_hash not in known}.values())
-        vectors = self._embedding.embed_documents(
+        vectors = embedding.embed_documents(
             [DocumentText(job.title, draft.heading_path, draft.text) for draft in missing]) if missing else []
         if isinstance(vectors, EmbeddingUnavailable):
             self._fail(job, f"embedding {vectors.reason}")

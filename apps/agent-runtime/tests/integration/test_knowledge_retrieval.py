@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import text
 
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork
+from agent_runtime.knowledge.embedding import by_model
 from agent_runtime.knowledge.filters import FilterError
 from agent_runtime.knowledge.retrieval import PgKnowledge
 from agent_runtime.knowledge.schemas import KnowledgeUnavailable, MetadataCondition, RetrievalRequest
@@ -22,7 +23,7 @@ def rig(test_database):
                             metadata={"houses": ["house_s"], "province": "Đà Nẵng"})
     rig.indexer.run_once()
     runtime = role_engine(test_database.url, test_database.runtime_role)
-    rig.knowledge = PgKnowledge(RuntimeUnitOfWork(runtime), rig.embedding)
+    rig.knowledge = PgKnowledge(RuntimeUnitOfWork(runtime), by_model(rig.embedding))
     yield rig
     runtime.dispose()
     rig.dispose()
@@ -108,7 +109,7 @@ def test_unexpected_embedding_errors_degrade_to_keyword_search(rig):
         def embed_query(self, text):
             raise RuntimeError("boom")
 
-    rig.knowledge._embedding = Exploding()
+    rig.knowledge._embeddings = by_model(Exploding())
     result = ask(rig, "hoc phi")
     assert result.degraded and result.records[0].metadata["document_id"] == "cntt"
 

@@ -78,8 +78,10 @@ RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL=... python -m agent_runtime.cli.knowledge
 
 Lưu ý vận hành:
 
-- Service `knowledge-indexer` trong compose cần `GOOGLE_API_KEY`; không có key thì nó thoát ngay
-  (`KNOWLEDGE_INDEXER_CONFIGURATION_REQUIRED`).
+- Service `knowledge-indexer` cần credentials của ít nhất một model trong `KNOWLEDGE_EMBEDDING_MODELS`
+  (`GOOGLE_API_KEY` cho Gemini, `VLLM_API_KEY` + `VLLM_BASE_URL` cho model vLLM); không có thì nó thoát ngay
+  (`KNOWLEDGE_INDEXER_CONFIGURATION_REQUIRED`). KB dùng model chưa cấu hình sẽ báo lỗi khi index và chỉ
+  search theo từ khoá.
 - KB seed với `--embedding-model fake-embedding` phải được index bằng `--fake-embedding`: tắt worker compose
   (hoặc đừng chạy nó) và chạy `knowledge_indexer --once --fake-embedding`.
 - Revision bị lỗi (`index_status='error'`) không tự chạy lại. Đưa về hàng đợi bằng

@@ -60,7 +60,7 @@ KNOWLEDGE_DDL = """
         PRIMARY KEY (revision_id, ordinal)
     );
     CREATE TABLE knowledge.embeddings (
-        chunk_hash text NOT NULL, embedding_model text NOT NULL, embedding vector(768) NOT NULL,
+        chunk_hash text NOT NULL, embedding_model text NOT NULL, embedding vector NOT NULL,
         created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
         PRIMARY KEY (chunk_hash, embedding_model)
     );

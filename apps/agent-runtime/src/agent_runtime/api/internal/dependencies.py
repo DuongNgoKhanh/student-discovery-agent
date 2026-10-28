@@ -129,12 +129,12 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         store = TurnStore(uow, ActivityPersistence(uow, product, validator), conversations)
         handler = TurnHandler(PinnedAssessmentEngine(), completion=EngineCompletionPort())
         # Imported lazily: provider SDKs load only when a runtime with a database is built.
-        from agent_runtime.infrastructure.llm.gemini_embedding import build_embedding_port
+        from agent_runtime.infrastructure.llm.embedding_registry import build_embedding_ports
         from agent_runtime.infrastructure.llm.model_registry import build_model_port
         from agent_runtime.knowledge.retrieval import PgKnowledge
         # Query path: no retries; a failed embed degrades to keyword search. The embedding timeout and the
         # SQL statement timeout run in sequence, so the worst case is their sum, not one shared budget.
-        knowledge = PgKnowledge(uow, build_embedding_port(
+        knowledge = PgKnowledge(uow, build_embedding_ports(
             settings, timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS, max_retries=0),
             timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS)
         responses = ResponseService(uow, trace_sink=trace_sink)

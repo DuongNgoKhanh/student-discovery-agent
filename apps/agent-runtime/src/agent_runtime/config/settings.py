@@ -27,16 +27,24 @@ class Settings(BaseSettings):
     # Gemini / embeddings
     GOOGLE_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
+    # OpenAI-compatible vLLM endpoint (or a LiteLLM proxy in front of it): chat provider `vllm` and vLLM embeddings
+    VLLM_API_KEY: str = ""
+    VLLM_BASE_URL: str = ""
     GOOGLE_CLOUD_PROJECT: str = ""
     GOOGLE_CLOUD_LOCATION: str = ""
     GOOGLE_EMBEDDING_MODEL: str = "text-embedding-004"
-    # Knowledge bases (gemini-embedding-2 ignores GOOGLE_EMBEDDING_MODEL, which belongs to legacy helpers)
-    KNOWLEDGE_EMBEDDING_MODEL: str = "gemini-embedding-2"
+    # Knowledge bases: comma-separated ids from infrastructure/llm/embedding_registry.py that this runtime serves;
+    # each KB picks one. gemini-embedding-2 ignores GOOGLE_EMBEDDING_MODEL, which belongs to legacy helpers.
+    KNOWLEDGE_EMBEDDING_MODELS: str = "gemini-embedding-2"
     KNOWLEDGE_RETRIEVAL_TIMEOUT_MS: int = 1500
 
     # Optional outbound proxy
     PROXY_HOST: str | None = None
     PROXY_PORT: int | None = None
+
+    @property
+    def KNOWLEDGE_EMBEDDING_MODEL_IDS(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(item.strip() for item in self.KNOWLEDGE_EMBEDDING_MODELS.split(",") if item.strip()))
 
     @property
     def PROXY_URL(self) -> str | None:

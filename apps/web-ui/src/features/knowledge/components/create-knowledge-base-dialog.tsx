@@ -18,6 +18,8 @@ import { slugify } from './shared/format';
 
 export const EMBEDDING_MODELS = [
   { value: 'gemini-embedding-2', label: 'gemini-embedding-2' },
+  { value: 'multilingual-e5-large', label: 'multilingual-e5-large (vLLM, đa ngôn ngữ)' },
+  { value: 'nomic-embed-text-v1.5', label: 'nomic-embed-text-v1.5 (vLLM)' },
   { value: 'fake-embedding', label: 'fake-embedding (chỉ dùng local, không cần key)' },
 ] as const;
 
