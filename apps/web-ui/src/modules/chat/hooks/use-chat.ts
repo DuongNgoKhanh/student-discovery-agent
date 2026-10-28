@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '@/lib/api/errors';
 import { queryKeys } from '@/lib/query/keys';
@@ -96,26 +96,51 @@ export function useSendTurn(conversationId: string) {
     },
   });
 
+  // Lỗi và payload chờ retry thuộc về hội thoại cũ; đổi hội thoại thì bỏ đi.
+  const { reset } = mutation;
+  useEffect(() => {
+    pending.current = null;
+    reset();
+  }, [conversationId, reset]);
+
+  /** Gọi `onDiscard` khi lượt lỗi bị bỏ hẳn (không còn retry được). */
+  const mutateWith = useCallback(
+    (onSuccess?: (result: TurnResult) => void, onDiscard?: () => void) => {
+      mutation.mutate(undefined, {
+        onSuccess,
+        onError: () => {
+          if (!pending.current) onDiscard?.();
+        },
+      });
+    },
+    [mutation],
+  );
+
   /** Gửi lượt mới: tạo key mới, gắn revision đang hiển thị. */
   const submit = useCallback(
-    (draft: TurnDraft, expectedRevision: number, onSuccess?: (result: TurnResult) => void) => {
+    (
+      draft: TurnDraft,
+      expectedRevision: number,
+      onSuccess?: (result: TurnResult) => void,
+      onDiscard?: () => void,
+    ) => {
       pending.current = {
         ...draft,
         expected_revision: expectedRevision,
         idempotency_key: newIdempotencyKey('turn'),
       } as ChatTurnInput;
-      mutation.mutate(undefined, { onSuccess });
+      mutateWith(onSuccess, onDiscard);
     },
-    [mutation],
+    [mutateWith],
   );
 
   /** Thử lại lượt lỗi: giữ nguyên key và payload. */
   const retry = useCallback(
-    (onSuccess?: (result: TurnResult) => void) => {
+    (onSuccess?: (result: TurnResult) => void, onDiscard?: () => void) => {
       if (!pending.current) return;
-      mutation.mutate(undefined, { onSuccess });
+      mutateWith(onSuccess, onDiscard);
     },
-    [mutation],
+    [mutateWith],
   );
 
   return {

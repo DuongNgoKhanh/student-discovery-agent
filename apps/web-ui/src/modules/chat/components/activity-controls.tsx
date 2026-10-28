@@ -1,10 +1,11 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { ActivityView, ActivityAnswer } from '../schemas/activity';
 import type { ConversationView } from '../schemas/conversation';
 import type { TurnDraft } from '../hooks/use-chat';
+import { ChatInputBar } from './chat-input-bar';
 import { EndedPanel } from './status-panels';
 import { NameForm } from './name-form';
 
@@ -48,6 +49,7 @@ export function ActivityControls({ conversation, activity, disabled, send, onNew
       <Button
         disabled={disabled}
         onClick={() => send({ type: 'message', content: { text: 'Bắt đầu' } }, 'Bắt đầu')}
+        className="rounded-full bg-slate-900 px-6 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-slate-800 active:scale-95 hover:scale-105 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
       >
         Bắt đầu
       </Button>
@@ -259,34 +261,12 @@ function FreeTextComposer({
   disabled: boolean;
   onSend: (text: string) => void;
 }) {
-  const [text, setText] = useState('');
-  const inputId = useId();
-  const trimmed = text.trim();
-
   return (
-    <form
-      className="flex gap-2 border-t pt-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!trimmed || disabled) return;
-        onSend(trimmed);
-        setText('');
-      }}
-    >
-      <label htmlFor={inputId} className="sr-only">
-        Nhập câu trả lời bằng chữ
-      </label>
-      <input
-        id={inputId}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        disabled={disabled}
-        placeholder="Nhập câu trả lời bằng chữ"
-        className="min-w-0 flex-1 rounded-md border px-3 py-2 text-base"
-      />
-      <Button type="submit" disabled={disabled || !trimmed}>
-        Gửi
-      </Button>
-    </form>
+    <ChatInputBar
+      disabled={disabled}
+      onSend={onSend}
+      label="Nhập câu trả lời bằng chữ"
+      placeholder="Nhập vào"
+    />
   );
 }
