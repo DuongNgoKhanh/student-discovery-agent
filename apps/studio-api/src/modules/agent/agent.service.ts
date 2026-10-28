@@ -1,7 +1,9 @@
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import { ProductError } from '@/http/errors';
+import type { RequestContext } from '@/http/types';
 import { computeContentHash } from '@/modules/experiences/canonical';
 import * as repo from '@/modules/agent/agent.repository';
+import { getAgentValidator, type AgentValidation } from '@/modules/agent/runtime-validation';
 import { toDraftDTO, type AgentDraftDTO, type SaveDraftInput } from '@/modules/agent/agent.schemas';
 
 export async function readDraft(db: ProductDatabase): Promise<AgentDraftDTO> {
@@ -42,4 +44,10 @@ export async function seedAgent(db: ProductDatabase, content: Record<string, unk
       before_ref: null, after_ref: release.id, outcome: 'success', details: { version: release.version } });
     return 'seeded';
   });
+}
+
+export async function validateDraft(db: ProductDatabase, ctx: RequestContext): Promise<AgentValidation & { draft_revision: number }> {
+  const draft = await repo.getDraft(db);
+  if (!draft) throw new ProductError(404, 'RES_NOT_FOUND', 'Agent draft not found');
+  return { ...(await getAgentValidator()(draft.content, ctx)), draft_revision: draft.revision };
 }

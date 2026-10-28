@@ -6,6 +6,7 @@ import { migrateProduct } from '@/infrastructure/db/migrate';
 import { closeProductDatabase, getProductDatabase } from '@/infrastructure/db/client';
 import { issueAccessToken } from '@/modules/auth/tokens';
 import { seedAgent } from '@/modules/agent/agent.service';
+import { setAgentValidator } from '@/modules/agent/runtime-validation';
 
 export const SEED = { greeting_text: 'Chào bạn!', allowed_activity_profiles: ['riasec.mean.bounds.v2'] };
 let pg: PostgresHandle;
@@ -50,5 +51,17 @@ describe('agent draft API', () => {
 
   it('rejects non-object content', async () => {
     expect((await req('PUT', '/admin/agent/draft', { content: [], expected_revision: 2 })).status).toBe(422);
+  });
+});
+
+describe('agent draft validations', () => {
+  afterAll(() => setAgentValidator(null));
+
+  it('returns the runtime report bound to the draft revision', async () => {
+    setAgentValidator(async () => ({ valid: false, content_hash: 'sha256:x', issues: [{ path: 'greeting_text', code: 'missing', message: 'Thiếu' }] }));
+    const res = await req('POST', '/admin/agent/draft/validations');
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ valid: false, issues: [{ path: 'greeting_text' }] });
+    expect(typeof res.body.data.draft_revision).toBe('number');
   });
 });

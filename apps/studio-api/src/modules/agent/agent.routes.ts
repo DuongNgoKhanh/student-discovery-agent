@@ -5,7 +5,7 @@ import { success } from '@/http/response';
 import { requireAdmin } from '@/modules/auth/auth.service';
 import { readExperienceJsonBody } from '@/modules/experiences/body';
 import { saveDraftSchema } from '@/modules/agent/agent.schemas';
-import { readDraft, saveDraftContent } from '@/modules/agent/agent.service';
+import { readDraft, saveDraftContent, validateDraft } from '@/modules/agent/agent.service';
 
 const ADMIN = '/api/v1/admin/agent';
 // Agent configs carry long system prompts; 256 KB keeps them well inside the body cap.
@@ -22,7 +22,13 @@ export const handleSaveDraft = withHandler(async (req, ctx) => {
   return success(await saveDraftContent(getProductDatabase(), body, admin.sub), ctx);
 });
 
+export const handleValidateDraft = withHandler(async (req, ctx) => {
+  await requireAdmin(req);
+  return success(await validateDraft(getProductDatabase(), ctx), ctx);
+});
+
 export function registerAgentRoutes(app: Hono): void {
   app.get(`${ADMIN}/draft`, honoHandler(handleReadDraft));
   app.put(`${ADMIN}/draft`, honoHandler(handleSaveDraft));
+  app.post(`${ADMIN}/draft/validations`, honoHandler(handleValidateDraft));
 }
