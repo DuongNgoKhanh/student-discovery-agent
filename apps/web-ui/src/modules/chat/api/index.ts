@@ -4,7 +4,7 @@ import { httpTransport } from './transport';
 
 /**
  * Chọn nguồn dữ liệu chat. Mặc định dùng mock để UI chạy khi backend chat chưa có.
- * Đặt NEXT_PUBLIC_CHAT_MOCK=false để gọi BFF thật (cần chốt cookie owner, xem PR).
+ * Đặt NEXT_PUBLIC_CHAT_MOCK=false lúc build để gọi BFF thật (studio-api /api/v1/conversations).
  */
 export const CHAT_MOCK_ENABLED = process.env.NEXT_PUBLIC_CHAT_MOCK !== 'false';
 

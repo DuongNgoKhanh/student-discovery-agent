@@ -54,6 +54,40 @@ export function envelopeSchema<T extends z.ZodTypeAny>(data: T) {
 export const CLIENT_INVALID_ENVELOPE = 'CLIENT_INVALID_ENVELOPE';
 
 /**
+ * Runtime trả mã theo registry chuẩn (contracts/error-codes.json); UI chat vẫn xử lý theo tên cũ trong
+ * docs/openapi/schemas/common.yaml. Chuẩn hoá một chỗ ở đây thay vì rải điều kiện khắp hook/component.
+ */
+const LEGACY_CHAT_CODES: Record<string, string> = {
+  CONFLICT_REVISION: 'REVISION_CONFLICT',
+  CONFLICT_IDEMPOTENCY_KEY: 'IDEMPOTENCY_KEY_COLLISION',
+  CONFLICT_STALE_CLARIFICATION: 'STALE_CLARIFICATION',
+  CONFLICT_STALE_RESULT_REVISION: 'STALE_RESULT_REVISION',
+  CONFLICT_ACTIVE_RELEASE: 'ACTIVE_RELEASE_CONFLICT',
+  RES_CONVERSATION_ENDED: 'CONVERSATION_ENDED',
+  RES_CONVERSATION_EXPIRED: 'CONVERSATION_EXPIRED',
+  RES_EXPERIENCE_NOT_CONFIGURED: 'EXPERIENCE_NOT_CONFIGURED',
+  RES_NOT_FOUND: 'RESOURCE_NOT_FOUND',
+  AUTH_TOKEN_MISSING: 'AUTH_REQUIRED',
+  AUTH_TOKEN_INVALID: 'AUTH_REQUIRED',
+  AUTH_CALLER_CONTEXT_INVALID: 'AUTH_REQUIRED',
+  AUTHZ_FORBIDDEN: 'FORBIDDEN',
+  VAL_INVALID_REQUEST: 'INVALID_REQUEST',
+  VAL_INVALID_INPUT: 'INVALID_INPUT',
+  VAL_INVALID_ACTIVITY_TRANSITION: 'INVALID_ACTIVITY_TRANSITION',
+  VAL_INVALID_QUESTION: 'INVALID_QUESTION',
+  VAL_INVALID_OPTION: 'INVALID_OPTION',
+  VAL_PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
+  SYS_RATE_LIMITED: 'RATE_LIMITED',
+  SYS_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+  SYS_REQUEST_TIMEOUT: 'REQUEST_TIMEOUT',
+  SYS_INTERNAL_ERROR: 'INTERNAL_ERROR',
+};
+
+export function chatErrorCode(code: string): string {
+  return LEGACY_CHAT_CODES[code] ?? code;
+}
+
+/**
  * Trả `data` đã validate, hoặc ném `ApiError` với đúng code/details từ server.
  * Ném `ApiError` cả khi envelope sai shape để UI không render dữ liệu hỏng.
  */
@@ -84,9 +118,10 @@ export function unwrapChatEnvelope<T extends z.ZodTypeAny>(
       httpStatus,
     });
   }
+  const code = chatErrorCode(err.code);
   throw new ApiError({
-    code: err.code,
-    message: mapErrorMessage(err.code),
+    code,
+    message: mapErrorMessage(code),
     details: err.details ?? undefined,
     retryable: err.retryable,
     httpStatus,

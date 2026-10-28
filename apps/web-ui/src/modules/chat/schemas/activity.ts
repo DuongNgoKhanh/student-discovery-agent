@@ -41,7 +41,7 @@ export const activityAnswerSchema = z
     answer_id: idSchema,
     question_id: idSchema,
     option_id: idSchema,
-    ordinal: z.number().int().min(1).max(6),
+    ordinal: z.number().int().min(1),
     question: activityQuestionSchema.optional(),
   })
   .passthrough();
@@ -50,15 +50,16 @@ export const activityViewSchema = z
   .object({
     id: idSchema,
     conversation_id: idSchema,
-    type: z.literal('personality_assessment'),
-    schema_version: z.literal(1),
+    // v1: 6 câu cố định; v2: adaptive (số câu do engine quyết định trong khoảng min/max).
+    type: z.enum(['personality_assessment', 'personality_assessment_adaptive']),
+    schema_version: z.union([z.literal(1), z.literal(2)]),
     status: activityStatusSchema,
     revision: z.number().int().min(0),
     display_name: z.string().min(1).nullable(),
     progress: assessmentProgressSchema,
     current_question: activityQuestionSchema.nullable(),
     clarification: activityClarificationSchema.nullable(),
-    answers: z.array(activityAnswerSchema).max(6),
+    answers: z.array(activityAnswerSchema),
     result: z
       .object({
         result_id: idSchema,
