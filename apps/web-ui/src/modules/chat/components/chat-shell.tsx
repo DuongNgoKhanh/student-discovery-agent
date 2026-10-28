@@ -376,9 +376,14 @@ export function ChatShell() {
                       : index === 2
                         ? 'animation-delay-300'
                         : undefined;
+                  const messageId =
+                    entry.block && entry.block.kind === 'known'
+                      ? entry.block.block.block_id
+                      : String(entry.id);
                   return (
                     <li key={entry.id} className="w-full">
                       <ChatMessageItem
+                        id={messageId}
                         role={entry.role}
                         text={entry.text}
                         block={entry.block}
