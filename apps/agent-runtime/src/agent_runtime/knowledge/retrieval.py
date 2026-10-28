@@ -116,6 +116,23 @@ class PgKnowledge:
                 {key: row[key] for key in ("id", "name", "type", "filterable", "label")}))
         return {kb_id: tuple(items) for kb_id, items in found.items()}
 
+    def base_fields(self, kb_ids: Sequence[str]) -> dict[str, frozenset[str]]:
+        """Field names per existing knowledge base (empty set when it has none). Database errors propagate."""
+        if not kb_ids:
+            return {}
+        with self._uow.begin() as session:
+            session.execute(text(f"SET LOCAL statement_timeout = {self._timeout_ms}"))
+            rows = session.execute(text(
+                "SELECT kb.id AS kb_id, f.name FROM knowledge.knowledge_bases kb "
+                "LEFT JOIN knowledge.metadata_fields f ON f.kb_id = kb.id WHERE kb.id = ANY(:kbs)"),
+                {"kbs": list(kb_ids)}).mappings().all()
+        found: dict[str, set[str]] = {}
+        for row in rows:
+            names = found.setdefault(row["kb_id"], set())
+            if row["name"] is not None:
+                names.add(row["name"])
+        return {kb: frozenset(names) for kb, names in found.items()}
+
     def _embed_query(self, model: str, query: str):
         embedding = self._embeddings.get(model)
         if embedding is None:

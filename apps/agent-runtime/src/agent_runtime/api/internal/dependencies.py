@@ -40,7 +40,10 @@ if TYPE_CHECKING:
     from agent_runtime.config.settings import Settings
 
 PREFIX = "/api/v1/internal"
-SERVICE_ROUTES = frozenset({("POST", PREFIX + "/knowledge/retrieval")})
+SERVICE_ROUTES: dict[tuple[str, str], str] = {
+    ("POST", PREFIX + "/knowledge/retrieval"): "knowledge.retrieval",
+    ("POST", PREFIX + "/agent-snapshots:validate"): "agent.validate",
+}
 
 
 class SystemClock:
@@ -62,6 +65,7 @@ class RuntimeContainer:
     product_ready: bool = False
     engine: object | None = None
     knowledge: object | None = None
+    agent_validation: object | None = None
 
 
 def _decode_key(value):
@@ -137,6 +141,8 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         knowledge = PgKnowledge(uow, build_embedding_ports(
             settings, timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS, max_retries=0),
             timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS)
+        from agent_runtime.agent.validation import AgentSnapshotValidator
+        agent_validation = AgentSnapshotValidator(knowledge, product, policy.environment)
         responses = ResponseService(uow, trace_sink=trace_sink)
         turns = TurnService(store, handler, models=functools.cache(build_model_port), responses=responses,
                             knowledge=knowledge, trace_sink=trace_sink)
@@ -145,7 +151,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
-            knowledge=knowledge,
+            knowledge=knowledge, agent_validation=agent_validation,
             product_ready=isinstance(product, LocalReleaseSource))
     except Exception:
         if engine is not None:
@@ -227,7 +233,7 @@ class InternalBoundary:
                 if error.status == 401:
                     raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID") from None
                 raise
-            if service and (scope["method"], target) not in SERVICE_ROUTES:
+            if service and SERVICE_ROUTES.get((scope["method"], target)) != caller.purpose:
                 raise RuntimeSessionError(403, "FORBIDDEN")
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)
 
