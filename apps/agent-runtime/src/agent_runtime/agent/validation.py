@@ -1,4 +1,5 @@
 """Validate an agent config exactly as the runtime will load it, plus the references it makes."""
+import logging
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
@@ -15,6 +16,8 @@ from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.ports import ProductReleaseSource
 from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+
+logger = logging.getLogger(__name__)
 
 # Card fields read record metadata by name (agent/knowledge_tools.py `_card`). Besides the knowledge base's own
 # fields only `source_url` is a meaningful built-in; `title` is not in metadata, so displaying it would be empty.
@@ -140,7 +143,10 @@ class AgentSnapshotValidator:
                 try:
                     self._experiences.resolve_active_experience(self._environment, item.experience_id,
                                                                 item.algorithm_profile)
-                except RuntimeSessionError:
+                except RuntimeSessionError as error:
+                    if error.status >= 500:
+                        # Release source outage: the experience may well exist, so this is not a config issue.
+                        raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}) from None
                     issues.append(Issue(path=f"tools[{index['assessment.start']}].params.experiences[{k}].experience_id",
                                         code="experience_not_configured",
                                         message=f"Bài khám phá '{item.experience_id}' chưa được cấu hình."))
@@ -151,7 +157,9 @@ class AgentSnapshotValidator:
                 raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "not_configured"})
             try:
                 fields = self._knowledge.base_fields([params.knowledge_base_id])
-            except Exception:
+            except Exception as error:
+                # Type name only: driver messages can carry the database URL.
+                logger.error("agent validation: knowledge database unavailable (%s)", type(error).__name__)
                 raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}) from None
             at = f"tools[{index['knowledge.search']}].params"
             known = fields.get(params.knowledge_base_id)

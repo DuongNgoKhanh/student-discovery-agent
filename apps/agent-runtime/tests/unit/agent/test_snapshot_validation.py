@@ -21,10 +21,12 @@ class Bases:
 
 
 class Experiences:
-    def __init__(self, known=("exp_riasec",)):
-        self.known = known
+    def __init__(self, known=("exp_riasec",), error=None):
+        self.known, self.error = known, error
 
     def resolve_active_experience(self, environment, experience_id, algorithm_profile):
+        if self.error:
+            raise self.error
         if experience_id not in self.known:
             raise RuntimeSessionError(422, "EXPERIENCE_NOT_CONFIGURED")
 
@@ -89,9 +91,18 @@ def test_non_object_content_is_one_root_issue():
     assert not result.valid and result.issues[0].path == ""
 
 
-def test_knowledge_database_failure_is_a_service_error_not_a_pass():
+def test_knowledge_database_failure_is_a_service_error_not_a_pass(caplog):
+    with caplog.at_level("ERROR"), pytest.raises(RuntimeSessionError) as error:
+        validator(bases=Bases(error=OSError("postgresql://user:secret@db/kb down"))).validate(SEED)
+    assert error.value.status == 503
+    assert "OSError" in caplog.text
+    assert "secret" not in caplog.text and "postgresql" not in caplog.text
+
+
+def test_release_source_outage_is_a_service_error_not_an_issue():
+    down = Experiences(error=RuntimeSessionError(502, "PRODUCT_UNAVAILABLE"))
     with pytest.raises(RuntimeSessionError) as error:
-        validator(bases=Bases(error=OSError("down"))).validate(SEED)
+        validator(experiences=down).validate(SEED)
     assert error.value.status == 503
 
 
