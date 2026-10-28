@@ -1,38 +1,49 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
+import { useMemo, useRef, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/sonner';
 import { useCommitImport, useFields, usePreviewImport } from '../hooks/use-knowledge';
 import type { ImportPreviewRequest, ImportPreviewRow } from '../types';
-import { csvHeader } from './csv-header';
+import { autoMapColumns } from './auto-map-columns';
+import { csvFirstRow, csvHeader, csvRowCount } from './csv-header';
 import { ErrorText } from './error-text';
+import { ImportFileStep } from './import-file-step';
+import { checkFiles, MAX_ROWS, readText } from './import-files';
+import { BASE_TARGETS, ImportMappingStep, mappingTargets, metaKey } from './import-mapping-step';
+import { ImportPreviewTable, ImportResult } from './import-review-step';
+import { type ImportStep, ImportStepper } from './import-stepper';
+import { kbHref } from './kb-routes';
 
-type Mode = 'files' | 'csv';
 const READ_ERROR = 'Không đọc được file, hãy thử lại.';
-const BASE_TARGETS = ['document_id', 'title', 'body', 'source_url'] as const;
 
-// FileReader instead of File.text(): jsdom lacks the latter and its File is not a Node Blob.
-const readText = (file: File) => new Promise<string>((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => resolve(String(reader.result));
-  reader.onerror = () => reject(reader.error);
-  reader.readAsText(file);
-});
+type WritableRow = ImportPreviewRow & { document_id: string; expected_revision: number; payload: NonNullable<ImportPreviewRow['payload']> };
 
 export function ImportTab({ kb }: { kb: string }) {
   const fields = useFields(kb);
   const preview = usePreviewImport();
   const commit = useCommitImport();
-  const [mode, setMode] = useState<Mode>('files');
+  const [step, setStep] = useState<ImportStep>(1);
   const [files, setFiles] = useState<File[]>([]);
-  const [csv, setCsv] = useState('');
-  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [csv, setCsv] = useState<string | null>(null);
+  const [mapping, setMapping] = useState<Record<string, string> | null>(null);
   const [importKey, setImportKey] = useState('');
   const [readError, setReadError] = useState<Error | null>(null);
+  // Ignores a CSV read that finishes after the selection changed again.
+  const readSeq = useRef(0);
 
-  const columns = csvHeader(csv);
-  const writable = (preview.data?.rows ?? []).filter((row): row is ImportPreviewRow & { document_id: string; expected_revision: number; payload: NonNullable<ImportPreviewRow['payload']> } =>
-    row.action === 'create' || row.action === 'update');
+  const { mode, errors } = checkFiles(files);
+  // Parsing a large CSV is not free; do it once per file instead of on every render.
+  const parsed = useMemo(() => (csv === null ? null : { header: csvHeader(csv), sample: csvFirstRow(csv), rows: csvRowCount(csv) }), [csv]);
+  const csvRows = mode === 'csv' && parsed ? parsed.rows : 0;
+  const csvErrors = mode !== 'csv' || !parsed ? []
+    : parsed.header.length === 0 ? [`${files[0]!.name}: không có dòng tiêu đề.`]
+      : csvRows > MAX_ROWS ? [`${files[0]!.name}: có ${csvRows} dòng dữ liệu, tối đa ${MAX_ROWS} dòng mỗi lần nhập.`] : [];
+  const fileErrors = [...errors, ...csvErrors];
+  const ready = mode === 'files' || (mode === 'csv' && csv !== null && csvErrors.length === 0);
+  const writable = (preview.data?.rows ?? []).filter((row): row is WritableRow => row.action === 'create' || row.action === 'update');
 
   // Any input change drops the old preview so the admin cannot commit rows that no longer match the inputs.
   function invalidatePreview() {
@@ -41,14 +52,37 @@ export function ImportTab({ kb }: { kb: string }) {
     setReadError(null);
   }
 
-  function loadCsv(file: File | undefined) {
+  function changeFiles(next: File[]) {
     invalidatePreview();
-    if (!file) return;
-    readText(file).then((text) => {
+    setFiles(next);
+    setCsv(null);
+    setMapping(null);
+    const seq = ++readSeq.current;
+    const checked = checkFiles(next);
+    if (checked.mode !== 'csv') return;
+    readText(next[0]!).then((text) => {
+      if (seq !== readSeq.current) return;
       setCsv(text);
-      setMapping({});
-    }).catch(() => setReadError(new Error(READ_ERROR)));
+    }).catch(() => { if (seq === readSeq.current) setReadError(new Error(READ_ERROR)); });
   }
+
+  function changeMapping(key: string, column: string | undefined) {
+    invalidatePreview();
+    setMapping((current) => {
+      const next = { ...current };
+      if (column === undefined) delete next[key];
+      else next[key] = column;
+      return next;
+    });
+  }
+
+  // Auto-map once per CSV, on first entering the mapping step (gated on the fields being loaded), so later edits stay.
+  function goToMapping() {
+    if (!fields.data) return;
+    if (mapping === null && parsed) setMapping(autoMapColumns(parsed.header, mappingTargets(fields.data)));
+    setStep(2);
+  }
+  const waitingFields = mode === 'csv' && !fields.data;
 
   async function runPreview() {
     invalidatePreview();
@@ -57,9 +91,10 @@ export function ImportTab({ kb }: { kb: string }) {
       if (mode === 'files') {
         body = { kind: 'files', files: await Promise.all(files.map(async file => ({ name: file.name, content: await readText(file) }))) };
       } else {
-        const pick = (key: string) => (mapping[key] ? { [key]: mapping[key] } : {});
-        const metadata = Object.fromEntries((fields.data ?? []).flatMap(field => (mapping[`meta:${field.name}`] ? [[field.name, mapping[`meta:${field.name}`]!]] : [])));
-        body = { kind: 'csv', content: csv, mapping: { ...pick('document_id'), ...pick('title'), ...pick('body'), ...pick('source_url'), metadata } };
+        const map = mapping ?? {};
+        const base = Object.fromEntries(BASE_TARGETS.flatMap(({ key }) => (map[key] ? [[key, map[key]]] : [])));
+        const metadata = Object.fromEntries((fields.data ?? []).flatMap(field => (map[metaKey(field.name)] ? [[field.name, map[metaKey(field.name)]!]] : [])));
+        body = { kind: 'csv', content: csv ?? '', mapping: { ...base, metadata } };
       }
       // One key per preview, so pressing commit twice replays the stored report instead of writing again.
       setImportKey(crypto.randomUUID());
@@ -69,72 +104,84 @@ export function ImportTab({ kb }: { kb: string }) {
     }
   }
 
-  const select = (key: string, label: string) => (
-    <label key={key} className="flex items-center gap-2 text-sm">
-      <span className="w-40">{label}</span>
-      <select className="h-8 rounded-md border px-2" value={mapping[key] ?? ''} onChange={(e) => { invalidatePreview(); setMapping({ ...mapping, [key]: e.target.value }); }}>
-        <option value="">(không map)</option>
-        {columns.map(column => <option key={column}>{column}</option>)}
-      </select>
-    </label>
-  );
+  function goToReview() {
+    setStep(3);
+    void runPreview();
+  }
+
+  function runCommit() {
+    commit.mutate(
+      { kb, body: { idempotency_key: importKey, rows: writable.map(({ row, document_id, expected_revision, payload }) => ({ row, document_id, expected_revision, payload })) } },
+      { onSuccess: report => toast.success(`Đã ghi xong: ${report.created} tạo, ${report.updated} sửa.`) },
+    );
+  }
+
+  function restart() {
+    readSeq.current++;
+    invalidatePreview();
+    setFiles([]);
+    setCsv(null);
+    setMapping(null);
+    setImportKey('');
+    setStep(1);
+  }
+
+  const footer = (children: React.ReactNode) => <div className="mt-6 flex flex-wrap justify-end gap-2">{children}</div>;
+  const back = (to: ImportStep) => <Button type="button" variant="outline" onClick={() => setStep(to)}>Quay lại</Button>;
 
   return (
-    <div className="space-y-4 text-sm">
-      <div className="flex gap-4">
-        <label><input type="radio" checked={mode === 'files'} onChange={() => { invalidatePreview(); setMode('files'); }} /> Markdown/TXT</label>
-        <label><input type="radio" checked={mode === 'csv'} onChange={() => { invalidatePreview(); setMode('csv'); }} /> CSV</label>
-      </div>
-      {mode === 'files'
-        ? (
-          <label className="block">File Markdown/TXT
-            <input type="file" multiple accept=".md,.markdown,.txt" onChange={(e) => { invalidatePreview(); setFiles([...(e.target.files ?? [])]); }} />
-          </label>
-        )
-        : (
-          <div className="space-y-2">
-            <label className="block">File CSV
-              <input type="file" accept=".csv,text/csv" onChange={e => loadCsv(e.target.files?.[0])} />
-            </label>
-            {columns.length > 0 && (
-              <div className="space-y-1">
-                {BASE_TARGETS.map(key => select(key, key))}
-                {fields.data?.map(field => select(`meta:${field.name}`, `metadata: ${field.name}`))}
-                <p className="text-gray-600">Document đã có: cột không map giữ giá trị cũ; ô rỗng trong cột được map sẽ xoá giá trị.</p>
-              </div>
-            )}
-          </div>
-        )}
-      <Button onClick={() => void runPreview()} disabled={preview.isPending || (mode === 'files' ? files.length === 0 : !csv)}>Xem trước</Button>
-      <ErrorText error={readError} />
-      <ErrorText error={preview.error} />
-      {preview.data && (
+    <div className="text-sm">
+      <ImportStepper current={step} skipMapping={mode === 'files'} />
+
+      {step === 1 && (
         <>
-          <table className="w-full">
-            <thead><tr className="text-left"><th>#</th><th>Nguồn</th><th>Document</th><th>Hành động</th><th>Lỗi</th></tr></thead>
-            <tbody>
-              {preview.data.rows.map(row => (
-                <tr key={row.row} className={row.action === 'invalid' ? 'border-t bg-red-50' : 'border-t'}>
-                  <td>{row.row}</td><td>{row.source}</td><td>{row.document_id ?? '—'}</td><td>{row.action}</td>
-                  <td>{row.errors.map(error => <div key={error}>{error}</div>)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <Button disabled={writable.length === 0 || commit.isPending}
-            onClick={() => commit.mutate({ kb, body: { idempotency_key: importKey, rows: writable.map(({ row, document_id, expected_revision, payload }) => ({ row, document_id, expected_revision, payload })) } })}>
-            {`Ghi ${writable.length} dòng`}
-          </Button>
+          <ImportFileStep files={files} errors={fileErrors} onAdd={added => changeFiles([...files, ...added])} onRemove={index => changeFiles(files.filter((_, i) => i !== index))} />
+          <ErrorText error={readError} />
+          {mode === 'csv' && <ErrorText error={fields.error} />}
+          {footer(
+            <>
+              {waitingFields && fields.isLoading && <span role="status" className="self-center text-13 text-muted-foreground">Đang tải metadata…</span>}
+              <Button type="button" disabled={!ready || waitingFields} onClick={() => (mode === 'csv' ? goToMapping() : goToReview())}>Tiếp tục</Button>
+            </>,
+          )}
         </>
       )}
-      <ErrorText error={commit.error} />
-      {commit.data && (
-        <div className="space-y-1">
-          <p>{`Tạo ${commit.data.created} · Sửa ${commit.data.updated} · Không đổi ${commit.data.unchanged} · Xung đột ${commit.data.conflict} · Lỗi ${commit.data.failed}`}</p>
-          <ul className="list-disc pl-5">
-            {commit.data.rows.filter(row => row.error).map(row => <li key={row.row}>{`${row.document_id}: ${row.error}`}</li>)}
-          </ul>
-        </div>
+
+      {step === 2 && parsed && (
+        <>
+          <ImportMappingStep header={parsed.header} sample={parsed.sample} fields={fields.data ?? []} mapping={mapping ?? {}} onChange={changeMapping} />
+          {footer(<>{back(1)}<Button type="button" onClick={goToReview}>Tiếp tục</Button></>)}
+        </>
+      )}
+
+      {step === 3 && (
+        <>
+          <ErrorText error={readError} />
+          <ErrorText error={preview.error} />
+          {preview.isPending && <p role="status" className="py-8 text-center text-13 text-muted-foreground">Đang xem trước…</p>}
+          {commit.data
+            ? <ImportResult kb={kb} report={commit.data} />
+            : preview.data && <ImportPreviewTable key={importKey} rows={preview.data.rows} />}
+          <div className="mt-3"><ErrorText error={commit.error} /></div>
+          {commit.data
+            ? footer(
+              <>
+                <Button type="button" variant="outline" onClick={restart}>Nhập tiếp</Button>
+                <Button asChild><Link href={kbHref(kb, 'documents')}>Về danh sách tài liệu</Link></Button>
+              </>,
+            )
+            : footer(
+              <>
+                {back(mode === 'csv' ? 2 : 1)}
+                <Button type="button" variant="outline" disabled={preview.isPending || commit.isPending} onClick={() => void runPreview()}>
+                  <RefreshCw className="mr-1.5 h-4 w-4" aria-hidden />Xem trước lại
+                </Button>
+                <Button type="button" disabled={!preview.data || writable.length === 0 || commit.isPending} onClick={runCommit}>
+                  {`Ghi ${writable.length} tài liệu`}
+                </Button>
+              </>,
+            )}
+        </>
       )}
     </div>
   );

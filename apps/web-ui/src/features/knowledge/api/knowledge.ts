@@ -1,23 +1,35 @@
 import { api } from '@/lib/api/client';
 import type {
-  AgentParams, DocumentDetail, DocumentPut, DocumentSummary, DocumentWriteResult, FieldCreate, FieldPatch,
-  ImportCommitRequest, ImportPreview, ImportPreviewRequest, ImportReport, KnowledgeBase, KnowledgeBaseCreate,
-  MetadataField, SearchRequest, SearchResult,
+  AgentParams, DocumentDetail, DocumentFilters, DocumentPage, DocumentPut, DocumentSummary, DocumentWriteResult, FieldCreate,
+  FieldPatch, ImportCommitRequest, ImportPreview, ImportPreviewRequest, ImportReport, KnowledgeBase, KnowledgeBaseCreate,
+  KnowledgeBasePatch, MetadataField, PaginationMeta, SearchRequest, SearchResult,
 } from '../types';
 
 const base = (kb: string) => `admin/knowledge-bases/${encodeURIComponent(kb)}`;
 const document = (kb: string, doc: string) => `${base(kb)}/documents/${encodeURIComponent(doc)}`;
+const query = (params: object) => {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value !== undefined && value !== '') search.set(key, String(value));
+  const text = search.toString();
+  return text ? `?${text}` : '';
+};
 
 export const knowledgeApi = {
   listBases: async () => (await api.get<{ items: KnowledgeBase[] }>('admin/knowledge-bases')).items,
   createBase: (body: KnowledgeBaseCreate) => api.post<KnowledgeBase>('admin/knowledge-bases', body),
   getBase: (kb: string) => api.get<KnowledgeBase>(base(kb)),
+  patchBase: ({ kb, body }: { kb: string; body: KnowledgeBasePatch }) => api.patch<KnowledgeBase>(base(kb), body),
   listFields: async (kb: string) => (await api.get<{ items: MetadataField[] }>(`${base(kb)}/fields`)).items,
   createField: ({ kb, body }: { kb: string; body: FieldCreate }) => api.post<MetadataField>(`${base(kb)}/fields`, body),
   patchField: ({ kb, name, body }: { kb: string; name: string; body: FieldPatch }) =>
     api.patch<MetadataField>(`${base(kb)}/fields/${name}`, body),
   deleteField: ({ kb, name }: { kb: string; name: string }) => api.del<{ name: string; deleted: true }>(`${base(kb)}/fields/${name}`),
-  listDocuments: async (kb: string) => (await api.get<{ items: DocumentSummary[] }>(`${base(kb)}/documents?limit=100`)).items,
+  listDocuments: async (kb: string, filters: DocumentFilters = {}): Promise<DocumentPage> => {
+    const { data, meta } = await api.getWithMeta<{ items: DocumentSummary[] }, { pagination?: PaginationMeta }>(
+      `${base(kb)}/documents${query(filters)}`,
+    );
+    return { items: data.items, next_cursor: meta?.pagination?.next_cursor ?? null };
+  },
   getDocument: (kb: string, doc: string) => api.get<DocumentDetail>(document(kb, doc)),
   putDocument: ({ kb, doc, body }: { kb: string; doc: string; body: DocumentPut }) =>
     api.put<DocumentWriteResult>(document(kb, doc), body),
