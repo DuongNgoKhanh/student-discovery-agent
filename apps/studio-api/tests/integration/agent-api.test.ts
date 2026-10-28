@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { SignJWT } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dispatch } from '../helpers/api';
 import { startPostgres, type PostgresHandle } from '../helpers/postgres';
@@ -153,5 +155,34 @@ describe('agent releases', () => {
     expect(done.status).toBe(200);
     const clash = await req('POST', `/admin/agent/releases/${active.release_id}:restore`, { expected_active_revision: active.revision, idempotency_key: 'restore-it-0003' });
     expect(clash.body.error.code).toBe('CONFLICT_IDEMPOTENCY_KEY');
+  });
+});
+
+const DELIVERY_KEY = Buffer.alloc(32, 4);
+async function runtimeToken(target: string) {
+  const now = Math.floor(Date.now() / 1000);
+  return new SignJWT({ caller_type: 'runtime_service', purpose: 'release.delivery', method: 'GET', request_target: target,
+    body_sha256: createHash('sha256').update('').digest('hex') })
+    .setProtectedHeader({ alg: 'HS256', typ: 'sda-internal+jwt', kid: 'runtime' })
+    .setIssuer('sda-agent-runtime').setAudience('sda-studio-api').setIssuedAt(now).setExpirationTime(now + 60)
+    .sign(new Uint8Array(DELIVERY_KEY));
+}
+
+describe('internal release delivery', () => {
+  beforeEach(() => vi.stubEnv('PRODUCT_DELIVERY_VERIFY_KEY', DELIVERY_KEY.toString('base64')));
+
+  it('returns the active agent as a ReleaseDescriptor', async () => {
+    const target = '/api/v1/internal/releases/active?kind=agent&environment=demo';
+    const res = await dispatch(new Request(`http://localhost${target}`, {
+      headers: { 'x-internal-caller': 'sda-agent-runtime', 'x-caller-context': await runtimeToken(target) } }));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.data).toMatchObject({ environment: 'demo', kind: 'agent', delivery_schema_version: 'agent.snapshot.v1', is_demo: true });
+    expect(body.data.content_hash).toBe(computeContentHash(body.data.content));
+  });
+
+  it('rejects an admin bearer token', async () => {
+    const res = await dispatch(call('GET', '/internal/releases/active?kind=agent&environment=demo', admin));
+    expect(res.status).toBe(401);
   });
 });

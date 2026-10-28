@@ -96,6 +96,18 @@ export function getConversationEnv(): ConversationEnv {
   return configured('conversation', () => parseConversationEnv(process.env));
 }
 
+// Agent delivery env: verify key for runtime -> studio-api calls; routes answer 503 while it is missing.
+const agentSchema = z.object({
+  PRODUCT_DELIVERY_VERIFY_KEY: z.preprocess(blankToUndefined, z.string().optional()),
+  PRODUCT_DELIVERY_VERIFY_KID: z.preprocess(blankToUndefined, z.string().regex(/^[A-Za-z0-9._-]{1,64}$/).default('runtime')),
+});
+
+export type AgentEnv = z.infer<typeof agentSchema>;
+
+export function getAgentEnv(): AgentEnv {
+  return configured('agent', () => agentSchema.parse(process.env));
+}
+
 // Storage env: parsed only when storage is used. No provider keys live in the web app.
 const storageSchema = z.object({
   S3_ENDPOINT: z.string().url(),

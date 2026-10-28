@@ -185,3 +185,10 @@ export async function listAgentAudit(db: ProductDatabase, query: { limit: number
   const page = await repo.listAudit(db, query);
   return { items: page.items.map(toAuditDTO), next_cursor: page.next_cursor };
 }
+
+export async function activeDescriptor(db: ProductDatabase, environment: string) {
+  const row = await repo.getActive(db);
+  if (!row) throw new ProductError(422, 'RES_EXPERIENCE_NOT_CONFIGURED', 'No active agent release');
+  return { environment, kind: 'agent' as const, release_id: row.release.id, content_hash: row.release.content_hash,
+    delivery_schema_version: 'agent.snapshot.v1' as const, content: row.release.content, is_demo: true as const };
+}
