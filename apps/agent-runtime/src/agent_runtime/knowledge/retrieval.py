@@ -6,7 +6,7 @@ max_chunks_per_doc per document, top_k overall. v1 scores every chunk of the kno
 fine at thousands of chunks.
 """
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC
 
 import psycopg
@@ -54,15 +54,16 @@ _SEARCH = """
 
 
 class PgKnowledge:
-    def __init__(self, uow, embedding: EmbeddingPort | None, *, timeout_ms: int = 1500):
+    def __init__(self, uow, embeddings: Mapping[str, EmbeddingPort], *, timeout_ms: int = 1500):
         self._uow = uow
-        self._embedding = embedding
+        self._embeddings = embeddings
         self._timeout_ms = int(timeout_ms)
 
     def retrieve(self, request: RetrievalRequest, *, required: MetadataCondition | None = None
                  ) -> RetrievalResult | KnowledgeUnavailable:
-        """``required`` is the binding's own condition, ANDed with the caller's; a bad one is a misconfiguration."""
-        vector = self._embed_query(request.query)
+        """``required`` is the binding's own condition, ANDed with the caller's; a bad one is a misconfiguration.
+
+        The query is embedded between the two reads, with the KB's own model, so no transaction waits on it."""
         setting = request.retrieval_setting
         try:
             with self._uow.begin() as session:
@@ -72,12 +73,15 @@ class PgKnowledge:
                 if model is None:
                     return KnowledgeUnavailable("not_found")
                 fields = load_fields(session, request.knowledge_id)
-                try:
-                    pinned = compile_filter(required, fields, prefix="rf")
-                except FilterError:
-                    return KnowledgeUnavailable("invalid_binding")
-                predicate = compile_filter(request.metadata_condition, fields)
-                semantic = not isinstance(vector, EmbeddingUnavailable) and model == self._embedding.model
+            try:
+                pinned = compile_filter(required, fields, prefix="rf")
+            except FilterError:
+                return KnowledgeUnavailable("invalid_binding")
+            predicate = compile_filter(request.metadata_condition, fields)
+            vector = self._embed_query(model, request.query)
+            semantic = not isinstance(vector, EmbeddingUnavailable)
+            with self._uow.begin() as session:
+                session.execute(text(f"SET LOCAL statement_timeout = {self._timeout_ms}"))
                 rows = session.execute(text(_SEARCH.format(predicate=f"{pinned.sql} AND {predicate.sql}")), {
                     **pinned.params, **predicate.params, "query": request.query, "kb": request.knowledge_id,
                     "model": model, "vector": vector_literal(vector) if semantic else None,
@@ -112,11 +116,29 @@ class PgKnowledge:
                 {key: row[key] for key in ("id", "name", "type", "filterable", "label")}))
         return {kb_id: tuple(items) for kb_id, items in found.items()}
 
-    def _embed_query(self, query: str):
-        if self._embedding is None:
+    def base_fields(self, kb_ids: Sequence[str]) -> dict[str, frozenset[str]]:
+        """Field names per existing knowledge base (empty set when it has none). Database errors propagate."""
+        if not kb_ids:
+            return {}
+        with self._uow.begin() as session:
+            session.execute(text(f"SET LOCAL statement_timeout = {self._timeout_ms}"))
+            rows = session.execute(text(
+                "SELECT kb.id AS kb_id, f.name FROM knowledge.knowledge_bases kb "
+                "LEFT JOIN knowledge.metadata_fields f ON f.kb_id = kb.id WHERE kb.id = ANY(:kbs)"),
+                {"kbs": list(kb_ids)}).mappings().all()
+        found: dict[str, set[str]] = {}
+        for row in rows:
+            names = found.setdefault(row["kb_id"], set())
+            if row["name"] is not None:
+                names.add(row["name"])
+        return {kb: frozenset(names) for kb, names in found.items()}
+
+    def _embed_query(self, model: str, query: str):
+        embedding = self._embeddings.get(model)
+        if embedding is None:
             return EmbeddingUnavailable("not_configured")
         try:
-            return self._embedding.embed_query(query)
+            return embedding.embed_query(query)
         except Exception as error:  # any provider failure must degrade to keyword search
             logger.warning("knowledge query embedding failed: %s", type(error).__name__)
             return EmbeddingUnavailable("provider_error")

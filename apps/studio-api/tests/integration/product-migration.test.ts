@@ -320,6 +320,8 @@ describe('Product migration', () => {
          WHERE table_schema = 'product' AND column_name = 'revision' ORDER BY table_name`,
       );
       expect(types.rows).toEqual([
+        { table_name: 'agent_active', data_type: 'bigint' },
+        { table_name: 'agent_draft', data_type: 'bigint' },
         { table_name: 'experience_drafts', data_type: 'bigint' },
         { table_name: 'experiences', data_type: 'bigint' },
       ]);

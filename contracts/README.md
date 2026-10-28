@@ -61,6 +61,7 @@ Tên `Experience` được dùng chung cho các endpoint, schema metadata/draft/
 | [experience-validation-api.yaml](openapi/public/experience-validation-api.yaml) | Kiểm tra cấu hình và chạy evaluation. |
 | [experience-preview-api.yaml](openapi/public/experience-preview-api.yaml) | Tạo preview và gửi turn trong preview. |
 | [experience-release-api.yaml](openapi/public/experience-release-api.yaml) | Publish/read release, active pointer, activate và rollback. |
+| [agent-api.yaml](openapi/public/agent-api.yaml) | Cấu hình agent: draft, kiểm tra bằng runtime, publish/restore release, active pointer và audit (`/admin/agent/*`). |
 | [audit-api.yaml](openapi/public/audit-api.yaml) | Đọc audit log. |
 | [admin-auth-api.yaml](openapi/public/admin-auth-api.yaml) | Đăng nhập Admin của scaffold. |
 | [admin-user-api.yaml](openapi/public/admin-user-api.yaml) | Quản lý người dùng của scaffold. |
@@ -141,6 +142,17 @@ Mọi endpoint Product `/api/v1` nhận JSON body (Studio API/Hono) yêu cầu `
 (cho phép `; charset=...` hoặc `application/*+json`); body không rỗng với content type khác trả `415`
 `VAL_UNSUPPORTED_MEDIA_TYPE` và không set cookie (chống CSRF qua request "simple" cross-site). Body tùy chọn
 để trống (ví dụ `/auth/refresh` dùng cookie) không cần content type. Mã lỗi xem [error_codes.md](error_codes.md).
+
+## Agent config (Studio)
+
+Admin sửa một draft agent có revision, kiểm tra bằng runtime, rồi publish thành release bất biến hoặc restore release cũ
+([agent-api.yaml](openapi/public/agent-api.yaml)). Hai endpoint internal phục vụ luồng này:
+
+- `POST /api/v1/internal/agent-snapshots:validate` (runtime, Studio ký `purpose=agent.validate`) trong
+  [runtime-api.yaml](openapi/internal/runtime-api.yaml).
+- `GET /api/v1/internal/releases/active?kind=agent&environment=...` (Studio, runtime ký `purpose=release.delivery`,
+  `iss=sda-agent-runtime`, `aud=sda-studio-api`, gắn method/request_target/body_sha256) trong
+  [product-delivery-api.yaml](openapi/internal/product-delivery-api.yaml).
 
 ## B-01 runtime lifecycle và capability
 

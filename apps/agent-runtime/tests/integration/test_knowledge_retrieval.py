@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import text
 
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork
+from agent_runtime.knowledge.embedding import by_model
 from agent_runtime.knowledge.filters import FilterError
 from agent_runtime.knowledge.retrieval import PgKnowledge
 from agent_runtime.knowledge.schemas import KnowledgeUnavailable, MetadataCondition, RetrievalRequest
@@ -22,7 +23,7 @@ def rig(test_database):
                             metadata={"houses": ["house_s"], "province": "Đà Nẵng"})
     rig.indexer.run_once()
     runtime = role_engine(test_database.url, test_database.runtime_role)
-    rig.knowledge = PgKnowledge(RuntimeUnitOfWork(runtime), rig.embedding)
+    rig.knowledge = PgKnowledge(RuntimeUnitOfWork(runtime), by_model(rig.embedding))
     yield rig
     runtime.dispose()
     rig.dispose()
@@ -108,7 +109,7 @@ def test_unexpected_embedding_errors_degrade_to_keyword_search(rig):
         def embed_query(self, text):
             raise RuntimeError("boom")
 
-    rig.knowledge._embedding = Exploding()
+    rig.knowledge._embeddings = by_model(Exploding())
     result = ask(rig, "hoc phi")
     assert result.degraded and result.records[0].metadata["document_id"] == "cntt"
 
@@ -193,3 +194,10 @@ def test_fields_are_read_for_several_knowledge_bases_at_once(rig):
     fields = rig.knowledge.fields(["kb1", "missing"])
     assert [field.name for field in fields["kb1"]] == ["houses", "province"]
     assert "missing" not in fields and rig.knowledge.fields([]) == {}
+
+
+def test_base_fields_lists_existing_bases_even_without_fields(rig):
+    rig.writer.create_knowledge_base("empty", "Empty", rig.embedding.model)
+    found = rig.knowledge.base_fields(["kb1", "empty", "missing"])
+    assert found == {"kb1": frozenset({"houses", "province"}), "empty": frozenset()}
+    assert rig.knowledge.base_fields([]) == {}

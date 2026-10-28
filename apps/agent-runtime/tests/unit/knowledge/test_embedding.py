@@ -78,15 +78,6 @@ def test_vector_literal():
     assert vector_literal([0.5, -1.0]) == "[0.5,-1.0]"
 
 
-def test_build_embedding_port_passes_query_path_overrides_through():
-    from types import SimpleNamespace
-
-    from agent_runtime.infrastructure.llm.gemini_embedding import build_embedding_port
-
-    settings = SimpleNamespace(GOOGLE_API_KEY="", KNOWLEDGE_EMBEDDING_MODEL="m-test", PROXY_URL=None)
-    default = build_embedding_port(settings)
-    tuned = build_embedding_port(settings, timeout_ms=1500, max_retries=0)
-    assert (default._max_retries, tuned._max_retries, tuned.model) == (2, 0, "m-test")
 
 
 def test_api_error_without_a_code_is_a_retryable_provider_error():

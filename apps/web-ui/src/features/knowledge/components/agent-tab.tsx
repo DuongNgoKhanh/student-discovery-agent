@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useAgentParams } from '../hooks/use-knowledge';
 import type { AgentParams } from '../types';
 import { ErrorText } from './error-text';
@@ -11,16 +13,15 @@ const TOOLS = ['knowledge.search', 'knowledge.show'] as const satisfies readonly
 
 export function AgentTab({ kb }: { kb: string }) {
   const { data, error } = useAgentParams(kb);
-  // `warnings` explains adjustments for the admin; agent.json only takes the two param objects.
+  // `warnings` explains adjustments for the admin; the agent only takes the two param objects.
   const { warnings = [], ...params } = data ?? {};
   const json = data ? JSON.stringify(params, null, 2) : '';
   return (
     <div className="space-y-4 text-sm">
-      <ol className="list-inside list-decimal space-y-1 text-13">
-        <li>Mở <code className="font-mono">prototypes/agent-chat/releases/agent.json</code>.</li>
-        <li>Thay params của <code className="font-mono">knowledge.search</code> và <code className="font-mono">knowledge.show</code> trong mảng <code className="font-mono">tools</code>.</li>
-        <li>Mở hội thoại mới để thấy thay đổi.</li>
-      </ol>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
+        <p className="text-13 text-muted-foreground">Bật công cụ tìm kiếm của agent với knowledge base này. Bạn kiểm tra và phát hành ở trang Agent.</p>
+        <Button asChild size="sm"><Link href={`/admin/agent?section=tools&kb=${encodeURIComponent(kb)}`}>Gắn vào agent</Link></Button>
+      </div>
       <ErrorText error={error} />
       {warnings.length > 0 && (
         <div role="status" className="flex gap-2 rounded-xl bg-warning-subtle px-4 py-3 text-13 text-warning-foreground">

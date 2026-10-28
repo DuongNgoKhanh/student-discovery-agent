@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, StringConstraints, model_validator
 from agent_runtime.knowledge.schemas import OPERATORS, FieldName, MetadataCondition, MetadataField
 from agent_runtime.sessions.schemas.common import ContractModel, NonEmptyText, OpaqueId
 
-SUPPORTED_MODEL_PROVIDERS = frozenset({"gemini", "openai"})  # adapters: infrastructure/llm/model_registry.py
+SUPPORTED_MODEL_PROVIDERS = frozenset({"gemini", "openai", "vllm"})  # adapters: infrastructure/llm/model_registry.py
 PROMPT_VARIABLES = frozenset({"display_name", "current_date"})
 PLACEHOLDER = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 

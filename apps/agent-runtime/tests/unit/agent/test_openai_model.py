@@ -1,6 +1,7 @@
 """OpenAI dialect: settings mapping and Chat Completions wire format, checked offline."""
 import json
 
+from agno.models.message import Message
 from agno.models.openai import OpenAIChat
 from agno.models.response import ModelResponse
 
@@ -33,6 +34,17 @@ def test_settings_map_to_the_openai_client_and_sdk_retries_are_off():
     kwargs = created[0]
     assert (kwargs["id"], kwargs["api_key"], kwargs["max_completion_tokens"], kwargs["timeout"],
             kwargs["max_retries"], kwargs["http_client"]) == ("gpt-4.1-mini", "key", 300, 5.0, 0, None)
+
+
+def test_vllm_targets_its_base_url_keeps_the_system_role_and_turns_thinking_off():
+    from agno.models.openai.like import OpenAILike
+
+    from agent_runtime.infrastructure.llm.vllm_model import VllmChatModel
+
+    model = VllmChatModel("key", base_url="http://vllm/v1").build(SETTINGS)
+    assert isinstance(model, OpenAILike) and model.base_url == "http://vllm/v1"
+    assert model.extra_body == {"chat_template_kwargs": {"enable_thinking": False}}
+    assert model._format_message(Message(role="system", content="x"))["role"] == "system"
 
 
 def test_proxy_client_is_pooled_per_adapter():

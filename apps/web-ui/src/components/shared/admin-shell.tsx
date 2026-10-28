@@ -3,14 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Database, Menu, Users } from 'lucide-react';
+import { Bot, Database, Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils/cn';
 import { IconButton } from './icon-button';
 
 const NAV = [
+  { key: 'agent', href: '/admin/agent', label: 'Agent', icon: Bot, match: (path: string) => path.startsWith('/admin/agent') },
   { key: 'knowledge', href: '/admin/knowledge', label: 'Knowledge Base', icon: Database, match: (path: string) => path.startsWith('/admin/knowledge') },
-  { key: 'users', href: '/admin', label: 'Người dùng', icon: Users, match: (path: string) => path === '/admin' },
 ] as const;
 
 export interface AdminShellProps {
@@ -25,7 +25,7 @@ function SidebarBody({ pathname, account, knowledgeNav, onNavigate }: {
 }) {
   return (
     <div className="flex h-full flex-col gap-4 px-3 py-4">
-      <Link href="/admin/knowledge" onClick={onNavigate} className="rounded-md px-2 text-base font-semibold text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <Link href="/admin/agent" onClick={onNavigate} className="rounded-md px-2 text-base font-semibold text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         Agent Studio
       </Link>
       <nav aria-label="Điều hướng chính" className="flex min-h-0 flex-col gap-0.5 overflow-y-auto">

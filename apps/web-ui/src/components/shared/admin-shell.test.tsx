@@ -16,7 +16,8 @@ describe('AdminShell', () => {
   it('marks the current section in the app sidebar', () => {
     renderShell();
     expect(screen.getByRole('link', { name: 'Knowledge Base' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Người dùng' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Agent' })).not.toHaveAttribute('aria-current');
+    expect(screen.queryByText('Người dùng')).not.toBeInTheDocument();
     expect(screen.getByText('nội dung')).toBeInTheDocument();
     expect(screen.getByText('nhóm KB')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mở menu' })).toBeInTheDocument();
@@ -25,6 +26,13 @@ describe('AdminShell', () => {
   it('leaves "page" to the nested item inside a knowledge base', () => {
     pathname = '/admin/knowledge/kb1/documents';
     renderShell();
+    expect(screen.getByRole('link', { name: 'Knowledge Base' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('highlights Agent on /admin/agent', () => {
+    pathname = '/admin/agent';
+    renderShell();
+    expect(screen.getByRole('link', { name: 'Agent' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Knowledge Base' })).not.toHaveAttribute('aria-current');
   });
 });

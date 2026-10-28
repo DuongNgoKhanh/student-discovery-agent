@@ -55,7 +55,7 @@ def test_tables_and_unaccented_search_vector(engine):
             "SELECT count(*) FROM knowledge.chunks WHERE tsv @@ to_tsquery('simple', 'hoc & phi')")).scalar_one() == 1
         assert connection.execute(text(
             "SELECT format_type(atttypid, atttypmod) FROM pg_attribute "
-            "WHERE attrelid = 'knowledge.embeddings'::regclass AND attname = 'embedding'")).scalar_one() == "vector(768)"
+            "WHERE attrelid = 'knowledge.embeddings'::regclass AND attname = 'embedding'")).scalar_one() == "vector"
 
 
 def test_revision_content_is_immutable_but_status_is_not(engine):

@@ -42,6 +42,6 @@ describe('KnowledgeSettings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy knowledge.search' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
     expect(JSON.parse(writeText.mock.calls[1]![0] as string)).toEqual({ knowledge_base_id: 'kb1' });
-    expect(screen.getByText(/Mở hội thoại mới/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Gắn vào agent' })).toHaveAttribute('href', '/admin/agent?section=tools&kb=kb1');
   });
 });

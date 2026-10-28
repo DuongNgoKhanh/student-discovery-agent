@@ -9,6 +9,7 @@ from agent_runtime.infrastructure.db.grants import grant_knowledge_roles
 from agent_runtime.infrastructure.db.migrate import upgrade_database
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
 from agent_runtime.knowledge.authoring import KnowledgeWriter
+from agent_runtime.knowledge.embedding import by_model
 from agent_runtime.knowledge.fake import FakeEmbedding
 from agent_runtime.knowledge.indexer import IndexerService
 
@@ -51,4 +52,4 @@ def knowledge_rig(test_database, *, embedding: FakeEmbedding | None = None) -> K
     writer.put_field("kb1", "houses", "string_list", filterable=True)
     writer.put_field("kb1", "province", "string", filterable=True)
     return KnowledgeRig(engine, indexer_engine, uow, writer,
-                        IndexerService(RuntimeUnitOfWork(indexer_engine), embedding), embedding)
+                        IndexerService(RuntimeUnitOfWork(indexer_engine), by_model(embedding)), embedding)

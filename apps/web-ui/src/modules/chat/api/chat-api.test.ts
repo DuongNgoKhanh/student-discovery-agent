@@ -253,3 +253,90 @@ describe('chat API với mock transport', () => {
     });
   });
 });
+
+describe('chatApi qua contract /messages của BFF', () => {
+  const meta = { request_id: 'req', trace_id: 'trace', timestamp: '2026-10-28T00:00:00Z' };
+  const ok = (status: number, data: unknown) => ({ status, body: { status, success: true, data, error: null, meta } });
+  const activity = {
+    id: 'act1', conversation_id: 'conv1', type: 'personality_assessment_adaptive', schema_version: 2,
+    status: 'in_progress', revision: 1, display_name: 'An', is_demo: true, answers: [], clarification: null, result: null,
+    progress: { completed: 0, min_total: 12, max_total: 15, total: null },
+    current_question: { question_id: 'q1', title: 'Câu 1', options: [{ id: 'o1', label: 'A' }, { id: 'o2', label: 'B' }] },
+  };
+  const conversation = {
+    id: 'conv1', schema_version: 1, status: 'active', revision: 2, agent_release_id: 'rel1', display_name: 'An',
+    active_activity: activity, created_at: 'x', expires_at: 'y',
+  };
+  const completed = (extra: Record<string, unknown> = {}) => ({
+    id: 'resp1', conversation_id: 'conv1', status: 'completed', revision: 2,
+    output: { message_id: 'msg1', blocks: [{ block_id: 'b1', type: 'text', schema_version: 1, content: 'Chào' }] },
+    activity: null, error: null, ...extra,
+  });
+
+  function recording(responses: Record<string, unknown>) {
+    const calls: { method: string; path: string; body?: unknown }[] = [];
+    const api = createChatApi({
+      async request(method, path, body) {
+        calls.push({ method, path, body });
+        return responses[`${method} ${path}`] as { status: number; body: unknown };
+      },
+    });
+    return { api, calls };
+  }
+
+  it('khai activity profile và block hỗ trợ khi tạo hội thoại', async () => {
+    const { api, calls } = recording({
+      'POST conversations': ok(201, { conversation: { ...conversation, revision: 0, active_activity: null }, message_id: 'm0', blocks: [{ block_id: 'b0', type: 'text', schema_version: 1, content: 'Chào' }] }),
+    });
+    await api.createConversation('create_1');
+    expect(calls[0]!.body).toMatchObject({
+      idempotency_key: 'create_1',
+      accepted_activity_profiles: ['riasec.mean.bounds.v2'],
+      supported_blocks: expect.arrayContaining([{ type: 'assessment_question', schema_versions: [1, 2] }]),
+    });
+  });
+
+  it('gửi interaction thành một content part và đọc lại activity khi response chỉ có bản gọn', async () => {
+    const { api, calls } = recording({
+      'POST conversations/conv1/messages': ok(200, completed({ activity: { id: 'act1', status: 'in_progress' } })),
+      'GET conversations/conv1': ok(200, conversation),
+    });
+    const result = await api.sendTurn('conv1', {
+      type: 'interaction', activity_id: 'act1', action: 'set_name', payload: { display_name: 'An' },
+      expected_revision: 1, idempotency_key: 'turn_1',
+    });
+    expect(calls[0]!.body).toEqual({
+      expected_revision: 1, idempotency_key: 'turn_1',
+      content: [{ type: 'interaction', activity_id: 'act1', action: 'set_name', payload: { display_name: 'An' } }],
+    });
+    expect(calls[1]).toMatchObject({ method: 'GET', path: 'conversations/conv1' });
+    expect(result).toMatchObject({ revision: 2, turnId: 'resp1', messageId: 'msg1', activity: { id: 'act1', status: 'in_progress' } });
+  });
+
+  it('gửi text tự do dạng {type:"text"}', async () => {
+    const { api, calls } = recording({ 'POST conversations/conv1/messages': ok(200, completed()) });
+    await api.sendTurn('conv1', { type: 'message', content: { text: 'xin chào' }, expected_revision: 1, idempotency_key: 'turn_2' });
+    expect(calls[0]!.body).toEqual({ expected_revision: 1, idempotency_key: 'turn_2', content: [{ type: 'text', text: 'xin chào' }] });
+  });
+
+  it('lượt failed thành ApiError với mã đã chuẩn hoá', async () => {
+    const { api } = recording({
+      'POST conversations/conv1/messages': ok(200, completed({ status: 'failed', output: null, error: { code: 'SYS_ENGINE_FAILURE' } })),
+    });
+    await expect(
+      api.sendTurn('conv1', { type: 'message', content: { text: 'x' }, expected_revision: 1, idempotency_key: 'turn_3' }),
+    ).rejects.toMatchObject({ code: 'SYS_ENGINE_FAILURE', httpStatus: 200 });
+  });
+
+  it('đổi mã lỗi registry mới về tên UI đang xử lý', async () => {
+    const { api } = recording({
+      'POST conversations/conv1/messages': {
+        status: 409,
+        body: { status: 409, success: false, data: null, meta, error: { code: 'CONFLICT_REVISION', message: 'x', retryable: false, details: null } },
+      },
+    });
+    await expect(
+      api.sendTurn('conv1', { type: 'message', content: { text: 'x' }, expected_revision: 0, idempotency_key: 'turn_4' }),
+    ).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
+  });
+});

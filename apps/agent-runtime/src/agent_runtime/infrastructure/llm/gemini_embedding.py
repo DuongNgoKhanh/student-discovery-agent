@@ -70,13 +70,3 @@ class GeminiEmbedding:
             self._sleep(RETRY_BACKOFF_SECONDS * 2 ** attempt)
         return EmbeddingUnavailable("provider_error")
 
-
-def build_embedding_port(settings, *, timeout_ms: int | None = None, max_retries: int | None = None) -> GeminiEmbedding:
-    """Indexer defaults unless overridden; the query path passes a tight timeout and no retries."""
-    options = {}
-    if timeout_ms is not None:
-        options["timeout_ms"] = timeout_ms
-    if max_retries is not None:
-        options["max_retries"] = max_retries
-    return GeminiEmbedding(settings.GOOGLE_API_KEY, settings.KNOWLEDGE_EMBEDDING_MODEL,
-                           proxy_url=settings.PROXY_URL, **options)

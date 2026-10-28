@@ -77,5 +77,71 @@ BEGIN
   CREATE TRIGGER experience_releases_no_truncate_trigger
   BEFORE TRUNCATE ON product.experience_releases
   FOR EACH STATEMENT EXECUTE FUNCTION product.prevent_experience_release_mutation();
+
+  -- Agent config (Studio Agent Config): one default agent, immutable releases, active pointer, audit.
+  CREATE TABLE IF NOT EXISTS product.agent_draft (
+    id TEXT DEFAULT 'default' NOT NULL CHECK (id = 'default'),
+    content JSONB NOT NULL,
+    revision BIGINT DEFAULT 1 NOT NULL,
+    content_hash TEXT NOT NULL,
+    updated_by TEXT NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    PRIMARY KEY (id)
+  );
+
+  CREATE TABLE IF NOT EXISTS product.agent_releases (
+    id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    content JSONB NOT NULL,
+    content_hash TEXT NOT NULL,
+    draft_revision BIGINT NOT NULL,
+    note TEXT CHECK (note IS NULL OR char_length(note) <= 500),
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT agent_releases_version_unique UNIQUE (version)
+  );
+
+  CREATE TABLE IF NOT EXISTS product.agent_active (
+    id TEXT DEFAULT 'default' NOT NULL CHECK (id = 'default'),
+    release_id TEXT NOT NULL REFERENCES product.agent_releases(id),
+    revision BIGINT DEFAULT 1 NOT NULL,
+    updated_by TEXT NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    PRIMARY KEY (id)
+  );
+
+  CREATE TABLE IF NOT EXISTS product.audit_events (
+    id TEXT NOT NULL,
+    at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target_kind TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    before_ref TEXT,
+    after_ref TEXT,
+    outcome TEXT NOT NULL CHECK (outcome IN ('success', 'rejected')),
+    details JSONB DEFAULT '{}'::jsonb NOT NULL,
+    PRIMARY KEY (id)
+  );
+  CREATE INDEX IF NOT EXISTS audit_events_target_at_idx ON product.audit_events (target_kind, at DESC, id DESC);
+
+  CREATE OR REPLACE FUNCTION product.prevent_agent_release_mutation()
+  RETURNS trigger AS $fn$
+  BEGIN
+    RAISE EXCEPTION 'agent_releases is immutable: UPDATE, DELETE and TRUNCATE are prohibited'
+      USING ERRCODE = 'restrict_violation';
+  END;
+  $fn$ LANGUAGE plpgsql;
+
+  DROP TRIGGER IF EXISTS agent_releases_immutable_trigger ON product.agent_releases;
+  CREATE TRIGGER agent_releases_immutable_trigger
+  BEFORE UPDATE OR DELETE ON product.agent_releases
+  FOR EACH ROW EXECUTE FUNCTION product.prevent_agent_release_mutation();
+
+  DROP TRIGGER IF EXISTS agent_releases_no_truncate_trigger ON product.agent_releases;
+  CREATE TRIGGER agent_releases_no_truncate_trigger
+  BEFORE TRUNCATE ON product.agent_releases
+  FOR EACH STATEMENT EXECUTE FUNCTION product.prevent_agent_release_mutation();
 END
 $$;

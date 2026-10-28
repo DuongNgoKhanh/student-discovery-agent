@@ -32,6 +32,14 @@ describe('AgentTab', () => {
     for (const block of document.querySelectorAll('pre')) expect(block.textContent).not.toContain('warnings');
   });
 
+  it('links to the agent tools with this knowledge base preselected', async () => {
+    mocked.agentParams.mockResolvedValue({ ...params, warnings: [] });
+    render(<TestProviders client={new QueryClient()}><AgentTab kb="kb_demo" /></TestProviders>);
+    const link = await screen.findByRole('link', { name: 'Gắn vào agent' });
+    expect(link).toHaveAttribute('href', '/admin/agent?section=tools&kb=kb_demo');
+    expect(screen.queryByText(/agent\.json/)).not.toBeInTheDocument();
+  });
+
   it('colours keys, strings, numbers and literals without changing the text', () => {
     const json = JSON.stringify({ a: 'x: "y"', b: -1.5, c: [true, null] }, null, 2);
     const tokens = tokenizeJson(json);
