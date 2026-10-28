@@ -1,0 +1,377 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery - Studio Agent
+  version: 1.0.0
+  description: >-
+    Admin cấu hình agent: một draft có revision, kiểm tra bằng runtime, phát hành release bất biến (version tăng dần),
+    con trỏ active có revision, khôi phục release cũ và audit. Publish/restore idempotent theo idempotency_key và
+    optimistic theo expected_*_revision (409 CONFLICT_REVISION); release không hợp lệ bị chặn bằng 422 PUBLISH_GATE_FAILED
+    (details.issues). Chưa có active release thì publish/restore trả 422 RES_EXPERIENCE_NOT_CONFIGURED.
+    Runtime tải active release qua endpoint internal trong internal/product-delivery-api.yaml.
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+tags:
+  - name: Studio Agent
+    description: Agent draft, validation, releases, active pointer and audit.
+security:
+  - BearerAuth: []
+paths:
+  /admin/agent/draft:
+    get:
+      operationId: getAgentDraft
+      tags: [Studio Agent]
+      summary: Đọc draft hiện tại
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/AgentDraftEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+    put:
+      operationId: saveAgentDraft
+      tags: [Studio Agent]
+      summary: Lưu draft (optimistic theo expected_revision)
+      description: 409 CONFLICT_REVISION trả details.current là draft hiện hành. Nội dung không phải canonical JSON trả 422 VAL_INVALID_INPUT.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/AgentDraftSave"}}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/AgentDraftEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "409": {$ref: "#/components/responses/AgentConflict"}
+        "413": {$ref: ../schemas/common.yaml#/components/responses/ChatError413}
+        "422": {$ref: "#/components/responses/AgentUnprocessable"}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/agent/draft/validations:
+    post:
+      operationId: validateAgentDraft
+      tags: [Studio Agent]
+      summary: Kiểm tra draft bằng runtime
+      description: Gọi runtime xác thực đúng như khi agent được nạp; kết quả gắn với draft_revision.
+      responses:
+        "200": {description: Báo cáo; valid=false vẫn là 200, content: {application/json: {schema: {$ref: "#/components/schemas/AgentValidationEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/agent/releases:
+    post:
+      operationId: publishAgentRelease
+      tags: [Studio Agent]
+      summary: Phát hành draft thành release mới và đặt làm active
+      description: Replay cùng idempotency_key và payload trả lại kết quả đã lưu; khác payload 409 CONFLICT_IDEMPOTENCY_KEY. Draft trùng release active 409 CONFLICT_INVALID_STATE. Không hợp lệ 422 PUBLISH_GATE_FAILED.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/AgentPublishInput"}}}
+      responses:
+        "201": {description: Created, content: {application/json: {schema: {$ref: "#/components/schemas/AgentReleaseEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "409": {$ref: "#/components/responses/AgentConflict"}
+        "413": {$ref: ../schemas/common.yaml#/components/responses/ChatError413}
+        "422": {$ref: "#/components/responses/AgentUnprocessable"}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+    get:
+      operationId: listAgentReleases
+      tags: [Studio Agent]
+      summary: Danh sách release (mới nhất trước)
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {name: cursor, in: query, schema: {type: string, maxLength: 4096}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/AgentReleasePageEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "422": {$ref: "#/components/responses/AgentUnprocessable"}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/agent/releases/{release_id}:
+    parameters: [{$ref: "#/components/parameters/ReleaseId"}]
+    get:
+      operationId: getAgentRelease
+      tags: [Studio Agent]
+      summary: Chi tiết release kèm content
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/AgentReleaseEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "422": {$ref: "#/components/responses/AgentUnprocessable"}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/agent/releases/{release_id}:restore:
+    parameters: [{$ref: "#/components/parameters/ReleaseId"}]
+    post:
+      operationId: restoreAgentRelease
+      tags: [Studio Agent]
+      summary: Khôi phục release cũ làm active
+      description: Không tạo release mới, chỉ dời con trỏ active. Release đã active 409 CONFLICT_INVALID_STATE; release không còn hợp lệ 422 PUBLISH_GATE_FAILED.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/AgentRestoreInput"}}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/AgentActiveEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "409": {$ref: "#/components/responses/AgentConflict"}
+        "413": {$ref: ../schemas/common.yaml#/components/responses/ChatError413}
+        "422": {$ref: "#/components/responses/AgentUnprocessable"}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/agent/active:
+    get:
+      operationId: getActiveAgent
+      tags: [Studio Agent]
+      summary: Con trỏ active hiện tại (data null nếu chưa có)
+      responses:
+        "200": {description: OK; data null khi chưa có release active, content: {application/json: {schema: {$ref: "#/components/schemas/AgentActiveEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/agent/audit-logs:
+    get:
+      operationId: listAgentAuditLogs
+      tags: [Studio Agent]
+      summary: Audit thay đổi agent (mới nhất trước)
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {name: cursor, in: query, schema: {type: string, maxLength: 4096}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/AgentAuditPageEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "422": {$ref: "#/components/responses/AgentUnprocessable"}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+components:
+  securitySchemes:
+    BearerAuth: {type: http, scheme: bearer, bearerFormat: JWT, description: Admin JWT access token}
+  responses:
+    AgentConflict:
+      description: >-
+        CONFLICT_REVISION (draft hoặc active đã đổi; details.kind=revision_conflict kèm current/actual_*_revision),
+        CONFLICT_INVALID_STATE (details.kind=no_changes) hoặc CONFLICT_IDEMPOTENCY_KEY. Đồng bộ lại rồi thử lại với key mới.
+      headers:
+        Cache-Control: {schema: {type: string, enum: [no-store]}}
+      content: {application/json: {schema: {$ref: "#/components/schemas/AgentConflictEnvelope"}}}
+    AgentUnprocessable:
+      description: >-
+        PUBLISH_GATE_FAILED (details.kind=validation, issues = báo cáo của runtime), VAL_INVALID_INPUT (nội dung không phải
+        canonical JSON hoặc tham số sai) hoặc RES_EXPERIENCE_NOT_CONFIGURED (chưa có release active).
+      headers:
+        Cache-Control: {schema: {type: string, enum: [no-store]}}
+      content: {application/json: {schema: {$ref: "#/components/schemas/AgentUnprocessableEnvelope"}}}
+  parameters:
+    ReleaseId: {name: release_id, in: path, required: true, schema: {type: string, pattern: "^agr_[0-9a-f]{24}$"}}
+  schemas:
+    AgentConflictEnvelope:
+      type: object
+      required: [status, success, data, error, meta]
+      properties:
+        status: {type: integer, enum: [409]}
+        success: {type: boolean, enum: [false]}
+        data: {type: object, nullable: true, enum: [null]}
+        message: {type: string, nullable: true}
+        meta: {$ref: ../schemas/common.yaml#/components/schemas/ChatResponseMeta}
+        error:
+          type: object
+          required: [code, message, retryable]
+          properties:
+            code: {type: string, enum: [CONFLICT_REVISION, CONFLICT_INVALID_STATE, CONFLICT_IDEMPOTENCY_KEY]}
+            message: {type: string}
+            retryable: {type: boolean}
+            details:
+              type: object
+              nullable: true
+              additionalProperties: true
+              properties:
+                kind: {type: string, enum: [revision_conflict, no_changes]}
+                current: {$ref: "#/components/schemas/AgentDraft"}
+    AgentUnprocessableEnvelope:
+      type: object
+      required: [status, success, data, error, meta]
+      properties:
+        status: {type: integer, enum: [422]}
+        success: {type: boolean, enum: [false]}
+        data: {type: object, nullable: true, enum: [null]}
+        message: {type: string, nullable: true}
+        meta: {$ref: ../schemas/common.yaml#/components/schemas/ChatResponseMeta}
+        error:
+          type: object
+          required: [code, message, retryable]
+          properties:
+            code: {type: string, enum: [PUBLISH_GATE_FAILED, VAL_INVALID_INPUT, VAL_INVALID_REQUEST, RES_EXPERIENCE_NOT_CONFIGURED]}
+            message: {type: string}
+            retryable: {type: boolean}
+            details:
+              type: object
+              nullable: true
+              additionalProperties: true
+              properties:
+                kind: {type: string}
+                issues: {type: array, items: {$ref: "#/components/schemas/AgentIssue"}}
+    Revision: {type: integer, minimum: 1}
+    IdempotencyKey: {type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$"}
+    PaginationMeta:
+      type: object
+      required: [limit, next_cursor, has_more]
+      properties:
+        limit: {type: integer}
+        next_cursor: {type: string, nullable: true}
+        has_more: {type: boolean}
+    AgentContent:
+      type: object
+      additionalProperties: true
+      description: Nội dung agent.snapshot.v1 (greeting, allowed_activity_profiles, persona, model, limits, tools, guardrails, links, templates); runtime là nguồn xác thực.
+    AgentDraft:
+      type: object
+      additionalProperties: false
+      required: [content, revision, content_hash, updated_at, updated_by]
+      properties:
+        content: {$ref: "#/components/schemas/AgentContent"}
+        revision: {$ref: "#/components/schemas/Revision"}
+        content_hash: {type: string}
+        updated_at: {type: string, format: date-time}
+        updated_by: {type: string}
+    AgentDraftSave:
+      type: object
+      additionalProperties: false
+      required: [content, expected_revision]
+      properties:
+        content: {$ref: "#/components/schemas/AgentContent"}
+        expected_revision: {$ref: "#/components/schemas/Revision"}
+    AgentIssue:
+      type: object
+      additionalProperties: false
+      required: [path, code, message]
+      properties:
+        path: {type: string, description: "Đường dẫn trường, ví dụ model.ref hoặc tools[0].params"}
+        code: {type: string}
+        message: {type: string}
+    AgentValidation:
+      type: object
+      additionalProperties: false
+      required: [valid, content_hash, issues, draft_revision]
+      properties:
+        valid: {type: boolean}
+        content_hash: {type: string}
+        issues: {type: array, items: {$ref: "#/components/schemas/AgentIssue"}}
+        draft_revision: {$ref: "#/components/schemas/Revision"}
+    AgentPublishInput:
+      type: object
+      additionalProperties: false
+      required: [expected_draft_revision, expected_active_revision, idempotency_key]
+      properties:
+        expected_draft_revision: {$ref: "#/components/schemas/Revision"}
+        expected_active_revision: {$ref: "#/components/schemas/Revision"}
+        note: {type: string, maxLength: 500}
+        idempotency_key: {$ref: "#/components/schemas/IdempotencyKey"}
+    AgentRestoreInput:
+      type: object
+      additionalProperties: false
+      required: [expected_active_revision, idempotency_key]
+      properties:
+        expected_active_revision: {$ref: "#/components/schemas/Revision"}
+        idempotency_key: {$ref: "#/components/schemas/IdempotencyKey"}
+    AgentReleaseSummary:
+      type: object
+      required: [id, version, content_hash, draft_revision, note, created_at, created_by, is_active]
+      properties:
+        id: {type: string, pattern: "^agr_[0-9a-f]{24}$"}
+        version: {type: integer, minimum: 1}
+        content_hash: {type: string}
+        draft_revision: {$ref: "#/components/schemas/Revision"}
+        note: {type: string, nullable: true}
+        created_at: {type: string, format: date-time}
+        created_by: {type: string}
+        is_active: {type: boolean}
+    AgentRelease:
+      allOf:
+        - $ref: "#/components/schemas/AgentReleaseSummary"
+        - type: object
+          required: [content]
+          properties:
+            content: {$ref: "#/components/schemas/AgentContent"}
+    AgentActive:
+      type: object
+      additionalProperties: false
+      required: [release_id, version, content_hash, revision, updated_at, updated_by]
+      properties:
+        release_id: {type: string}
+        version: {type: integer, minimum: 1}
+        content_hash: {type: string}
+        revision: {$ref: "#/components/schemas/Revision"}
+        updated_at: {type: string, format: date-time}
+        updated_by: {type: string}
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      required: [id, at, actor, action, before_ref, after_ref, outcome, details]
+      properties:
+        id: {type: string}
+        at: {type: string, format: date-time}
+        actor: {type: string}
+        action: {type: string, example: agent.release.publish}
+        before_ref: {type: string, nullable: true}
+        after_ref: {type: string, nullable: true}
+        outcome: {type: string, enum: [success, rejected]}
+        details: {type: object, additionalProperties: true}
+    AgentDraftEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/AgentDraft"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    AgentValidationEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/AgentValidation"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    AgentReleaseEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/AgentRelease"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    AgentActiveEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {anyOf: [{$ref: "#/components/schemas/AgentActive"}, {type: object, nullable: true, enum: [null]}]}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    AgentReleasePageEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required: [data, meta]
+              properties:
+                data:
+                  type: object
+                  required: [items]
+                  properties: {items: {type: array, items: {$ref: "#/components/schemas/AgentReleaseSummary"}}}
+                meta:
+                  allOf:
+                    - $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+                    - {type: object, required: [pagination], properties: {pagination: {$ref: "#/components/schemas/PaginationMeta"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    AgentAuditPageEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required: [data, meta]
+              properties:
+                data:
+                  type: object
+                  required: [items]
+                  properties: {items: {type: array, items: {$ref: "#/components/schemas/AuditEvent"}}}
+                meta:
+                  allOf:
+                    - $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+                    - {type: object, required: [pagination], properties: {pagination: {$ref: "#/components/schemas/PaginationMeta"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope

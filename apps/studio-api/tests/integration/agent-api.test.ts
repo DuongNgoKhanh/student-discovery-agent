@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { SignJWT } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dispatch } from '../helpers/api';
+import { declaredResponseValidator } from '../helpers/openapi-response';
 import { startPostgres, type PostgresHandle } from '../helpers/postgres';
 import { call, json, validateEnvelope } from '../helpers/users-api';
 import { migrateProduct } from '@/infrastructure/db/migrate';
@@ -12,6 +13,10 @@ import { computeContentHash } from '@/modules/experiences/canonical';
 import { setAgentValidator } from '@/modules/agent/runtime-validation';
 
 export const SEED = { greeting_text: 'Chào bạn!', allowed_activity_profiles: ['riasec.mean.bounds.v2'] };
+const expectDeclared = (envelope: unknown, path: string, method: string, status: number) => {
+  const validate = declaredResponseValidator('public/agent-api.yaml', path, method, status);
+  expect(validate(envelope), JSON.stringify(validate.errors)).toBe(true);
+};
 let pg: PostgresHandle;
 let admin: string;
 
@@ -45,10 +50,12 @@ describe('agent draft API', () => {
   it('reads the seeded draft and saves with revision', async () => {
     const read = await req('GET', '/admin/agent/draft');
     expect(read.body.data).toMatchObject({ content: SEED, revision: 1 });
+    expectDeclared(read.body, '/admin/agent/draft', 'get', 200);
     const saved = await req('PUT', '/admin/agent/draft', { content: { ...SEED, greeting_text: 'Xin chào' }, expected_revision: 1 });
     expect(saved.body.data.revision).toBe(2);
     const stale = await req('PUT', '/admin/agent/draft', { content: SEED, expected_revision: 1 });
     expect(stale.status).toBe(409);
+    expectDeclared(stale.body, '/admin/agent/draft', 'put', 409);
     expect(stale.body.error).toMatchObject({ code: 'CONFLICT_REVISION', details: { current: { revision: 2 } } });
   });
 
@@ -86,17 +93,22 @@ describe('agent releases', () => {
       expected_draft_revision: after.draft.revision, expected_active_revision: after.active.revision, note: 'đổi lời chào', idempotency_key: 'publish-it-0001',
     });
     expect(published.status).toBe(201);
+    expectDeclared(published.body, '/admin/agent/releases', 'post', 201);
     expect(published.body.data).toMatchObject({ is_active: true, note: 'đổi lời chào' });
 
     const list = await req('GET', '/admin/agent/releases?limit=10');
+    expectDeclared(list.body, '/admin/agent/releases', 'get', 200);
     expect(list.body.data.items[0]).toMatchObject({ id: published.body.data.id, is_active: true });
     const v1 = list.body.data.items.find((r: { version: number }) => r.version === 1);
 
     const active = (await state()).active;
     const restored = await req('POST', `/admin/agent/releases/${v1.id}:restore`, { expected_active_revision: active.revision, idempotency_key: 'restore-it-0001' });
     expect(restored.body.data).toMatchObject({ release_id: v1.id, version: 1 });
+    expectDeclared(restored.body, '/admin/agent/releases/{release_id}:restore', 'post', 200);
+    expectDeclared((await req('GET', '/admin/agent/active')).body, '/admin/agent/active', 'get', 200);
 
     const audit = await req('GET', '/admin/agent/audit-logs');
+    expectDeclared(audit.body, '/admin/agent/audit-logs', 'get', 200);
     expect(audit.body.data.items.map((e: { action: string }) => e.action).slice(0, 2)).toEqual(['agent.release.restore', 'agent.release.publish']);
   });
 
@@ -127,6 +139,7 @@ describe('agent releases', () => {
     const res = await req('POST', '/admin/agent/releases', { expected_draft_revision: draft.revision, expected_active_revision: active.revision, idempotency_key: 'publish-it-0005' });
     expect(res.status).toBe(422);
     expect(res.body.error.details.issues[0].path).toBe('model.ref');
+    expectDeclared(res.body, '/admin/agent/releases', 'post', 422);
   });
 
   it('replays a publish after the draft changed without creating a release', async () => {
