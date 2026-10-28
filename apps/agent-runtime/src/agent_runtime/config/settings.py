@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # Local development only: read active releases from this directory instead of Product.
     RUNTIME_LOCAL_RELEASES_DIR: str | None = None
     # Where the active agent comes from: "local" reads RUNTIME_LOCAL_RELEASES_DIR/agent.json, "product" asks studio-api.
-    RUNTIME_AGENT_RELEASE_SOURCE: Literal["local", "product"] = "local"
+    RUNTIME_AGENT_RELEASE_SOURCE: Literal["local", "product"] = "product"
     RUNTIME_PRODUCT_URL: str | None = None
     # Canonical padded standard Base64, >=32 decoded bytes; distinct from every other runtime key.
     RUNTIME_PRODUCT_SIGNING_KEY: SecretStr | None = None
