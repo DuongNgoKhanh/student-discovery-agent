@@ -93,8 +93,23 @@ services:
       retries: 5
     restart: unless-stopped
 
+  knowledge-indexer:
+    build:
+      context: ./apps/agent-runtime
+      args:
+        http_proxy: ${http_proxy:-}
+        https_proxy: ${https_proxy:-}
+    command: ["python", "-m", "agent_runtime.cli.knowledge_indexer"]
+    env_file:
+      - path: ./apps/agent-runtime/.env
+        required: false
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: sda
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sda-local-dev}

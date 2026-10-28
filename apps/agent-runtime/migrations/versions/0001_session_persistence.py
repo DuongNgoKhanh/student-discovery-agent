@@ -1,4 +1,4 @@
-"""Execution-only durable session state, immutable generations and deferred references."""
+"""Execution session state plus the knowledge schema (Studio content, indexer chunks, retrieval)."""
 
 from alembic import op
 
@@ -6,6 +6,113 @@ revision = "0001_session_persistence"
 down_revision = None
 branch_labels = None
 depends_on = None
+
+
+KNOWLEDGE_DDL = """
+    CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;
+    CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public;
+    CREATE SCHEMA knowledge;
+    REVOKE ALL ON SCHEMA knowledge FROM PUBLIC;
+    CREATE FUNCTION knowledge.immutable_unaccent(value text) RETURNS text
+        LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
+        RETURN public.unaccent('public.unaccent'::regdictionary, value);
+    CREATE TABLE knowledge.knowledge_bases (
+        id text PRIMARY KEY CHECK (id ~ '^[A-Za-z0-9][A-Za-z0-9._-]*$'), name text NOT NULL CHECK (name ~ '\\S'),
+        description text NOT NULL DEFAULT '', embedding_model text NOT NULL CHECK (embedding_model ~ '\\S'),
+        created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+        updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+    );
+    CREATE TABLE knowledge.metadata_fields (
+        id text PRIMARY KEY, kb_id text NOT NULL REFERENCES knowledge.knowledge_bases(id) ON DELETE CASCADE,
+        name text NOT NULL CHECK (name ~ '^[a-z][a-z0-9_]{0,63}$'),
+        type text NOT NULL CHECK (type IN ('string', 'number', 'time', 'string_list')),
+        filterable boolean NOT NULL DEFAULT false, label text NOT NULL DEFAULT '', ordinal integer NOT NULL DEFAULT 0,
+        UNIQUE (kb_id, name)
+    );
+    CREATE TABLE knowledge.documents (
+        id text PRIMARY KEY CHECK (id ~ '^[A-Za-z0-9][A-Za-z0-9._-]*$'),
+        kb_id text NOT NULL REFERENCES knowledge.knowledge_bases(id) ON DELETE CASCADE,
+        status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+        revision bigint NOT NULL DEFAULT 0 CHECK (revision BETWEEN 0 AND 9007199254740991),
+        active_revision_id text, latest_revision_id text,
+        created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+        updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+    );
+    CREATE TABLE knowledge.document_revisions (
+        id text PRIMARY KEY, document_id text NOT NULL REFERENCES knowledge.documents(id) ON DELETE CASCADE,
+        revision bigint NOT NULL CHECK (revision BETWEEN 1 AND 9007199254740991),
+        title text NOT NULL CHECK (title ~ '\\S'), body text NOT NULL, source_url text,
+        metadata jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(metadata) = 'object'),
+        content_hash text NOT NULL CHECK (content_hash ~ '^sha256:[a-f0-9]{64}$'),
+        index_status text NOT NULL DEFAULT 'pending' CHECK (index_status IN ('pending', 'indexing', 'ready', 'error')),
+        error text, claimed_at timestamptz, created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+        UNIQUE (document_id, revision)
+    );
+    ALTER TABLE knowledge.documents
+        ADD FOREIGN KEY (active_revision_id) REFERENCES knowledge.document_revisions(id) DEFERRABLE INITIALLY DEFERRED,
+        ADD FOREIGN KEY (latest_revision_id) REFERENCES knowledge.document_revisions(id) DEFERRABLE INITIALLY DEFERRED;
+    CREATE TABLE knowledge.chunks (
+        revision_id text NOT NULL REFERENCES knowledge.document_revisions(id) ON DELETE CASCADE,
+        ordinal integer NOT NULL CHECK (ordinal >= 0), heading_path text NOT NULL DEFAULT '', text text NOT NULL,
+        chunk_hash text NOT NULL CHECK (chunk_hash ~ '^sha256:[a-f0-9]{64}$'),
+        tsv tsvector GENERATED ALWAYS AS
+            (to_tsvector('simple', knowledge.immutable_unaccent(heading_path || ' ' || text))) STORED,
+        PRIMARY KEY (revision_id, ordinal)
+    );
+    CREATE TABLE knowledge.embeddings (
+        chunk_hash text NOT NULL, embedding_model text NOT NULL, embedding vector(768) NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+        PRIMARY KEY (chunk_hash, embedding_model)
+    );
+    CREATE INDEX chunks_tsv ON knowledge.chunks USING gin (tsv);
+    CREATE INDEX documents_active ON knowledge.documents (kb_id) WHERE status = 'active';
+    CREATE INDEX revisions_queue ON knowledge.document_revisions (created_at, id) WHERE index_status = 'pending';
+    CREATE FUNCTION knowledge.reject_revision_content_change() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+        IF (NEW.document_id, NEW.revision, NEW.title, NEW.body, NEW.source_url, NEW.metadata, NEW.content_hash)
+            IS DISTINCT FROM
+           (OLD.document_id, OLD.revision, OLD.title, OLD.body, OLD.source_url, OLD.metadata, OLD.content_hash) THEN
+            RAISE EXCEPTION 'document revision content is immutable';
+        END IF;
+        RETURN NEW;
+    END $$;
+    CREATE TRIGGER revision_content_immutable BEFORE UPDATE ON knowledge.document_revisions
+        FOR EACH ROW EXECUTE FUNCTION knowledge.reject_revision_content_change();
+    CREATE FUNCTION knowledge.reject_field_type_change() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+        IF NEW.type <> OLD.type OR NEW.kb_id <> OLD.kb_id THEN
+            RAISE EXCEPTION 'metadata field type is immutable';
+        END IF;
+        RETURN NEW;
+    END $$;
+    CREATE TRIGGER field_type_immutable BEFORE UPDATE ON knowledge.metadata_fields
+        FOR EACH ROW EXECUTE FUNCTION knowledge.reject_field_type_change();
+    CREATE FUNCTION knowledge.notify_index() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+        PERFORM pg_notify('knowledge_index', NEW.id);
+        RETURN NULL;
+    END $$;
+    CREATE TRIGGER revision_queued AFTER INSERT OR UPDATE OF index_status ON knowledge.document_revisions
+        FOR EACH ROW WHEN (NEW.index_status = 'pending') EXECUTE FUNCTION knowledge.notify_index();
+    CREATE TABLE knowledge.imports (
+        id text PRIMARY KEY,
+        kb_id text NOT NULL REFERENCES knowledge.knowledge_bases(id) ON DELETE CASCADE,
+        idempotency_key text NOT NULL CHECK (length(idempotency_key) BETWEEN 1 AND 256),
+        request_hash text NOT NULL CHECK (request_hash ~ '^sha256:[a-f0-9]{64}$'),
+        report jsonb NOT NULL CHECK (jsonb_typeof(report) = 'object'),
+        created_by text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+        UNIQUE (kb_id, idempotency_key)
+    );
+    CREATE FUNCTION knowledge.retry_revision(revision_id text) RETURNS boolean
+        LANGUAGE plpgsql SECURITY DEFINER SET search_path = knowledge, pg_temp AS $$
+    BEGIN
+        UPDATE knowledge.document_revisions SET index_status = 'pending', error = NULL, claimed_at = NULL
+            WHERE id = revision_id AND index_status = 'error';
+        RETURN FOUND;
+    END $$;
+    REVOKE ALL ON FUNCTION knowledge.retry_revision(text) FROM PUBLIC;
+"""
 
 
 def upgrade() -> None:
@@ -117,7 +224,10 @@ def upgrade() -> None:
             after_revision bigint CHECK (after_revision BETWEEN 0 AND 9007199254740991),
             environment text, agent_release_id text, experience_release_id text,
             algorithm_profile text, engine_version text, latency_ms bigint CHECK (latency_ms >= 0),
-            provider text, fallback boolean, timestamp timestamptz NOT NULL DEFAULT clock_timestamp()
+            provider text, fallback boolean, fallback_reason text,
+            agent_steps integer CHECK (agent_steps >= 0), input_tokens integer CHECK (input_tokens >= 0),
+            output_tokens integer CHECK (output_tokens >= 0), knowledge jsonb,
+            timestamp timestamptz NOT NULL DEFAULT clock_timestamp()
         );
         CREATE INDEX conversations_owner_lookup ON execution.conversations (owner_id, id);
         CREATE INDEX conversations_expiry ON execution.conversations (expires_at) WHERE status = 'active';
@@ -204,9 +314,11 @@ def upgrade() -> None:
             AFTER INSERT OR UPDATE OR DELETE ON execution.result_snapshots DEFERRABLE INITIALLY DEFERRED
             FOR EACH ROW EXECUTE FUNCTION execution.check_current_result();
     """)
+    op.execute(KNOWLEDGE_DDL)
 
 
 def downgrade() -> None:
+    op.execute("DROP SCHEMA knowledge CASCADE;")
     op.execute("""
         ALTER TABLE execution.conversations DROP CONSTRAINT conversations_active_activity_fk;
         DROP TABLE execution.runtime_traces, execution.responses, execution.operation_outcomes, execution.messages,

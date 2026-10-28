@@ -143,7 +143,7 @@ def test_failed_response_is_traced_once_as_failure():
 
 def test_completed_response_is_traced_once_with_the_pinned_release():
     store = _TurnStore()
-    service = _turn_service(store, lambda caller, begun, on_event: begun.response.model_copy(
+    service = _turn_service(store, lambda caller, begun, on_event, observed: begun.response.model_copy(
         update={"status": "completed", "revision": 5}))
     service.finish(None, service.begin(None, "conv1", None))
     (event,) = service.trace_sink.events
@@ -175,3 +175,42 @@ def test_bad_trace_description_drops_metadata_not_the_event(describe):
     event = _observed_service({}, describe)
     assert event.outcome == "success" and event.conversation_id is None
     assert "Ngân" not in str(event.model_dump())
+
+
+KNOWLEDGE = {"kb_id": "kb1", "hits": (("doc_a", 2, 0),), "shown": ("doc_a",), "degraded": False, "latency_ms": 12}
+
+
+def _completed(**observation):
+    def run(caller, begun, on_event, observed):
+        observed.update(observation)
+        return begun.response.model_copy(update={"status": "completed", "revision": 5})
+    return run
+
+
+def test_agent_observation_reaches_the_turn_trace():
+    service = _turn_service(_TurnStore(), _completed(
+        provider="gemini", agent_steps=3, input_tokens=120, output_tokens=40, fallback=False, knowledge=(KNOWLEDGE,)))
+    service.finish(None, service.begin(None, "conv1", None))
+    (event,) = service.trace_sink.events
+    assert (event.provider, event.agent_steps, event.input_tokens, event.output_tokens, event.fallback) == (
+        "gemini", 3, 120, 40, False)
+    assert event.knowledge[0].hits == (("doc_a", 2, 0),) and event.knowledge[0].shown == ("doc_a",)
+    assert event.conversation_id == "conv1"
+
+
+def test_bad_agent_observation_is_dropped_but_the_turn_identifiers_stay():
+    bad = {**KNOWLEDGE, "hits": [["doc_a", 2, 0]]}  # lists are not tuples under strict validation
+    service = _turn_service(_TurnStore(), _completed(agent_steps=2, knowledge=(bad,)))
+    service.finish(None, service.begin(None, "conv1", None))
+    (event,) = service.trace_sink.events
+    assert event.knowledge is None and event.agent_steps is None and event.conversation_id == "conv1"
+
+
+def test_fallback_reason_and_provider_are_closed_sets():
+    base = {"event_id": "a" * 32, "request_id": "00000000-0000-4000-8000-000000000000",
+            "action": "conversation.turn", "step": "complete", "outcome": "success",
+            "timestamp": datetime(2026, 10, 27, tzinfo=UTC)}
+    assert TraceEvent(**base, fallback_reason="deadline", provider="openai").fallback_reason == "deadline"
+    for bad in ({"fallback_reason": "boom"}, {"provider": "anthropic"}):
+        with pytest.raises(ValidationError):
+            TraceEvent(**base, **bad)

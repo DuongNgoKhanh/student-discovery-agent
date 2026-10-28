@@ -151,3 +151,32 @@ def test_unconfigured_product_adapter_reports_not_configured(operation, args):
         getattr(ProductUnavailable(), operation)(*args)
     assert (caught.value.status, caught.value.code) == (503, "SERVICE_UNAVAILABLE")
     assert caught.value.details == {"kind": "not_configured"}
+
+
+STUDIO_KEY = b"studio-boundary-key-at-least-32-bytes"
+
+
+def studio_keyring(key=STUDIO_KEY, kid="studio"):
+    return json.dumps({kid: base64.b64encode(key).decode()})
+
+
+def test_valid_studio_keyring_enables_the_service_verifier():
+    runtime = build_runtime(settings(RUNTIME_STUDIO_KEYRING=studio_keyring()))
+    assert runtime.verifier is not None and runtime.service_verifier is not None
+
+
+def test_no_studio_keyring_leaves_the_service_verifier_off():
+    runtime = build_runtime(settings())
+    assert runtime.verifier is not None and runtime.service_verifier is None
+
+
+@pytest.mark.parametrize("keyring", [
+    studio_keyring(KEY, kid="other"),
+    "not json",
+    studio_keyring(b"short"),
+    json.dumps({"studio": base64.b64encode(STUDIO_KEY).decode().rstrip("=") + "=" * 3}),
+    json.dumps({"studio": base64.urlsafe_b64encode(b"\xfb" * 40).decode()}),
+])
+def test_bad_studio_keyring_disables_only_the_studio_path(keyring):
+    runtime = build_runtime(settings(RUNTIME_STUDIO_KEYRING=keyring))
+    assert runtime is not None and runtime.verifier is not None and runtime.service_verifier is None

@@ -23,6 +23,13 @@ class VerifiedCaller:
     expires_at: datetime
 
 
+@dataclass(frozen=True)
+class VerifiedService:
+    issuer: str
+    purpose: str
+    expires_at: datetime
+
+
 def require_owner(caller: VerifiedCaller) -> None:
     """Revalidate trusted Python port inputs without leaking identity details."""
     try:

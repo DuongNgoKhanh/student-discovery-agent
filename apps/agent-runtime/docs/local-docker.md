@@ -63,3 +63,30 @@ docker compose -f docker-compose.runtime-local.yaml down
 ```
 
 File Compose này không tạo database, không migrate dữ liệu và không gắn volume của stack Product. Image production và cơ chế xác thực runtime giữ nguyên.
+
+## Knowledge base demo
+
+DB phải dùng image `pgvector/pgvector:pg16`. Sau khi đổi image hoặc schema, drop volume DB và migrate lại.
+
+```bash
+# Nạp knowledge base minh họa (trường hư cấu), chạy lại bao nhiêu lần cũng được
+RUNTIME_KNOWLEDGE_SEED_DATABASE_URL=... python -m agent_runtime.cli.knowledge_seed
+# Index một lượt rồi thoát (cần GOOGLE_API_KEY; không có key thì dùng --fake-embedding và seed với
+# --embedding-model fake-embedding)
+RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL=... python -m agent_runtime.cli.knowledge_indexer --once
+```
+
+Lưu ý vận hành:
+
+- Service `knowledge-indexer` trong compose cần `GOOGLE_API_KEY`; không có key thì nó thoát ngay
+  (`KNOWLEDGE_INDEXER_CONFIGURATION_REQUIRED`).
+- KB seed với `--embedding-model fake-embedding` phải được index bằng `--fake-embedding`: tắt worker compose
+  (hoặc đừng chạy nó) và chạy `knowledge_indexer --once --fake-embedding`.
+- Revision bị lỗi (`index_status='error'`) không tự chạy lại. Đưa về hàng đợi bằng
+  `python -m agent_runtime.cli.knowledge_indexer --retry-errors [KB_ID]` (in `retried=N`), rồi chạy indexer.
+- `CREATE EXTENSION vector` cần superuser hoặc extension do ops tạo sẵn; quyền cho role indexer/runtime được cấp
+  qua `grant_knowledge_roles` (bước của operator, không tự động).
+
+Thử tìm kiếm qua `POST /api/v1/internal/knowledge/retrieval` (contract trong
+`contracts/openapi/internal/runtime-api.yaml`, ví dụ trong `contracts/fixtures/knowledge-retrieval.json`).
+Service `knowledge-indexer` trong `docker-compose.yaml` chạy worker liên tục, thức dậy bằng `LISTEN knowledge_index`.

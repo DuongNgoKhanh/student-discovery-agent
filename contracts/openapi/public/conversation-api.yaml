@@ -491,7 +491,7 @@ components:
         Cookie được cấp qua Set-Cookie của POST /conversations; CSRF/token format/TTL còn chờ DEC-07.
         Create key scoped theo anonymous owner/operation; retry cùng owner giữ key/payload.
         Mất cả cookie và response khởi tạo không cho phép replay xuyên owner bằng idempotency_key.
-        Nếu không khai báo supported_blocks, dùng bộ block v1 của MVP; chỉ gửi block/schema client được hỗ trợ. Block markdown v1 và suggestions v1 là tùy chọn; nếu không khai báo, server hạ chúng về text v1.
+        Nếu không khai báo supported_blocks, dùng bộ block v1 của MVP; chỉ gửi block/schema client được hỗ trợ. Block markdown v1, suggestions v1 và knowledge_card v1 là tùy chọn; nếu không khai báo, server hạ knowledge_card về markdown v1, markdown và suggestions về text v1.
         Idempotency keys are at most 256 ASCII identifier characters. Structurally malformed input returns 422 VAL_INVALID_INPUT.
         Unsupported capability versions/profiles or incomplete adaptive manifests return 422 VAL_INCOMPATIBLE_SCHEMA after owner/lifecycle/replay lookup and before Product resolution or writes.
         Demo TTL is exactly 3600 seconds from creation and never slides. Validate and pin capability before create.

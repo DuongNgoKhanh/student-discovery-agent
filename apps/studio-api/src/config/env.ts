@@ -54,6 +54,28 @@ export function getAuthEnv(): AuthEnv {
   return configured('auth', () => parseAuthEnv(process.env));
 }
 
+// Knowledge env: parsed only by the knowledge module; routes answer 503 while it is incomplete.
+const knowledgeSchema = z.object({
+  KNOWLEDGE_DATABASE_URL: z.preprocess(blankToUndefined, z.string().min(1).optional()),
+  KNOWLEDGE_EMBEDDING_MODELS: z.preprocess(blankToUndefined, z.string().default('gemini-embedding-2'))
+    .transform(value => value.split(',').map(model => model.trim()).filter(Boolean))
+    .refine(models => models.length > 0 && models.every(model => /^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/.test(model)),
+      'Expected a comma-separated list of embedding model ids'),
+  RUNTIME_INTERNAL_URL: z.preprocess(blankToUndefined, z.string().url().optional()),
+  STUDIO_RUNTIME_SIGNING_KEY: z.preprocess(blankToUndefined, z.string().optional()),
+  STUDIO_RUNTIME_SIGNING_KID: z.preprocess(blankToUndefined, z.string().regex(/^[A-Za-z0-9._-]{1,64}$/).default('studio')),
+});
+
+export type KnowledgeEnv = z.infer<typeof knowledgeSchema>;
+
+export function parseKnowledgeEnv(source: Record<string, string | undefined>): KnowledgeEnv {
+  return knowledgeSchema.parse(source);
+}
+
+export function getKnowledgeEnv(): KnowledgeEnv {
+  return configured('knowledge', () => parseKnowledgeEnv(process.env));
+}
+
 // Storage env: parsed only when storage is used. No provider keys live in the web app.
 const storageSchema = z.object({
   S3_ENDPOINT: z.string().url(),

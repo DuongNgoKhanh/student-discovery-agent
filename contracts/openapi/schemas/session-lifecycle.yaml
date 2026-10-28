@@ -95,7 +95,7 @@
               version: {type: integer, minimum: 1}
               params: {type: object}
               description: {type: string, minLength: 1, maxLength: 1000, pattern: '\S'}
-          description: Mỗi name@version phải có trong tool catalog của runtime; params kiểm theo schema của tool. Mỗi name chỉ bind một lần; experiences của assessment.start phải dùng algorithm_profile nằm trong allowed_activity_profiles.
+          description: Mỗi name@version phải có trong tool catalog của runtime; params kiểm theo schema của tool. Mỗi name chỉ bind một lần; experiences của assessment.start phải dùng algorithm_profile nằm trong allowed_activity_profiles. knowledge.show chỉ bind được khi đã bind knowledge.search; auto_filter_fields không trùng.
         guardrails:
           type: object
           additionalProperties: false
@@ -119,6 +119,7 @@
           description: "Mọi text template dùng cùng luật biến như persona.system_prompt; fallback_suggestions không được trùng."
           properties:
             unknown_message: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
+            busy_message: {type: string, minLength: 1, maxLength: 500, pattern: '\S', description: "Hiển thị khi model bận, lỗi hoặc hết thời gian lượt; unknown_message chỉ dùng khi model trả lời không dùng được."}
             fallback_suggestions: {type: array, maxItems: 4, items: {type: string, minLength: 1, maxLength: 60, pattern: '\S'}}
             next_question: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}
             completed: {type: string, minLength: 1, maxLength: 500, pattern: '\S'}

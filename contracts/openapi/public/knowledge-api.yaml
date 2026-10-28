@@ -1,0 +1,726 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery - Knowledge Studio
+  version: 1.0.0
+  description: >-
+    Admin quản lý knowledge base cho agent: KB, metadata fields (tên và kiểu bất biến), documents có revision,
+    import MD/TXT/CSV (preview rồi commit), trạng thái index, thử tìm kiếm qua runtime và đoạn params cho
+    agent.json. Sửa document có hiệu lực sau khi indexer kích hoạt revision mới; agent luôn đọc revision active.
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+tags:
+  - name: Studio Knowledge
+    description: Knowledge bases, fields, documents, imports and test search.
+security:
+  - BearerAuth: []
+paths:
+  /admin/knowledge-bases:
+    get:
+      operationId: listKnowledgeBases
+      tags: [Studio Knowledge]
+      summary: Danh sách knowledge base
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/KnowledgeBaseListEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+    post:
+      operationId: createKnowledgeBase
+      tags: [Studio Knowledge]
+      summary: Tạo knowledge base
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/KnowledgeBaseCreate"}}}
+      responses:
+        "201": {description: Created, content: {application/json: {schema: {$ref: "#/components/schemas/KnowledgeBaseEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "409": {$ref: ../schemas/common.yaml#/components/responses/ChatError409}
+        "413": {$ref: ../schemas/common.yaml#/components/responses/ChatError413}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}:
+    parameters: [{$ref: "#/components/parameters/KbId"}]
+    get:
+      operationId: getKnowledgeBase
+      tags: [Studio Knowledge]
+      summary: Chi tiết knowledge base
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/KnowledgeBaseEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+    patch:
+      operationId: patchKnowledgeBase
+      tags: [Studio Knowledge]
+      summary: Sửa tên/mô tả (không đổi embedding_model)
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/KnowledgeBasePatch"}}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/KnowledgeBaseEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/fields:
+    parameters: [{$ref: "#/components/parameters/KbId"}]
+    get:
+      operationId: listKnowledgeFields
+      tags: [Studio Knowledge]
+      summary: Danh sách metadata field theo ordinal
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/FieldListEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+    post:
+      operationId: createKnowledgeField
+      tags: [Studio Knowledge]
+      summary: Tạo metadata field
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/FieldCreate"}}}
+      responses:
+        "201": {description: Created, content: {application/json: {schema: {$ref: "#/components/schemas/FieldEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "409": {$ref: ../schemas/common.yaml#/components/responses/ChatError409}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/fields/{field_name}:
+    parameters: [{$ref: "#/components/parameters/KbId"}, {$ref: "#/components/parameters/FieldName"}]
+    patch:
+      operationId: patchKnowledgeField
+      tags: [Studio Knowledge]
+      summary: Sửa label/filterable/ordinal; name và type phải giữ nguyên
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/FieldPatch"}}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/FieldEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+    delete:
+      operationId: deleteKnowledgeField
+      tags: [Studio Knowledge]
+      summary: Xoá field; 409 CONFLICT_RESOURCE_IN_USE nếu còn document active có giá trị
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/FieldDeletedEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "409": {$ref: ../schemas/common.yaml#/components/responses/ChatError409}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/documents:
+    parameters: [{$ref: "#/components/parameters/KbId"}]
+    get:
+      operationId: listKnowledgeDocuments
+      tags: [Studio Knowledge]
+      summary: Danh sách document (cursor theo id)
+      parameters:
+        - {name: status, in: query, schema: {type: string, enum: [active, archived]}}
+        - {name: index_status, in: query, schema: {$ref: "#/components/schemas/IndexStatus"}}
+        - {name: q, in: query, description: Tiêu đề chứa chuỗi (không phân biệt hoa thường), schema: {type: string, maxLength: 200}}
+        - {name: cursor, in: query, schema: {type: string, maxLength: 4096}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/DocumentPageEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/documents/{document_id}:
+    parameters: [{$ref: "#/components/parameters/KbId"}, {$ref: "#/components/parameters/DocumentId"}]
+    get:
+      operationId: getKnowledgeDocument
+      tags: [Studio Knowledge]
+      summary: Document với latest và active revision
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/DocumentEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+    put:
+      operationId: putKnowledgeDocument
+      tags: [Studio Knowledge]
+      summary: Tạo (expected_revision=0) hoặc sửa document; trùng nội dung trả outcome=unchanged
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/DocumentPut"}}}
+      responses:
+        "200": {description: Updated or unchanged, content: {application/json: {schema: {$ref: "#/components/schemas/DocumentWriteEnvelope"}}}}
+        "201": {description: Created, content: {application/json: {schema: {$ref: "#/components/schemas/DocumentWriteEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "409": {$ref: ../schemas/common.yaml#/components/responses/ChatError409}
+        "413": {$ref: ../schemas/common.yaml#/components/responses/ChatError413}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/documents/{document_id}/archive:
+    parameters: [{$ref: "#/components/parameters/KbId"}, {$ref: "#/components/parameters/DocumentId"}]
+    post:
+      operationId: archiveKnowledgeDocument
+      tags: [Studio Knowledge]
+      summary: Archive (biến khỏi tìm kiếm ngay)
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/StatusChange"}}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/DocumentEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "409": {$ref: ../schemas/common.yaml#/components/responses/ChatError409}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/documents/{document_id}/restore:
+    parameters: [{$ref: "#/components/parameters/KbId"}, {$ref: "#/components/parameters/DocumentId"}]
+    post:
+      operationId: restoreKnowledgeDocument
+      tags: [Studio Knowledge]
+      summary: Khôi phục document đã archive
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/StatusChange"}}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/DocumentEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "409": {$ref: ../schemas/common.yaml#/components/responses/ChatError409}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/documents/{document_id}/revisions/{revision}/retry:
+    parameters:
+      - {$ref: "#/components/parameters/KbId"}
+      - {$ref: "#/components/parameters/DocumentId"}
+      - {name: revision, in: path, required: true, schema: {type: integer, minimum: 1}}
+    post:
+      operationId: retryKnowledgeRevision
+      tags: [Studio Knowledge]
+      summary: Đưa revision đang lỗi index về hàng đợi; 409 CONFLICT_INVALID_STATE nếu không ở trạng thái error
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/DocumentEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "409": {$ref: ../schemas/common.yaml#/components/responses/ChatError409}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/imports/preview:
+    parameters: [{$ref: "#/components/parameters/KbId"}]
+    post:
+      operationId: previewKnowledgeImport
+      tags: [Studio Knowledge]
+      summary: Xem trước import (không ghi). Tối đa 200 dòng, request ≤ 5 MiB.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/ImportPreviewRequest"}}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/ImportPreviewEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "413": {$ref: ../schemas/common.yaml#/components/responses/ChatError413}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/imports:
+    parameters: [{$ref: "#/components/parameters/KbId"}]
+    post:
+      operationId: commitKnowledgeImport
+      tags: [Studio Knowledge]
+      summary: >-
+        Ghi các dòng đã preview; mỗi dòng một transaction. Cùng idempotency_key + cùng nội dung trả lại báo cáo
+        đã lưu; cùng key khác nội dung 409 CONFLICT_IDEMPOTENCY_KEY.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/ImportCommitRequest"}}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/ImportReportEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "409": {$ref: ../schemas/common.yaml#/components/responses/ChatError409}
+        "413": {$ref: ../schemas/common.yaml#/components/responses/ChatError413}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/search:
+    parameters: [{$ref: "#/components/parameters/KbId"}]
+    post:
+      operationId: searchKnowledgeBase
+      tags: [Studio Knowledge]
+      summary: Thử tìm kiếm qua retrieval của runtime (chỉ thấy revision active)
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: "#/components/schemas/SearchRequest"}}}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/SearchEnvelope"}}}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "422": {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/knowledge-bases/{kb_id}/agent-params:
+    parameters: [{$ref: "#/components/parameters/KbId"}]
+    get:
+      operationId: getKnowledgeAgentParams
+      tags: [Studio Knowledge]
+      summary: Params knowledge.search/knowledge.show để dán vào agent.json
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/AgentParamsEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+components:
+  securitySchemes:
+    BearerAuth: {type: http, scheme: bearer, bearerFormat: JWT, description: Admin JWT access token}
+  parameters:
+    KbId: {name: kb_id, in: path, required: true, schema: {type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$", maxLength: 128}}
+    DocumentId: {name: document_id, in: path, required: true, schema: {type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$", maxLength: 128}}
+    FieldName: {name: field_name, in: path, required: true, schema: {type: string, pattern: "^[a-z][a-z0-9_]{0,63}$"}}
+  schemas:
+    FieldType: {type: string, enum: [string, number, time, string_list]}
+    IndexStatus: {type: string, enum: [pending, indexing, ready, error]}
+    Metadata:
+      type: object
+      description: Giá trị theo tên field. string ≤ 2000 ký tự; number hữu hạn; time ISO mở rộng; string_list ≤ 50 phần tử, mỗi phần tử 1–200 ký tự.
+      additionalProperties: true
+    KnowledgeBase:
+      type: object
+      additionalProperties: false
+      required: [id, name, description, embedding_model, document_count, error_count, created_at, updated_at]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        description: {type: string}
+        embedding_model: {type: string}
+        document_count: {type: integer, minimum: 0, description: Số document active}
+        error_count: {type: integer, minimum: 0, description: Số document active có latest revision lỗi index}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    KnowledgeBaseCreate:
+      type: object
+      additionalProperties: false
+      required: [name, embedding_model]
+      properties:
+        id: {type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,63}$", description: Mặc định là slug của name}
+        name: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string, maxLength: 2000}
+        embedding_model: {type: string, description: Một trong các model server hỗ trợ (KNOWLEDGE_EMBEDDING_MODELS)}
+    KnowledgeBasePatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string, maxLength: 2000}
+    MetadataField:
+      type: object
+      additionalProperties: false
+      required: [id, name, type, label, filterable, ordinal]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        type: {$ref: "#/components/schemas/FieldType"}
+        label: {type: string}
+        filterable: {type: boolean}
+        ordinal: {type: integer}
+    FieldCreate:
+      type: object
+      additionalProperties: false
+      required: [name, type]
+      properties:
+        name: {type: string, pattern: "^[a-z][a-z0-9_]{0,63}$"}
+        type: {$ref: "#/components/schemas/FieldType"}
+        label: {type: string, maxLength: 200}
+        filterable: {type: boolean}
+        ordinal: {type: integer, minimum: 0, maximum: 10000}
+    FieldPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: name/type chỉ được gửi nếu bằng giá trị hiện tại; khác → 422.
+      properties:
+        name: {type: string, pattern: "^[a-z][a-z0-9_]{0,63}$"}
+        type: {$ref: "#/components/schemas/FieldType"}
+        label: {type: string, maxLength: 200}
+        filterable: {type: boolean}
+        ordinal: {type: integer, minimum: 0, maximum: 10000}
+    DocumentSummary:
+      type: object
+      additionalProperties: false
+      required: [id, status, revision, title, index_status, active_revision, updated_at]
+      properties:
+        id: {type: string}
+        status: {type: string, enum: [active, archived]}
+        revision: {type: integer, minimum: 1}
+        title: {type: string}
+        index_status: {$ref: "#/components/schemas/IndexStatus"}
+        active_revision: {type: integer, nullable: true}
+        updated_at: {type: string, format: date-time}
+    DocumentContent:
+      type: object
+      additionalProperties: false
+      required: [title, body, source_url, metadata]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 300, pattern: "\\S"}
+        body: {type: string, description: "Markdown, tối đa 262144 byte UTF-8"}
+        source_url: {type: string, nullable: true, maxLength: 2000, pattern: "^https?://"}
+        metadata: {$ref: "#/components/schemas/Metadata"}
+    DocumentRevision:
+      type: object
+      additionalProperties: false
+      required: [revision, title, body, source_url, metadata, index_status, error, created_at]
+      properties:
+        revision: {type: integer, minimum: 1}
+        title: {type: string}
+        body: {type: string}
+        source_url: {type: string, nullable: true}
+        metadata: {$ref: "#/components/schemas/Metadata"}
+        index_status: {$ref: "#/components/schemas/IndexStatus"}
+        error: {type: string, nullable: true}
+        created_at: {type: string, format: date-time}
+    DocumentDetail:
+      type: object
+      additionalProperties: false
+      required: [id, kb_id, status, revision, updated_at, latest, active]
+      properties:
+        id: {type: string}
+        kb_id: {type: string}
+        status: {type: string, enum: [active, archived]}
+        revision: {type: integer, minimum: 1, description: Dùng làm expected_revision}
+        updated_at: {type: string, format: date-time}
+        latest: {$ref: "#/components/schemas/DocumentRevision"}
+        active:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [revision]
+          properties:
+            revision: {type: integer, minimum: 1}
+    DocumentPut:
+      type: object
+      additionalProperties: false
+      required: [title, body, expected_revision]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 300, pattern: "\\S"}
+        body: {type: string}
+        source_url: {type: string, nullable: true, maxLength: 2000, pattern: "^https?://"}
+        metadata: {$ref: "#/components/schemas/Metadata"}
+        expected_revision: {type: integer, minimum: 0, description: 0 khi tạo mới}
+    DocumentWriteResult:
+      type: object
+      additionalProperties: false
+      required: [document_id, revision, outcome]
+      properties:
+        document_id: {type: string}
+        revision: {type: integer, minimum: 1}
+        outcome: {type: string, enum: [created, updated, unchanged]}
+    StatusChange:
+      type: object
+      additionalProperties: false
+      required: [expected_revision]
+      properties:
+        expected_revision: {type: integer, minimum: 1}
+    CsvMapping:
+      type: object
+      additionalProperties: false
+      required: [metadata]
+      description: Giá trị là tên cột trong header CSV.
+      properties:
+        document_id: {type: string}
+        title: {type: string}
+        body: {type: string}
+        source_url: {type: string}
+        metadata: {type: object, additionalProperties: {type: string}}
+    ImportPreviewRequest:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [kind, files]
+          properties:
+            kind: {type: string, enum: [files]}
+            files:
+              type: array
+              minItems: 1
+              maxItems: 200
+              items:
+                type: object
+                additionalProperties: false
+                required: [name, content]
+                properties:
+                  name: {type: string, minLength: 1, maxLength: 255}
+                  content: {type: string}
+        - type: object
+          additionalProperties: false
+          required: [kind, content, mapping]
+          properties:
+            kind: {type: string, enum: [csv]}
+            content: {type: string}
+            mapping: {$ref: "#/components/schemas/CsvMapping"}
+    ImportPreviewRow:
+      type: object
+      additionalProperties: false
+      required: [row, source, document_id, action, expected_revision, errors, payload]
+      properties:
+        row: {type: integer, minimum: 1}
+        source: {type: string, description: Tên file hoặc "dòng N"}
+        document_id: {type: string, nullable: true}
+        action: {type: string, enum: [create, update, unchanged, invalid]}
+        expected_revision: {type: integer, nullable: true}
+        errors: {type: array, items: {type: string}}
+        payload: {anyOf: [{$ref: "#/components/schemas/DocumentContent"}, {type: object, nullable: true, enum: [null]}]}
+    ImportPreview:
+      type: object
+      additionalProperties: false
+      required: [rows]
+      properties:
+        rows: {type: array, items: {$ref: "#/components/schemas/ImportPreviewRow"}}
+    ImportCommitRequest:
+      type: object
+      additionalProperties: false
+      required: [idempotency_key, rows]
+      properties:
+        idempotency_key: {type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$", maxLength: 256}
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            additionalProperties: false
+            required: [row, document_id, expected_revision, payload]
+            properties:
+              row: {type: integer, minimum: 1}
+              document_id: {type: string}
+              expected_revision: {type: integer, minimum: 0}
+              payload: {$ref: "#/components/schemas/DocumentContent"}
+    ImportReport:
+      type: object
+      additionalProperties: false
+      required: [import_id, created, updated, unchanged, conflict, failed, rows]
+      properties:
+        import_id: {type: string}
+        created: {type: integer, minimum: 0}
+        updated: {type: integer, minimum: 0}
+        unchanged: {type: integer, minimum: 0}
+        conflict: {type: integer, minimum: 0}
+        failed: {type: integer, minimum: 0}
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [row, document_id, outcome, revision, error]
+            properties:
+              row: {type: integer, minimum: 1}
+              document_id: {type: string}
+              outcome: {type: string, enum: [created, updated, unchanged, conflict, failed]}
+              revision: {type: integer, nullable: true}
+              error: {type: string, nullable: true}
+    SearchRequest:
+      type: object
+      additionalProperties: false
+      required: [query]
+      properties:
+        query: {type: string, minLength: 1, maxLength: 300}
+        top_k: {type: integer, minimum: 1, maximum: 20, default: 4}
+        score_threshold: {type: number, minimum: 0, maximum: 1}
+        semantic_weight: {type: number, minimum: 0, maximum: 1}
+        max_chunks_per_doc: {type: integer, minimum: 1, maximum: 10}
+        metadata_condition:
+          type: object
+          description: Như External Knowledge API của Dify; runtime kiểm field và phép so sánh.
+          required: [conditions]
+          properties:
+            logical_operator: {type: string, enum: [and, or]}
+            conditions:
+              type: array
+              minItems: 1
+              maxItems: 10
+              items:
+                type: object
+                required: [name, comparison_operator]
+                properties:
+                  name: {type: string}
+                  comparison_operator: {type: string}
+                  value: {}
+    SearchRecord:
+      type: object
+      additionalProperties: false
+      required: [content, score, title, metadata]
+      properties:
+        content: {type: string}
+        score: {type: number}
+        title: {type: string}
+        metadata: {type: object, additionalProperties: true}
+    SearchResult:
+      type: object
+      additionalProperties: false
+      required: [records, degraded]
+      properties:
+        records: {type: array, items: {$ref: "#/components/schemas/SearchRecord"}}
+        degraded: {type: boolean, description: true khi chỉ tìm theo từ khoá vì embedding câu hỏi lỗi}
+    AgentParams:
+      type: object
+      additionalProperties: false
+      required: [knowledge.search, knowledge.show, warnings]
+      properties:
+        knowledge.search:
+          type: object
+          additionalProperties: false
+          required: [knowledge_base_id, top_k, auto_filter_fields]
+          properties:
+            knowledge_base_id: {type: string}
+            top_k: {type: integer}
+            auto_filter_fields: {type: array, items: {type: string}}
+        knowledge.show:
+          type: object
+          additionalProperties: false
+          required: [display]
+          properties:
+            display:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [field, label]
+                properties:
+                  field: {type: string}
+                  label: {type: string}
+        warnings:
+          type: array
+          description: Điều chỉnh để params hợp lệ với runtime (cắt field/nhãn, KB chưa có field); không đưa vào agent.json.
+          items: {type: string}
+    PaginationMeta:
+      type: object
+      required: [limit, next_cursor, has_more]
+      properties:
+        limit: {type: integer}
+        next_cursor: {type: string, nullable: true}
+        has_more: {type: boolean}
+    KnowledgeBaseEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/KnowledgeBase"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    KnowledgeBaseListEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  required: [items]
+                  properties: {items: {type: array, items: {$ref: "#/components/schemas/KnowledgeBase"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    FieldEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/MetadataField"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    FieldListEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  required: [items]
+                  properties: {items: {type: array, items: {$ref: "#/components/schemas/MetadataField"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    FieldDeletedEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  additionalProperties: false
+                  required: [name, deleted]
+                  properties: {name: {type: string}, deleted: {type: boolean, enum: [true]}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    DocumentPageEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - type: object
+              required: [data, meta]
+              properties:
+                data:
+                  type: object
+                  required: [items]
+                  properties: {items: {type: array, items: {$ref: "#/components/schemas/DocumentSummary"}}}
+                meta:
+                  allOf:
+                    - $ref: ../schemas/common.yaml#/components/schemas/ResponseMeta
+                    - {type: object, required: [pagination], properties: {pagination: {$ref: "#/components/schemas/PaginationMeta"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    DocumentEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/DocumentDetail"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    DocumentWriteEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/DocumentWriteResult"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    ImportPreviewEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/ImportPreview"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    ImportReportEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/ImportReport"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    SearchEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/SearchResult"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    AgentParamsEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/AgentParams"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope

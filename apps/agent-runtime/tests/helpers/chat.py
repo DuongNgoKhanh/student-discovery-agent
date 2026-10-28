@@ -14,6 +14,11 @@ from agent_runtime.infrastructure.db.migrate import upgrade_database
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
 from agent_runtime.infrastructure.db.tables import conversations as conversations_table
 from agent_runtime.infrastructure.db.tables import messages
+from agent_runtime.knowledge.authoring import KnowledgeWriter
+from agent_runtime.knowledge.fake import FakeEmbedding
+from agent_runtime.knowledge.fixtures.ihrd_demo import IHRD_DEMO, load_dataset
+from agent_runtime.knowledge.indexer import IndexerService
+from agent_runtime.knowledge.retrieval import PgKnowledge
 from agent_runtime.sessions.schemas.activity import SupportedBlock
 from agent_runtime.sessions.schemas.common import RuntimePolicy
 from agent_runtime.sessions.schemas.conversation import CreateConversationInput
@@ -33,33 +38,45 @@ ROOT = Path(__file__).resolve().parents[4]
 EXPERIENCE = "logical-experience"
 
 
-def _agent_content():
+def _agent_content(*, knowledge_threshold: float | None = None):
     content = copy.deepcopy(json.loads((ROOT / "contracts/fixtures/agent-snapshot-demo.json").read_text("utf-8")))
     start = next(tool for tool in content["tools"] if tool["name"] == "assessment.start")
     start["params"]["experiences"][0]["experience_id"] = EXPERIENCE
+    if knowledge_threshold is not None:
+        search = next(tool for tool in content["tools"] if tool["name"] == "knowledge.search")
+        search["params"]["score_threshold"] = knowledge_threshold
     return content
 
 
-def build_chat(test_database, valid_v2_doc, validator) -> SimpleNamespace:
-    """Caller owns ``dispose()``."""
+def build_chat(test_database, valid_v2_doc, validator, *, with_knowledge: bool = False,
+               trace_sink=None) -> SimpleNamespace:
+    """Caller owns ``dispose()``. ``with_knowledge`` loads the fictional IHRD demo KB, indexed with fake embeddings."""
     upgrade_database(test_database.url)
     db_engine = build_engine(test_database.url)
     uow = RuntimeUnitOfWork(db_engine)
+    knowledge = None
+    if with_knowledge:
+        load_dataset(KnowledgeWriter(uow), IHRD_DEMO, embedding_model=FakeEmbedding.model)
+        IndexerService(uow, FakeEmbedding()).run_once()
+        knowledge = PgKnowledge(uow, FakeEmbedding())
     clock = FakeClock(NOW)
     caller = VerifiedCaller("owner", "sda-product-bff", NOW + timedelta(seconds=60))
     product = FakeProductReleaseSource()
-    product.agent = agent_release(content=_agent_content())
+    # Fake embeddings score far below real ones, so the demo threshold would hide every hit.
+    product.agent = agent_release(content=_agent_content(knowledge_threshold=0.0 if with_knowledge else None))
     product.experiences[(EXPERIENCE, PROFILE)] = experience_release(valid_v2_doc)
     conversations = ConversationService(uow, product, validator, policy=RuntimePolicy(environment="demo"), clock=clock)
     blocks = [*adaptive_capabilities().supported_blocks, SupportedBlock(type="markdown", schema_versions=(1,)),
-              SupportedBlock(type="suggestions", schema_versions=(1,))]
+              SupportedBlock(type="suggestions", schema_versions=(1,)),
+              SupportedBlock(type="knowledge_card", schema_versions=(1,))]
     created = conversations.create(caller, CreateConversationInput(idempotency_key="create",
         accepted_activity_profiles=(PROFILE,), supported_blocks=[block.model_dump() for block in blocks]))
     model = FakeModel()
     store = TurnStore(uow, ActivityPersistence(uow, product, validator, clock=clock), conversations, clock=clock)
     responses = ResponseService(uow, clock=clock)
     service = TurnService(store, TurnHandler(PinnedAssessmentEngine(PILOT_ENGINE_REGISTRY), FakeCompletionPort()),
-                          models=lambda provider: model, responses=responses)
+                          models=lambda provider: model, responses=responses, knowledge=knowledge,
+                          trace_sink=trace_sink)
     conversation_id = created.data["conversation"]["id"]
 
     def send(body, *, revision, key):
@@ -83,6 +100,13 @@ def build_chat(test_database, valid_v2_doc, validator) -> SimpleNamespace:
             return list(session.scalars(select(messages.c.message_id).where(
                 messages.c.conversation_id == conversation_id, messages.c.role == "user")))
 
+    def last_assistant_blocks():
+        with uow.begin() as session:
+            return session.scalars(select(messages.c.blocks).where(
+                messages.c.conversation_id == conversation_id, messages.c.role == "assistant")
+                .order_by(messages.c.ordinal.desc()).limit(1)).one()
+
     return SimpleNamespace(model=model, service=service, responses=responses, conversations=conversations,
                            clock=clock, caller=caller, conversation_id=conversation_id, send=send, message_count=message_count,
-                           revision=revision, user_message_ids=user_message_ids, dispose=db_engine.dispose)
+                           revision=revision, user_message_ids=user_message_ids, uow=uow,
+                           last_assistant_blocks=last_assistant_blocks, dispose=db_engine.dispose)

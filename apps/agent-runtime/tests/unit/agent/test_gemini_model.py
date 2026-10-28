@@ -54,6 +54,7 @@ def test_text_reply_usage_and_settings_are_forwarded():
     assert (kwargs["id"], kwargs["api_key"], kwargs["temperature"], kwargs["max_output_tokens"]) == (
         "gemini-2.5-flash", "key", 0.2, 300)
     assert kwargs["client_params"]["http_options"].timeout == 5000
+    assert kwargs["thinking_level"] == "minimal"  # short tool loops: thinking only adds latency and eats output tokens
     assert created[0].invocations[0]["tools"] is None
 
 
