@@ -26,7 +26,7 @@ function SidebarBody({ pathname, account, knowledgeNav, onNavigate }: {
   return (
     <div className="flex h-full flex-col gap-4 px-3 py-4">
       <Link href="/admin/knowledge" onClick={onNavigate} className="rounded-md px-2 text-base font-semibold text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        IHRD Studio
+        Agent Studio
       </Link>
       <nav aria-label="Điều hướng chính" className="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
         {NAV.map(({ key, href, label, icon: Icon, match }) => {
@@ -74,7 +74,7 @@ export function AdminShell({ children, account, knowledgeNav }: AdminShellProps)
           <IconButton label="Mở menu" side="right" onClick={() => setOpen(true)} aria-expanded={open}>
             <Menu className="h-4 w-4" aria-hidden />
           </IconButton>
-          <span className="text-sm font-semibold text-brand">IHRD Studio</span>
+          <span className="text-sm font-semibold text-brand">Agent Studio</span>
         </header>
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent side="left" className="w-[260px] bg-sidebar p-0">

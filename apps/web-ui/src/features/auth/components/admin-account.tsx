@@ -10,7 +10,7 @@ export function AdminAccount() {
   const logout = useLogout();
   return (
     <div className="flex items-center justify-between gap-2 px-2">
-      <span className="truncate text-13 text-sidebar-foreground">Quản trị viên</span>
+      <span className="truncate text-13 text-sidebar-foreground">Admin</span>
       <IconButton
         className="h-8 w-8" label="Đăng xuất" disabled={logout.isPending}
         onClick={() => logout.mutate(undefined, { onSettled: () => router.replace('/admin/login') })}
