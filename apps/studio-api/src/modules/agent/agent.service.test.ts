@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import * as repo from '@/modules/agent/agent.repository';
-import { readDraft, saveDraftContent, seedAgent } from '@/modules/agent/agent.service';
+import { publish, readDraft, restore, saveDraftContent, seedAgent } from '@/modules/agent/agent.service';
+import { setAgentValidator } from '@/modules/agent/runtime-validation';
 import { computeContentHash } from '@/modules/experiences/canonical';
 
 vi.mock('@/modules/agent/agent.repository');
@@ -39,5 +40,59 @@ describe('agent draft', () => {
     await expect(seedAgent(db, { greeting_text: 'x' })).resolves.toBe('skipped');
     expect(repo.insertRelease).toHaveBeenCalledTimes(1);
     expect(repo.insertAudit).toHaveBeenCalledWith(db, expect.objectContaining({ actor: 'system:seed', action: 'agent.release.publish' }));
+  });
+});
+
+const ctx = { requestId: 'r', traceId: 't' };
+const release = (id: string, version: number, content: Record<string, unknown>) => ({
+  id, version, content, content_hash: computeContentHash(content), draft_revision: 1, note: null, created_by: 'admin', created_at: at,
+});
+const active = (releaseId: string, revision = 1) => ({ id: 'default', release_id: releaseId, revision, updated_by: 'admin', updated_at: at });
+
+describe('publish', () => {
+  beforeEach(() => {
+    vi.mocked(repo.findIdempotencyRecordForAgent).mockResolvedValue(undefined);
+    vi.mocked(repo.withAgentLock).mockImplementation((_db, _scope, _key, work) => work(db as never));
+    setAgentValidator(async () => ({ valid: true, content_hash: 'h', issues: [] }));
+  });
+
+  it('creates the next version, moves the pointer and audits in one unit', async () => {
+    const v1 = release('agr_1', 1, { greeting_text: 'a' });
+    vi.mocked(repo.getDraft).mockResolvedValue(draftRow({ greeting_text: 'b' }, 2));
+    vi.mocked(repo.lockActive).mockResolvedValue(active('agr_1'));
+    vi.mocked(repo.findRelease).mockResolvedValue(v1);
+    vi.mocked(repo.insertRelease).mockResolvedValue(release('agr_2', 2, { greeting_text: 'b' }));
+    vi.mocked(repo.pointActive).mockResolvedValue(active('agr_2', 2));
+    const res = await publish(db, { expected_draft_revision: 2, expected_active_revision: 1, idempotency_key: 'publish-0001' }, 'admin', ctx);
+    expect(res).toMatchObject({ status: 201, data: { id: 'agr_2', version: 2, is_active: true } });
+    expect(repo.insertAudit).toHaveBeenCalledWith(db, expect.objectContaining({ action: 'agent.release.publish', before_ref: 'agr_1', after_ref: 'agr_2' }));
+  });
+
+  it('refuses an invalid draft with the runtime issues', async () => {
+    vi.mocked(repo.getDraft).mockResolvedValue(draftRow({ greeting_text: '' }, 2));
+    setAgentValidator(async () => ({ valid: false, content_hash: 'h', issues: [{ path: 'greeting_text', code: 'string_too_short', message: 'x' }] }));
+    await expect(publish(db, { expected_draft_revision: 2, expected_active_revision: 1, idempotency_key: 'publish-0002' }, 'admin', ctx))
+      .rejects.toMatchObject({ status: 422, code: 'PUBLISH_GATE_FAILED', details: { issues: [{ path: 'greeting_text' }] } });
+    expect(repo.insertRelease).not.toHaveBeenCalled();
+  });
+
+  it('409s on unchanged content and on a moved pointer', async () => {
+    vi.mocked(repo.getDraft).mockResolvedValue(draftRow({ greeting_text: 'a' }, 2));
+    vi.mocked(repo.lockActive).mockResolvedValue(active('agr_1'));
+    vi.mocked(repo.findRelease).mockResolvedValue(release('agr_1', 1, { greeting_text: 'a' }));
+    await expect(publish(db, { expected_draft_revision: 2, expected_active_revision: 1, idempotency_key: 'publish-0003' }, 'admin', ctx))
+      .rejects.toMatchObject({ status: 409, code: 'CONFLICT_INVALID_STATE', details: { kind: 'no_changes' } });
+    vi.mocked(repo.lockActive).mockResolvedValue(active('agr_1', 5));
+    await expect(publish(db, { expected_draft_revision: 2, expected_active_revision: 1, idempotency_key: 'publish-0004' }, 'admin', ctx))
+      .rejects.toMatchObject({ status: 409, code: 'CONFLICT_REVISION' });
+  });
+
+  it('restores an older release after re-validating it', async () => {
+    vi.mocked(repo.findRelease).mockImplementation(async (_db, id) => (id === 'agr_1' ? release('agr_1', 1, { greeting_text: 'a' }) : release('agr_2', 2, { greeting_text: 'b' })));
+    vi.mocked(repo.lockActive).mockResolvedValue(active('agr_2', 2));
+    vi.mocked(repo.pointActive).mockResolvedValue(active('agr_1', 3));
+    const res = await restore(db, 'agr_1', { expected_active_revision: 2, idempotency_key: 'restore-0001' }, 'admin', ctx);
+    expect(res.data).toMatchObject({ release_id: 'agr_1', version: 1, revision: 3 });
+    expect(repo.insertAudit).toHaveBeenCalledWith(db, expect.objectContaining({ action: 'agent.release.restore', before_ref: 'agr_2', after_ref: 'agr_1' }));
   });
 });

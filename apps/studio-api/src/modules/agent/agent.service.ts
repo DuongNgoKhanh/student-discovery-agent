@@ -4,7 +4,10 @@ import type { RequestContext } from '@/http/types';
 import { computeContentHash } from '@/modules/experiences/canonical';
 import * as repo from '@/modules/agent/agent.repository';
 import { getAgentValidator, type AgentValidation } from '@/modules/agent/runtime-validation';
-import { toDraftDTO, type AgentDraftDTO, type SaveDraftInput } from '@/modules/agent/agent.schemas';
+import {
+  toActiveDTO, toAuditDTO, toDraftDTO, toReleaseDTO, toReleaseSummaryDTO,
+  type AgentActiveDTO, type AgentDraftDTO, type PublishInput, type RestoreInput, type SaveDraftInput,
+} from '@/modules/agent/agent.schemas';
 
 export async function readDraft(db: ProductDatabase): Promise<AgentDraftDTO> {
   const row = await repo.getDraft(db);
@@ -50,4 +53,122 @@ export async function validateDraft(db: ProductDatabase, ctx: RequestContext): P
   const draft = await repo.getDraft(db);
   if (!draft) throw new ProductError(404, 'RES_NOT_FOUND', 'Agent draft not found');
   return { ...(await getAgentValidator()(draft.content, ctx)), draft_revision: draft.revision };
+}
+
+export interface ServiceResult<T> { status: number; data: T; replayed?: boolean }
+export type AgentReleaseDTO = ReturnType<typeof toReleaseDTO>;
+
+async function idempotent<T>(
+  db: ProductDatabase, scope: string, key: string, payload: unknown, status: number,
+  work: (tx: repo.ProductExecutorLike) => Promise<T>,
+): Promise<ServiceResult<T>> {
+  const requestHash = computeContentHash(payload);
+  return repo.withAgentLock(db, scope, key, async tx => {
+    const existing = await repo.findIdempotencyRecordForAgent(tx, scope, key);
+    if (existing) {
+      if (existing.request_hash !== requestHash) {
+        throw new ProductError(409, 'CONFLICT_IDEMPOTENCY_KEY', 'Idempotency key reused with different request payload');
+      }
+      return { status: existing.response_status, data: existing.response_body as T, replayed: true };
+    }
+    const data = await work(tx);
+    await repo.saveIdempotencyRecordForAgent(tx, {
+      scope, key, request_hash: requestHash, response_status: status, response_body: data as unknown as Record<string, unknown>,
+    });
+    return { status, data };
+  });
+}
+
+function gateFailed(issues: unknown[]): ProductError {
+  return new ProductError(422, 'PUBLISH_GATE_FAILED', 'Agent config failed validation', false, { kind: 'validation', issues });
+}
+
+async function lockedPointer(tx: repo.ProductExecutorLike, expected: number) {
+  const pointer = await repo.lockActive(tx);
+  if (!pointer) throw new ProductError(422, 'RES_EXPERIENCE_NOT_CONFIGURED', 'No active agent release');
+  if (pointer.revision !== expected) {
+    throw new ProductError(409, 'CONFLICT_REVISION', 'Active agent changed', false,
+      { kind: 'revision_conflict', expected_active_revision: expected, actual_active_revision: pointer.revision });
+  }
+  return pointer;
+}
+
+export async function publish(
+  db: ProductDatabase, input: PublishInput, actor: string, ctx: RequestContext,
+): Promise<ServiceResult<AgentReleaseDTO>> {
+  const draft = await repo.getDraft(db);
+  if (!draft) throw new ProductError(404, 'RES_NOT_FOUND', 'Agent draft not found');
+  if (draft.revision !== input.expected_draft_revision) {
+    throw new ProductError(409, 'CONFLICT_REVISION', 'Agent draft changed', false,
+      { kind: 'revision_conflict', expected_draft_revision: input.expected_draft_revision, actual_draft_revision: draft.revision });
+  }
+  // Validate outside the transaction (network call); the hash check inside binds the report to this content.
+  const report = await getAgentValidator()(draft.content, ctx);
+  if (!report.valid) throw gateFailed(report.issues);
+  return idempotent(db, 'agent:publish', input.idempotency_key, input, 201, async tx => {
+    const pointer = await lockedPointer(tx, input.expected_active_revision);
+    const current = await repo.getDraft(tx);
+    if (!current || current.content_hash !== draft.content_hash) {
+      throw new ProductError(409, 'CONFLICT_REVISION', 'Agent draft changed during publish', false, { kind: 'revision_conflict' });
+    }
+    const before = await repo.findRelease(tx, pointer.release_id);
+    if (before?.content_hash === current.content_hash) {
+      throw new ProductError(409, 'CONFLICT_INVALID_STATE', 'Draft equals the active release', false, { kind: 'no_changes' });
+    }
+    const created = await repo.insertRelease(tx, {
+      content: current.content, hash: current.content_hash, draftRevision: current.revision, note: input.note || null, actor,
+    });
+    if (!(await repo.pointActive(tx, { releaseId: created.id, expectedRevision: pointer.revision, actor }))) {
+      throw new ProductError(409, 'CONFLICT_REVISION', 'Active agent changed', false, { kind: 'revision_conflict' });
+    }
+    await repo.insertAudit(tx, {
+      actor, action: 'agent.release.publish', target_kind: 'agent', target_id: 'default',
+      before_ref: pointer.release_id, after_ref: created.id, outcome: 'success', details: { version: created.version },
+    });
+    return toReleaseDTO(created, created.id);
+  });
+}
+
+export async function restore(
+  db: ProductDatabase, releaseId: string, input: RestoreInput, actor: string, ctx: RequestContext,
+): Promise<ServiceResult<AgentActiveDTO>> {
+  const target = await repo.findRelease(db, releaseId);
+  if (!target) throw new ProductError(404, 'RES_NOT_FOUND', 'Agent release not found');
+  const report = await getAgentValidator()(target.content, ctx);
+  if (!report.valid) throw gateFailed(report.issues);
+  return idempotent(db, `agent:restore:${releaseId}`, input.idempotency_key, input, 200, async tx => {
+    const pointer = await lockedPointer(tx, input.expected_active_revision);
+    if (pointer.release_id === releaseId) {
+      throw new ProductError(409, 'CONFLICT_INVALID_STATE', 'Release is already active', false, { kind: 'no_changes' });
+    }
+    const moved = await repo.pointActive(tx, { releaseId, expectedRevision: pointer.revision, actor });
+    if (!moved) throw new ProductError(409, 'CONFLICT_REVISION', 'Active agent changed', false, { kind: 'revision_conflict' });
+    await repo.insertAudit(tx, {
+      actor, action: 'agent.release.restore', target_kind: 'agent', target_id: 'default',
+      before_ref: pointer.release_id, after_ref: releaseId, outcome: 'success', details: { version: target.version },
+    });
+    return toActiveDTO(moved, target);
+  });
+}
+
+export async function getActiveAgent(db: ProductDatabase): Promise<AgentActiveDTO | null> {
+  const row = await repo.getActive(db);
+  return row ? toActiveDTO(row.active, row.release) : null;
+}
+
+export async function listAgentReleases(db: ProductDatabase, query: { limit: number; cursor?: string }) {
+  const [page, row] = await Promise.all([repo.listReleases(db, query), repo.getActive(db)]);
+  const activeId = row?.release.id ?? null;
+  return { items: page.items.map(r => toReleaseSummaryDTO(r, activeId)), next_cursor: page.next_cursor };
+}
+
+export async function getAgentRelease(db: ProductDatabase, id: string) {
+  const [release, row] = await Promise.all([repo.findRelease(db, id), repo.getActive(db)]);
+  if (!release) throw new ProductError(404, 'RES_NOT_FOUND', 'Agent release not found');
+  return toReleaseDTO(release, row?.release.id ?? null);
+}
+
+export async function listAgentAudit(db: ProductDatabase, query: { limit: number; cursor?: string }) {
+  const page = await repo.listAudit(db, query);
+  return { items: page.items.map(toAuditDTO), next_cursor: page.next_cursor };
 }

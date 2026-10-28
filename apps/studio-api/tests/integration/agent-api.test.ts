@@ -6,6 +6,7 @@ import { migrateProduct } from '@/infrastructure/db/migrate';
 import { closeProductDatabase, getProductDatabase } from '@/infrastructure/db/client';
 import { issueAccessToken } from '@/modules/auth/tokens';
 import { seedAgent } from '@/modules/agent/agent.service';
+import { computeContentHash } from '@/modules/experiences/canonical';
 import { setAgentValidator } from '@/modules/agent/runtime-validation';
 
 export const SEED = { greeting_text: 'Chào bạn!', allowed_activity_profiles: ['riasec.mean.bounds.v2'] };
@@ -63,5 +64,66 @@ describe('agent draft validations', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject({ valid: false, issues: [{ path: 'greeting_text' }] });
     expect(typeof res.body.data.draft_revision).toBe('number');
+  });
+});
+
+describe('agent releases', () => {
+  beforeEach(() => setAgentValidator(async content => ({ valid: true, content_hash: computeContentHash(content), issues: [] })));
+  afterAll(() => setAgentValidator(null));
+
+  const state = async () => ({
+    draft: (await req('GET', '/admin/agent/draft')).body.data,
+    active: (await req('GET', '/admin/agent/active')).body.data,
+  });
+
+  it('publishes v2, lists it as active and restores v1', async () => {
+    const before = await state();
+    await req('PUT', '/admin/agent/draft', { content: { ...SEED, greeting_text: 'Bản mới' }, expected_revision: before.draft.revision });
+    const after = await state();
+    const published = await req('POST', '/admin/agent/releases', {
+      expected_draft_revision: after.draft.revision, expected_active_revision: after.active.revision, note: 'đổi lời chào', idempotency_key: 'publish-it-0001',
+    });
+    expect(published.status).toBe(201);
+    expect(published.body.data).toMatchObject({ is_active: true, note: 'đổi lời chào' });
+
+    const list = await req('GET', '/admin/agent/releases?limit=10');
+    expect(list.body.data.items[0]).toMatchObject({ id: published.body.data.id, is_active: true });
+    const v1 = list.body.data.items.find((r: { version: number }) => r.version === 1);
+
+    const active = (await state()).active;
+    const restored = await req('POST', `/admin/agent/releases/${v1.id}:restore`, { expected_active_revision: active.revision, idempotency_key: 'restore-it-0001' });
+    expect(restored.body.data).toMatchObject({ release_id: v1.id, version: 1 });
+
+    const audit = await req('GET', '/admin/agent/audit-logs');
+    expect(audit.body.data.items.map((e: { action: string }) => e.action).slice(0, 2)).toEqual(['agent.release.restore', 'agent.release.publish']);
+  });
+
+  it('replays the same idempotency key and rejects a different payload', async () => {
+    const { draft, active } = await state();
+    await req('PUT', '/admin/agent/draft', { content: { ...SEED, greeting_text: `x${Date.now()}` }, expected_revision: draft.revision });
+    const fresh = (await state()).draft;
+    const body = { expected_draft_revision: fresh.revision, expected_active_revision: active.revision, idempotency_key: 'publish-it-0002' };
+    const first = await req('POST', '/admin/agent/releases', body);
+    const again = await req('POST', '/admin/agent/releases', body);
+    expect(again.body.data.id).toBe(first.body.data.id);
+    const clash = await req('POST', '/admin/agent/releases', { ...body, note: 'khác' });
+    expect(clash.body.error.code).toBe('CONFLICT_IDEMPOTENCY_KEY');
+  });
+
+  it('allows only one of two concurrent publishes', async () => {
+    const { draft, active } = await state();
+    await req('PUT', '/admin/agent/draft', { content: { ...SEED, greeting_text: `y${Date.now()}` }, expected_revision: draft.revision });
+    const fresh = (await state()).draft;
+    const body = (key: string) => ({ expected_draft_revision: fresh.revision, expected_active_revision: active.revision, idempotency_key: key });
+    const results = await Promise.all([req('POST', '/admin/agent/releases', body('publish-it-0003')), req('POST', '/admin/agent/releases', body('publish-it-0004'))]);
+    expect(results.map(r => r.status).sort()).toEqual([201, 409]);
+  });
+
+  it('rejects publishing when validation fails', async () => {
+    setAgentValidator(async () => ({ valid: false, content_hash: 'h', issues: [{ path: 'model.ref', code: 'value_error', message: 'x' }] }));
+    const { draft, active } = await state();
+    const res = await req('POST', '/admin/agent/releases', { expected_draft_revision: draft.revision, expected_active_revision: active.revision, idempotency_key: 'publish-it-0005' });
+    expect(res.status).toBe(422);
+    expect(res.body.error.details.issues[0].path).toBe('model.ref');
   });
 });
