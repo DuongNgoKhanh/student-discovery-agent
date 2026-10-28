@@ -6,3 +6,5 @@ export { useLogin } from './hooks/use-login';
 export { useRegister } from './hooks/use-register';
 export { useLogout } from './hooks/use-logout';
 export { AdminAccount } from './components/admin-account';
+export { AuthShell } from './components/auth-shell';
+export { AuthPasswordField, AuthTextField } from './components/auth-fields';
