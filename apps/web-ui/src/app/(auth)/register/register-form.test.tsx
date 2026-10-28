@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { PASSWORD_POLICY_HINT } from '@/features/auth';
 import { RegisterForm } from './register-form';
 
 const mockPush = vi.fn();
@@ -27,6 +28,19 @@ vi.mock('@/features/auth', async (importOriginal) => {
   };
 });
 
+const VALID_PASSWORD = 'MatKhau1!';
+
+function fillAndSubmit({
+  name = 'Nguyễn Ngân',
+  email = 'hocsinh@example.com',
+  password = VALID_PASSWORD,
+} = {}) {
+  fireEvent.change(screen.getByLabelText('Họ và tên'), { target: { value: name } });
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } });
+  fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: password } });
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo tài khoản' }));
+}
+
 describe('RegisterForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -35,136 +49,88 @@ describe('RegisterForm', () => {
     mockGetSearchParams.mockReturnValue(null);
   });
 
-  it('renders branding elements: IHRD logo, title, and career discovery hero', () => {
+  it('hiển thị các ô đăng ký, gợi ý chính sách mật khẩu và link Đăng nhập', () => {
     render(<RegisterForm />);
 
-    // Brand logo & subtext
-    const logoImg = screen.getByAltText('IHRD Logo');
-    expect(logoImg).toBeInTheDocument();
-    expect(logoImg.getAttribute('src')).toContain('Logo-IHRD.png');
-    expect(screen.getByText('localis-ai')).toBeInTheDocument();
-    expect(screen.getByText('student-discovery-agent')).toBeInTheDocument();
-
-    // Hero section text
-    expect(screen.getByText('Start Your Career Journey.')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Trợ lý AI Hướng nghiệp GenZ để khám phá tiềm năng/),
-    ).toBeInTheDocument();
-
-    // Log in pill button
-    const loginLinks = screen.getAllByRole('link', { name: /log in/i });
-    expect(loginLinks.length).toBeGreaterThanOrEqual(1);
-    expect(loginLinks[0]).toHaveAttribute('href', '/login');
+    expect(screen.getByRole('heading', { level: 1, name: 'Tạo tài khoản' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Họ và tên')).toHaveAttribute('autocomplete', 'name');
+    expect(screen.getByLabelText('Mật khẩu')).toHaveAttribute('autocomplete', 'new-password');
+    expect(screen.getByLabelText('Mật khẩu')).toHaveAttribute('aria-describedby', 'password-hint');
+    expect(screen.getByText(PASSWORD_POLICY_HINT)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Đăng nhập' })).toHaveAttribute('href', '/login');
   });
 
-  it('renders register form inputs, labels, and action buttons', () => {
+  it('mật khẩu không đủ chính sách backend bị chặn ở client', async () => {
     render(<RegisterForm />);
+    fillAndSubmit({ password: 'matkhau123' });
 
-    expect(screen.getByRole('heading', { name: 'Create an Account' })).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Sign up to start your journey, discover your strengths, and shape your future.',
-      ),
-    ).toBeInTheDocument();
-
-    // Inputs
-    expect(screen.getByLabelText('Full name')).toBeInTheDocument();
-    expect(screen.getByLabelText('Email address')).toBeInTheDocument();
-    expect(screen.getByLabelText('Password')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /sign up with google/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create Account' })).toBeInTheDocument();
-  });
-
-  it('toggles password visibility when eye icon button is clicked', () => {
-    render(<RegisterForm />);
-
-    const passwordInput = screen.getByLabelText('Password');
-    expect(passwordInput).toHaveAttribute('type', 'password');
-
-    const toggleBtn = screen.getByRole('button', { name: 'Hiện mật khẩu' });
-    fireEvent.click(toggleBtn);
-    expect(passwordInput).toHaveAttribute('type', 'text');
-
-    const hideBtn = screen.getByRole('button', { name: 'Ẩn mật khẩu' });
-    fireEvent.click(hideBtn);
-    expect(passwordInput).toHaveAttribute('type', 'password');
-  });
-
-  it('shows validation errors when submitting invalid email and short password', async () => {
-    render(<RegisterForm />);
-
-    fireEvent.change(screen.getByLabelText('Email address'), {
-      target: { value: 'not-an-email' },
-    });
-    fireEvent.change(screen.getByLabelText('Password'), {
-      target: { value: 'short' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Email không hợp lệ')).toBeInTheDocument();
-      expect(screen.getByText('Mật khẩu tối thiểu 8 ký tự')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Mật khẩu cần ít nhất một chữ hoa')).toBeInTheDocument();
+    expect(screen.getByLabelText('Mật khẩu')).toHaveAttribute('aria-invalid', 'true');
     expect(mockMutateAsync).not.toHaveBeenCalled();
   });
 
-  it('calls mutateAsync and redirects to /dashboard on valid submission', async () => {
-    mockMutateAsync.mockResolvedValueOnce(undefined);
+  it('báo lỗi email sai định dạng', async () => {
     render(<RegisterForm />);
+    fillAndSubmit({ email: 'abc' });
 
-    fireEvent.change(screen.getByLabelText('Full name'), {
-      target: { value: 'Nguyen Van A' },
-    });
-    fireEvent.change(screen.getByLabelText('Email address'), {
-      target: { value: 'student@example.com' },
-    });
-    fireEvent.change(screen.getByLabelText('Password'), {
-      target: { value: 'password123' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
+    expect(await screen.findByText('Email không hợp lệ')).toBeInTheDocument();
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() => {
-      expect(mockMutateAsync).toHaveBeenCalledWith({
-        name: 'Nguyen Van A',
-        email: 'student@example.com',
-        password: 'password123',
-      });
-      expect(mockPush).toHaveBeenCalledWith('/dashboard');
+  it('đăng ký thành công chuyển về /dashboard mặc định', async () => {
+    mockMutateAsync.mockResolvedValueOnce({});
+    render(<RegisterForm />);
+    fillAndSubmit();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
+    expect(mockMutateAsync).toHaveBeenCalledWith({
+      name: 'Nguyễn Ngân',
+      email: 'hocsinh@example.com',
+      password: VALID_PASSWORD,
     });
   });
 
-  it('respects safe next query param redirect', async () => {
-    mockGetSearchParams.mockReturnValue('/custom-page');
-    mockMutateAsync.mockResolvedValueOnce(undefined);
+  it('next an toàn được dùng để chuyển hướng và chuyển tiếp sang link Đăng nhập', async () => {
+    mockGetSearchParams.mockReturnValue('/chat');
+    mockMutateAsync.mockResolvedValueOnce({});
     render(<RegisterForm />);
 
-    fireEvent.change(screen.getByLabelText('Full name'), {
-      target: { value: 'Nguyen Van A' },
-    });
-    fireEvent.change(screen.getByLabelText('Email address'), {
-      target: { value: 'student@example.com' },
-    });
-    fireEvent.change(screen.getByLabelText('Password'), {
-      target: { value: 'password123' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }));
-
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/custom-page');
-    });
+    expect(screen.getByRole('link', { name: 'Đăng nhập' })).toHaveAttribute(
+      'href',
+      '/login?next=%2Fchat',
+    );
+    fillAndSubmit();
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/chat'));
   });
 
-  it('displays notice message when clicking Google Sign up', () => {
+  it('next không an toàn bị bỏ', async () => {
+    mockGetSearchParams.mockReturnValue('https://evil.com');
+    mockMutateAsync.mockResolvedValueOnce({});
     render(<RegisterForm />);
 
-    fireEvent.click(screen.getByRole('button', { name: /sign up with google/i }));
-    expect(screen.getByText('Đăng ký với Google sẽ sớm được hỗ trợ.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Đăng nhập' })).toHaveAttribute('href', '/login');
+    fillAndSubmit();
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
   });
 
-  it('displays error message from mutation when registration fails', () => {
-    mockError = new Error('Email is already registered');
+  it('đăng ký thất bại không chuyển trang', async () => {
+    mockMutateAsync.mockRejectedValueOnce(new Error('Email đã được sử dụng'));
     render(<RegisterForm />);
+    fillAndSubmit();
 
-    expect(screen.getByText('Email is already registered')).toBeInTheDocument();
+    await waitFor(() => expect(mockMutateAsync).toHaveBeenCalled());
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('đang gửi: nút bị khoá và hiện Đang xử lý...', () => {
+    mockIsPending = true;
+    render(<RegisterForm />);
+    expect(screen.getByRole('button', { name: 'Đang xử lý...' })).toBeDisabled();
+  });
+
+  it('hiển thị lỗi từ mutation', () => {
+    mockError = new Error('Email đã được sử dụng');
+    render(<RegisterForm />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Email đã được sử dụng');
   });
 });

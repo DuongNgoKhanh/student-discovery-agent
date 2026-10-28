@@ -1,20 +1,20 @@
 import type { SVGProps } from 'react';
 
+/** Hình minh hoạ trang trí cho trang đăng nhập/đăng ký; id trong `defs` có tiền tố để tránh trùng. */
 export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
   return (
     <svg
       viewBox="0 0 520 380"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      role="img"
-      aria-label="Minh họa Trợ lý AI Hướng nghiệp GenZ"
+      aria-hidden="true"
       className="h-auto w-full max-w-[420px] select-none drop-shadow-lg"
       {...props}
     >
       <defs>
         {/* Gradients */}
         <linearGradient
-          id="orbitGlow"
+          id="sda-auth-orbitGlow"
           x1="260"
           y1="40"
           x2="260"
@@ -25,28 +25,28 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           <stop offset="1" stopColor="#ffffff" stopOpacity="0.02" />
         </linearGradient>
 
-        <linearGradient id="badgeGlass" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id="sda-auth-badgeGlass" x1="0" y1="0" x2="1" y2="1">
           <stop stopColor="#ffffff" stopOpacity="0.22" />
           <stop offset="1" stopColor="#ffffff" stopOpacity="0.08" />
         </linearGradient>
 
-        <linearGradient id="aiBody" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id="sda-auth-aiBody" x1="0" y1="0" x2="0" y2="1">
           <stop stopColor="#ffffff" />
           <stop offset="1" stopColor="#e2e8f0" />
         </linearGradient>
 
-        <linearGradient id="aiVisor" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id="sda-auth-aiVisor" x1="0" y1="0" x2="1" y2="1">
           <stop stopColor="#0f172a" />
           <stop offset="1" stopColor="#1e293b" />
         </linearGradient>
 
-        <linearGradient id="goldGradient" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id="sda-auth-goldGradient" x1="0" y1="0" x2="1" y2="1">
           <stop stopColor="#fde047" />
           <stop offset="1" stopColor="#eab308" />
         </linearGradient>
 
         <linearGradient
-          id="pathGradient"
+          id="sda-auth-pathGradient"
           x1="80"
           y1="300"
           x2="440"
@@ -58,7 +58,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           <stop offset="1" stopColor="#ffffff" stopOpacity="0.9" />
         </linearGradient>
 
-        <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+        <filter id="sda-auth-softGlow" x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur stdDeviation="6" result="blur" />
           <feComposite in="SourceGraphic" in2="blur" operator="over" />
         </filter>
@@ -69,7 +69,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
         cx="260"
         cy="190"
         r="145"
-        stroke="url(#orbitGlow)"
+        stroke="url(#sda-auth-orbitGlow)"
         strokeWidth="1.5"
         strokeDasharray="6 6"
       />
@@ -77,7 +77,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
         cx="260"
         cy="190"
         r="105"
-        stroke="url(#orbitGlow)"
+        stroke="url(#sda-auth-orbitGlow)"
         strokeWidth="1"
         strokeDasharray="4 4"
       />
@@ -86,17 +86,17 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
       {/* Career Trajectory Roadmap Curve */}
       <path
         d="M 90 310 C 140 290 190 260 240 210 C 290 160 360 120 440 90"
-        stroke="url(#pathGradient)"
+        stroke="url(#sda-auth-pathGradient)"
         strokeWidth="3"
         strokeLinecap="round"
         strokeDasharray="6 8"
       />
 
       {/* Milestones on Career Curve */}
-      <circle cx="160" cy="275" r="5" fill="#fde047" filter="url(#softGlow)" />
-      <circle cx="240" cy="210" r="6" fill="#38bdf8" filter="url(#softGlow)" />
-      <circle cx="340" cy="140" r="7" fill="#fb7185" filter="url(#softGlow)" />
-      <circle cx="440" cy="90" r="9" fill="#fde047" filter="url(#softGlow)" />
+      <circle cx="160" cy="275" r="5" fill="#fde047" filter="url(#sda-auth-softGlow)" />
+      <circle cx="240" cy="210" r="6" fill="#38bdf8" filter="url(#sda-auth-softGlow)" />
+      <circle cx="340" cy="140" r="7" fill="#fb7185" filter="url(#sda-auth-softGlow)" />
+      <circle cx="440" cy="90" r="9" fill="#fde047" filter="url(#sda-auth-softGlow)" />
 
       {/* Floating Badge 1: AI Career Match */}
       <g transform="translate(45, 60)">
@@ -104,7 +104,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           width="135"
           height="42"
           rx="12"
-          fill="url(#badgeGlass)"
+          fill="url(#sda-auth-badgeGlass)"
           stroke="#ffffff"
           strokeOpacity="0.3"
           strokeWidth="1"
@@ -128,7 +128,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           width="140"
           height="44"
           rx="12"
-          fill="url(#badgeGlass)"
+          fill="url(#sda-auth-badgeGlass)"
           stroke="#ffffff"
           strokeOpacity="0.3"
           strokeWidth="1"
@@ -151,7 +151,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           width="125"
           height="38"
           rx="10"
-          fill="url(#badgeGlass)"
+          fill="url(#sda-auth-badgeGlass)"
           stroke="#ffffff"
           strokeOpacity="0.25"
           strokeWidth="1"
@@ -220,7 +220,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
       </g>
 
       {/* STUDENT CHARACTER (Left & Center) */}
-      <g id="student-character">
+      <g>
         {/* Ground shadow */}
         <ellipse cx="195" cy="355" rx="55" ry="8" fill="#1e293b" fillOpacity="0.3" />
 
@@ -252,7 +252,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
         {/* Hoodie / Jacket (GenZ Yellow & White) */}
         <path
           d="M 172 210 C 182 205 212 205 224 210 L 230 295 C 215 300 182 300 168 295 Z"
-          fill="url(#goldGradient)"
+          fill="url(#sda-auth-goldGradient)"
         />
         {/* Hoodie cord & neckline */}
         <path d="M 190 210 Q 198 228 206 210" stroke="#713f12" strokeWidth="2" fill="none" />
@@ -301,7 +301,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
         {/* Left Arm holding Digital Tablet */}
         <path
           d="M 172 215 L 160 250 L 195 260"
-          stroke="url(#goldGradient)"
+          stroke="url(#sda-auth-goldGradient)"
           strokeWidth="12"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -311,7 +311,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
         {/* Right Arm gesturing towards AI Bot */}
         <path
           d="M 224 216 L 244 240 L 268 226"
-          stroke="url(#goldGradient)"
+          stroke="url(#sda-auth-goldGradient)"
           strokeWidth="11"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -339,7 +339,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
       </g>
 
       {/* AI AGENT COMPANION BOT (Right) */}
-      <g id="ai-agent-bot" transform="translate(295, 140)">
+      <g transform="translate(295, 140)">
         {/* Bot Glow aura */}
         <ellipse
           cx="48"
@@ -348,7 +348,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           ry="46"
           fill="#38bdf8"
           fillOpacity="0.15"
-          filter="url(#softGlow)"
+          filter="url(#sda-auth-softGlow)"
         />
 
         {/* Floating shadow */}
@@ -364,7 +364,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           strokeWidth="2.5"
           strokeLinecap="round"
         />
-        <circle cx="48" cy="6" r="4" fill="#fde047" filter="url(#softGlow)" />
+        <circle cx="48" cy="6" r="4" fill="#fde047" filter="url(#sda-auth-softGlow)" />
 
         {/* Bot Head Body (Smooth Rounded Mascot) */}
         <rect
@@ -373,14 +373,14 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           width="64"
           height="54"
           rx="22"
-          fill="url(#aiBody)"
+          fill="url(#sda-auth-aiBody)"
           stroke="#ffffff"
           strokeWidth="1.5"
           className="drop-shadow-md"
         />
 
         {/* Visor Screen */}
-        <rect x="24" y="27" width="48" height="32" rx="12" fill="url(#aiVisor)" />
+        <rect x="24" y="27" width="48" height="32" rx="12" fill="url(#sda-auth-aiVisor)" />
 
         {/* Friendly Cheerful Glowing Eyes: ^ ^ */}
         <path
@@ -389,7 +389,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           strokeWidth="2.8"
           strokeLinecap="round"
           fill="none"
-          filter="url(#softGlow)"
+          filter="url(#sda-auth-softGlow)"
         />
         <path
           d="M 55 44 C 56 38 62 38 63 44"
@@ -397,7 +397,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           strokeWidth="2.8"
           strokeLinecap="round"
           fill="none"
-          filter="url(#softGlow)"
+          filter="url(#sda-auth-softGlow)"
         />
 
         {/* Blushing cheeks */}
@@ -405,7 +405,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
         <circle cx="65" cy="48" r="2.5" fill="#fb7185" fillOpacity="0.7" />
 
         {/* Lower floating body / thruster */}
-        <path d="M 32 72 C 32 72 36 94 48 94 C 60 94 64 72 64 72 Z" fill="url(#aiBody)" />
+        <path d="M 32 72 C 32 72 36 94 48 94 C 60 94 64 72 64 72 Z" fill="url(#sda-auth-aiBody)" />
         <circle cx="48" cy="80" r="4" fill="#4963a8" />
         <circle cx="48" cy="80" r="2" fill="#38bdf8" />
 
@@ -414,18 +414,18 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           d="M 42 95 C 44 102 52 102 54 95 Z"
           fill="#38bdf8"
           opacity="0.8"
-          filter="url(#softGlow)"
+          filter="url(#sda-auth-softGlow)"
         />
 
         {/* Left Waving Hand */}
         <g transform="translate(10, 50)">
-          <path d="M 12 12 C 4 6 -2 -2 2 -8 C 6 -12 14 -4 14 6 Z" fill="url(#aiBody)" />
+          <path d="M 12 12 C 4 6 -2 -2 2 -8 C 6 -12 14 -4 14 6 Z" fill="url(#sda-auth-aiBody)" />
           <circle cx="2" cy="-8" r="3.5" fill="#fde047" />
         </g>
 
         {/* Right Friendly Hand */}
         <g transform="translate(72, 54)">
-          <path d="M 2 10 C 10 14 16 20 18 26 C 18 30 12 30 8 22 Z" fill="url(#aiBody)" />
+          <path d="M 2 10 C 10 14 16 20 18 26 C 18 30 12 30 8 22 Z" fill="url(#sda-auth-aiBody)" />
           <circle cx="16" cy="26" r="3" fill="#38bdf8" />
         </g>
 
@@ -434,7 +434,7 @@ export function StudentAgentIllustration(props: SVGProps<SVGSVGElement>) {
           <path
             d="M 0 25 L 8 20 H 42 C 48 20 52 16 52 10 C 52 4 48 0 42 0 H 10 C 4 0 0 4 0 10 V 25 Z"
             fill="#ffffff"
-            filter="url(#softGlow)"
+            filter="url(#sda-auth-softGlow)"
           />
           <text x="11" y="13" fill="#0f172a" fontSize="8" fontWeight="800" fontFamily="sans-serif">
             Hi GenZ! ✨
