@@ -92,6 +92,38 @@ def _build_service_verifier(settings: Settings, student_keys: dict[str, bytes]) 
         return None
 
 
+def _other_runtime_keys(settings: Settings, student_keys: dict[str, bytes]) -> set[bytes]:
+    """Every runtime key a delivery key must differ from: student, Studio service and cursor keys."""
+    others = set(student_keys.values())
+    for secret, is_keyring in ((settings.RUNTIME_STUDIO_KEYRING, True), (settings.RUNTIME_CURSOR_SIGNING_KEY, False)):
+        if not secret:
+            continue
+        try:
+            if is_keyring:
+                raw = read_strict_json(secret.get_secret_value().encode("utf-8"))
+                others |= {_decode_key(value) for value in raw.values()}
+            else:
+                others.add(_decode_key(secret.get_secret_value()))
+        except Exception:
+            continue
+    return others
+
+
+def _choose_agent_source(settings: Settings, local, student_keys: dict[str, bytes]):
+    """Local files, or the signed studio-api delivery; a missing/colliding delivery config means no agent source."""
+    if settings.RUNTIME_AGENT_RELEASE_SOURCE != "product":
+        return local
+    if not (settings.RUNTIME_PRODUCT_URL and settings.RUNTIME_PRODUCT_SIGNING_KEY):
+        return None
+    try:
+        delivery_key = _decode_key(settings.RUNTIME_PRODUCT_SIGNING_KEY.get_secret_value())
+    except Exception:
+        return None
+    if delivery_key in _other_runtime_keys(settings, student_keys):
+        return None
+    return HttpProductReleaseSource(settings.RUNTIME_PRODUCT_URL, delivery_key, settings.RUNTIME_PRODUCT_SIGNING_KID)
+
+
 def build_runtime(settings: Settings) -> RuntimeContainer | None:
     """No connection/migration at startup; malformed secrets fail closed silently.
 
@@ -128,14 +160,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         uow = RuntimeUnitOfWork(engine)
         trace_sink = DatabaseTraceSink(uow)
         local = LocalReleaseSource(settings.RUNTIME_LOCAL_RELEASES_DIR) if settings.RUNTIME_LOCAL_RELEASES_DIR else None
-        agent_source = local
-        if settings.RUNTIME_AGENT_RELEASE_SOURCE == "product":
-            agent_source = None
-            if settings.RUNTIME_PRODUCT_URL and settings.RUNTIME_PRODUCT_SIGNING_KEY:
-                delivery_key = _decode_key(settings.RUNTIME_PRODUCT_SIGNING_KEY.get_secret_value())
-                if delivery_key not in keys.values():
-                    agent_source = HttpProductReleaseSource(settings.RUNTIME_PRODUCT_URL, delivery_key,
-                                                            settings.RUNTIME_PRODUCT_SIGNING_KID)
+        agent_source = _choose_agent_source(settings, local, keys)
         product = CompositeReleaseSource(agent=agent_source or ProductUnavailable(),
                                          experience=local or ProductUnavailable())
         validator = ExperienceValidator()
