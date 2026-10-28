@@ -19,6 +19,7 @@ from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_eng
 from agent_runtime.infrastructure.db.trace import DatabaseTraceSink
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
 from agent_runtime.infrastructure.http.trace import request_trace_context
+from agent_runtime.infrastructure.product.delivery import CompositeReleaseSource, HttpProductReleaseSource
 from agent_runtime.infrastructure.product.local_files import LocalReleaseSource
 from agent_runtime.infrastructure.product.releases import ProductUnavailable
 from agent_runtime.sessions.errors import RuntimeSessionError
@@ -126,8 +127,17 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         engine = build_engine(settings.RUNTIME_DATABASE_URL.get_secret_value())
         uow = RuntimeUnitOfWork(engine)
         trace_sink = DatabaseTraceSink(uow)
-        product = (LocalReleaseSource(settings.RUNTIME_LOCAL_RELEASES_DIR) if settings.RUNTIME_LOCAL_RELEASES_DIR
-                   else ProductUnavailable())
+        local = LocalReleaseSource(settings.RUNTIME_LOCAL_RELEASES_DIR) if settings.RUNTIME_LOCAL_RELEASES_DIR else None
+        agent_source = local
+        if settings.RUNTIME_AGENT_RELEASE_SOURCE == "product":
+            agent_source = None
+            if settings.RUNTIME_PRODUCT_URL and settings.RUNTIME_PRODUCT_SIGNING_KEY:
+                delivery_key = _decode_key(settings.RUNTIME_PRODUCT_SIGNING_KEY.get_secret_value())
+                if delivery_key not in keys.values():
+                    agent_source = HttpProductReleaseSource(settings.RUNTIME_PRODUCT_URL, delivery_key,
+                                                            settings.RUNTIME_PRODUCT_SIGNING_KID)
+        product = CompositeReleaseSource(agent=agent_source or ProductUnavailable(),
+                                         experience=local or ProductUnavailable())
         validator = ExperienceValidator()
         conversations = ConversationService(uow, product, validator, policy=policy, trace_sink=trace_sink)
         store = TurnStore(uow, ActivityPersistence(uow, product, validator), conversations)
@@ -152,7 +162,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
             knowledge=knowledge, agent_validation=agent_validation,
-            product_ready=isinstance(product, LocalReleaseSource))
+            product_ready=agent_source is not None)
     except Exception:
         if engine is not None:
             engine.dispose()
