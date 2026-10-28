@@ -15,8 +15,8 @@ import { ApiError } from '@/lib/api/errors';
 import { cn } from '@/lib/utils/cn';
 import { knowledgeKeys, useArchiveDocument, useDocument, useFields, useRestoreDocument, useRetryRevision } from '../hooks/use-knowledge';
 import type { DocumentDetail, MetadataField } from '../types';
-import { highlightSegments } from './highlight';
 import { kbHref } from './kb-routes';
+import { MarkdownPreview } from './markdown-preview';
 import { fieldLabel } from './metadata-inputs';
 import { ConfirmDialog } from './shared/confirm-dialog';
 import { CopyButton } from './shared/copy-button';
@@ -64,20 +64,16 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 function ChunkBlock({ chunk }: { chunk: RetrievedChunk }) {
   const place = [chunk.chunk !== undefined && `Chunk #${chunk.chunk}`, chunk.revision !== undefined && `r${chunk.revision}`].filter(Boolean).join(' · ');
-  const segments = chunk.query ? highlightSegments(chunk.content, chunk.query) : [{ text: chunk.content, match: false }];
   return (
     <section aria-labelledby="doc-chunk-heading" className="rounded-lg border bg-primary-subtle/60 p-3">
-      <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
         <h3 id="doc-chunk-heading" className="text-13 font-semibold">Đoạn được truy xuất</h3>
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="ml-auto font-mono text-xs text-muted-foreground">
           {place}{chunk.score !== undefined && `${place ? ' · ' : ''}${chunk.score.toFixed(3)}`}
         </span>
+        <CopyButton value={chunk.content} label="Copy đoạn" copiedLabel="Đã copy đoạn" iconOnly variant="ghost" className="-my-1 h-7 w-7 text-muted-foreground" />
       </div>
-      <p className="max-h-60 overflow-y-auto whitespace-pre-wrap break-words text-13">
-        {segments.map((segment, index) => segment.match
-          ? <mark key={index} className="rounded-sm bg-warning-subtle px-0.5 text-foreground">{segment.text}</mark>
-          : <span key={index}>{segment.text}</span>)}
-      </p>
+      <MarkdownPreview source={chunk.content} highlight={chunk.query} compact className="max-h-60 overflow-y-auto" />
     </section>
   );
 }

@@ -9,7 +9,7 @@ import { useFields } from '../hooks/use-knowledge';
 import { DEFAULT_SETTINGS, QUERY_MAX, buildSearchRequest, droppedConditions, type SearchSettings, type SearchState } from './build-search-request';
 import { EmptyState } from './shared/empty-state';
 import { errorMessage } from './shared/error-message';
-import { relativeTime } from './shared/format';
+import { SearchHistory } from './search-history';
 import { SearchResults, SearchResultsSkeleton } from './search-results';
 import { ConditionChips, SearchSettingsPopover } from './search-settings';
 import { useSearchHistory } from './use-search-history';
@@ -26,14 +26,16 @@ export function SearchTab({ kb }: { kb: string }) {
   const [settings, setSettings] = useState<SearchSettings>(DEFAULT_SETTINGS);
   // The query the shown results answer, for highlighting and retry; the textarea may have moved on.
   const [ran, setRan] = useState<SearchState | null>(null);
+  const [ranAt, setRanAt] = useState<string | null>(null);
 
   const dropped = droppedConditions(settings, fields);
 
   const run = (state: SearchState) => {
     if (!state.query.trim() || !fieldsReady) return;
     setRan(state);
-    history.add(state);
-    runSearch({ kb, body: buildSearchRequest(state, fields) });
+    const at = history.add(state);
+    setRanAt(at);
+    runSearch({ kb, body: buildSearchRequest(state, fields) }, (result, elapsedMs) => history.settle(at, { count: result.records.length, elapsedMs }));
   };
 
   return (
@@ -69,23 +71,9 @@ export function SearchTab({ kb }: { kb: string }) {
             </Button>
           </div>
         </form>
-        <section aria-labelledby="search-history-heading" className="border-t pt-4">
-          <h2 id="search-history-heading" className="mb-2 text-13 font-semibold text-muted-foreground">Gần đây</h2>
-          {history.entries.length === 0 ? <p className="text-13 text-muted-foreground">Chưa có truy vấn nào.</p> : (
-            <ul className="-mx-2 space-y-0.5">
-              {history.entries.map(entry => (
-                <li key={entry.at}>
-                  <button type="button" disabled={search.isPending || !fieldsReady}
-                    className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-13 hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                    onClick={() => { setQuery(entry.query); setSettings(entry.settings); run({ query: entry.query, settings: entry.settings }); }}>
-                    <span className="min-w-0 flex-1 truncate">{entry.query}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{relativeTime(entry.at)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <SearchHistory entries={history.entries} fields={fields} activeAt={ranAt} disabled={search.isPending || !fieldsReady}
+          onRun={entry => { setQuery(entry.query); setSettings(entry.settings); run({ query: entry.query, settings: entry.settings }); }}
+          onRemove={history.remove} onClear={history.clear} />
       </div>
       <div className="min-w-0" aria-busy={search.isPending}>
         {search.isPending ? (
@@ -98,7 +86,7 @@ export function SearchTab({ kb }: { kb: string }) {
             </Button>
           </div>
         ) : search.data && ran ? (
-          <SearchResults kb={kb} result={search.data} query={ran.query} settings={ran.settings} fields={fields} elapsedMs={elapsedMs} />
+          <SearchResults key={ranAt} kb={kb} result={search.data} query={ran.query} settings={ran.settings} fields={fields} elapsedMs={elapsedMs} />
         ) : (
           <EmptyState icon={SearchCode} title="Nhập câu hỏi để xem agent sẽ đọc được gì"
             description="Kết quả hiện các đoạn theo thứ tự agent nhận được, kèm điểm và vị trí trong tài liệu." className="rounded-xl border border-dashed" />

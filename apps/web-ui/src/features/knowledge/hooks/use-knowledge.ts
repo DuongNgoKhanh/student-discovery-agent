@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { knowledgeApi } from '../api/knowledge';
 import type { DocumentFilters, IndexStatus } from '../types';
 
@@ -23,9 +23,13 @@ export interface PollOptions { pollWhilePending?: boolean }
 export const useKnowledgeBases = () => useQuery({ queryKey: knowledgeKeys.bases(), queryFn: knowledgeApi.listBases });
 export const useKnowledgeBase = (kb: string) => useQuery({ queryKey: knowledgeKeys.base(kb), queryFn: () => knowledgeApi.getBase(kb) });
 export const useFields = (kb: string) => useQuery({ queryKey: knowledgeKeys.fields(kb), queryFn: () => knowledgeApi.listFields(kb) });
-export const useDocuments = (kb: string, filters: DocumentFilters = {}, { pollWhilePending = false }: PollOptions = {}) => useQuery({
+/** `keepPrevious` keeps the last page on screen while the next one loads (paging), instead of a skeleton. */
+export const useDocuments = (
+  kb: string, filters: DocumentFilters = {}, { pollWhilePending = false, keepPrevious = false }: PollOptions & { keepPrevious?: boolean } = {},
+) => useQuery({
   queryKey: knowledgeKeys.documents(kb, filters),
   queryFn: () => knowledgeApi.listDocuments(kb, filters),
+  placeholderData: keepPrevious ? keepPreviousData : undefined,
   refetchInterval: query =>
     pollWhilePending && query.state.data?.items.some(doc => isIndexPending(doc.index_status)) ? POLL_INTERVAL_MS : false,
 });

@@ -9,14 +9,14 @@ import { cn } from '@/lib/utils/cn';
 import { IconButton } from './icon-button';
 
 const NAV = [
-  { key: 'knowledge', href: '/admin/knowledge', label: 'Knowledge', icon: Database, match: (path: string) => path.startsWith('/admin/knowledge') },
+  { key: 'knowledge', href: '/admin/knowledge', label: 'Knowledge Base', icon: Database, match: (path: string) => path.startsWith('/admin/knowledge') },
   { key: 'users', href: '/admin', label: 'Người dùng', icon: Users, match: (path: string) => path === '/admin' },
 ] as const;
 
 export interface AdminShellProps {
   children: React.ReactNode;
   account?: React.ReactNode;
-  /** Nested group under "Knowledge" (the open knowledge base's sections); it decides itself when to render. */
+  /** Nested group under "Knowledge Base" (the open knowledge base's sections); it decides itself when to render. */
   knowledgeNav?: React.ReactNode;
 }
 

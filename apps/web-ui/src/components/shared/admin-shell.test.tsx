@@ -15,7 +15,7 @@ const renderShell = () => render(
 describe('AdminShell', () => {
   it('marks the current section in the app sidebar', () => {
     renderShell();
-    expect(screen.getByRole('link', { name: 'Knowledge' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Knowledge Base' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Người dùng' })).not.toHaveAttribute('aria-current');
     expect(screen.getByText('nội dung')).toBeInTheDocument();
     expect(screen.getByText('nhóm KB')).toBeInTheDocument();
@@ -25,6 +25,6 @@ describe('AdminShell', () => {
   it('leaves "page" to the nested item inside a knowledge base', () => {
     pathname = '/admin/knowledge/kb1/documents';
     renderShell();
-    expect(screen.getByRole('link', { name: 'Knowledge' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Knowledge Base' })).not.toHaveAttribute('aria-current');
   });
 });

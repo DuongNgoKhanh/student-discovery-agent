@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { AlertTriangle, Database, MoreHorizontal, Pencil, Plus, Search, Settings } from 'lucide-react';
+import { CircleAlert, Database, FileText, MoreHorizontal, Pencil, Plus, Search, Settings } from 'lucide-react';
 import { IconButton } from '@/components/shared/icon-button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ import { fullDateTime, relativeTime } from './shared/format';
 import { PageTitle } from './shared/page-title';
 import { QueryState } from './shared/query-state';
 
-const CARD = 'flex h-full min-h-[156px] flex-col gap-2 rounded-xl border p-4 text-left transition-colors';
+const CARD = 'flex h-full min-h-[148px] flex-col gap-2 rounded-xl border p-4 text-left transition-colors';
 const GRID = 'grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4';
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -45,20 +45,24 @@ function KnowledgeBaseCard({ kb }: { kb: KnowledgeBase }) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <p className="line-clamp-2 text-13 text-muted-foreground">{kb.description || 'Chưa có mô tả.'}</p>
-      <div className="mt-auto flex flex-col gap-1 text-xs text-muted-foreground">
-        <span>{kb.document_count} tài liệu</span>
+      <p className={cn('line-clamp-2 text-13', kb.description ? 'text-muted-foreground' : 'italic text-muted-foreground/70')}>
+        {kb.description || 'Chưa có mô tả.'}
+      </p>
+      <div className="mt-auto flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
+        <span className="inline-flex shrink-0 items-center gap-1 font-medium text-foreground">
+          <FileText className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />{kb.document_count} tài liệu
+        </span>
         {kb.error_count > 0 && (
-          <Link href={`${kbHref(kb.id, 'documents')}?state=error`}
-            className={cn('relative z-10 inline-flex w-fit items-center gap-1 rounded-sm text-warning-foreground hover:underline', FOCUS)}>
-            <AlertTriangle className="h-3.5 w-3.5" aria-hidden />{kb.error_count} tài liệu lỗi index
+          <Link href={`${kbHref(kb.id, 'documents')}?state=error`} aria-label={`${kb.error_count} tài liệu lỗi index`}
+            className={cn('relative z-10 inline-flex shrink-0 items-center gap-1 rounded-full bg-destructive-subtle px-2 py-0.5 font-medium text-destructive hover:underline', FOCUS)}>
+            <CircleAlert className="h-3.5 w-3.5" aria-hidden />{kb.error_count} lỗi
           </Link>
         )}
         <Tooltip>
           <TooltipTrigger asChild>
-            <span tabIndex={0} className={cn('relative z-10 w-fit rounded-sm', FOCUS)}>Cập nhật {relativeTime(kb.updated_at)}</span>
+            <span tabIndex={0} className={cn('relative z-10 ml-auto truncate rounded-sm', FOCUS)}>{relativeTime(kb.updated_at)}</span>
           </TooltipTrigger>
-          <TooltipContent>{fullDateTime(kb.updated_at)}</TooltipContent>
+          <TooltipContent>Cập nhật {fullDateTime(kb.updated_at)}</TooltipContent>
         </Tooltip>
       </div>
       <RenameKnowledgeBaseDialog kb={kb} open={renaming} onOpenChange={setRenaming} />
@@ -74,7 +78,7 @@ export function KnowledgeBaseList() {
   return (
     <>
       <PageTitle
-        title="Knowledge"
+        title="Knowledge Base"
         description="Tài liệu để agent tra cứu khi trả lời."
         actions={!!bases.data?.length && (
           <div className="relative w-56">
@@ -85,7 +89,7 @@ export function KnowledgeBaseList() {
       />
       <QueryState query={bases} loading={(
         <div aria-busy="true" aria-label="Đang tải knowledge base" className={GRID}>
-          {Array.from({ length: 3 }, (_, index) => <Skeleton key={index} className="h-[156px] rounded-xl" />)}
+          {Array.from({ length: 3 }, (_, index) => <Skeleton key={index} className="h-[148px] rounded-xl" />)}
         </div>
       )}>
         {data => {

@@ -47,9 +47,41 @@ describe('KnowledgeTestingPage', () => {
     expect(card.getByText('Học', { selector: 'mark' })).toBeInTheDocument();
 
     const history = within(screen.getByRole('region', { name: 'Gần đây' }));
-    fireEvent.click(history.getByRole('button', { name: /hoc phi/ }));
+    expect(history.getByText(/^1 kết quả · \d+ ms · /)).toBeInTheDocument();
+    fireEvent.click(history.getByRole('button', { name: /^hoc phi/ }));
     await waitFor(() => expect(mocked.search).toHaveBeenCalledTimes(2));
     expect(JSON.parse(window.localStorage.getItem('knowledge.search-history.kb1') ?? '[]')).toHaveLength(1);
+    fireEvent.click(history.getByRole('button', { name: 'Xoá khỏi lịch sử: hoc phi' }));
+    expect(history.getByText('Chưa có truy vấn nào.')).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem('knowledge.search-history.kb1') ?? '[]')).toHaveLength(0);
+  });
+
+  it('renders chunks as safe Markdown, switches to the raw text and expands every long chunk at once', async () => {
+    const long = `## Học phí\n\n<script>alert(1)</script>\n\n| Ngành | Học phí |\n|---|---|\n| CNTT | 42 |\n\n${'Chi tiết. '.repeat(40)}`;
+    mocked.search.mockResolvedValue({ degraded: false, records: [
+      { content: long, score: 0.9, title: 'A', metadata: { document_id: 'a' } },
+      { content: long, score: 0.8, title: 'B', metadata: { document_id: 'b' } },
+    ] });
+    const { container } = renderPage();
+    fireEvent.change(screen.getByLabelText('Câu hỏi'), { target: { value: 'học phí' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tìm' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Tìm' }));
+
+    const first = within(await screen.findByRole('listitem', { name: '#1 A' }));
+    expect(first.getByRole('heading', { name: 'Học phí' })).toBeInTheDocument();
+    expect(first.getByRole('table')).toBeInTheDocument();
+    expect(first.getAllByText('Học', { selector: 'mark' }).length).toBeGreaterThan(0);
+    expect(container.querySelector('script')).toBeNull();
+    expect(first.getByRole('button', { name: 'Copy đoạn' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mở rộng tất cả' }));
+    expect(screen.getAllByRole('button', { name: 'Thu gọn' })).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn tất cả' }));
+    expect(screen.getAllByRole('button', { name: 'Xem thêm' })).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Văn bản gốc' }));
+    expect(first.queryByRole('heading')).not.toBeInTheDocument();
+    expect(first.getByText('##')).toBeInTheDocument();
   });
 
   it('says when nothing passes the threshold and retries after a 503', async () => {

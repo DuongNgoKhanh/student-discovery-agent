@@ -69,7 +69,7 @@ export function KnowledgeBaseNav() {
   return kb ? <KnowledgeBaseGroup kb={kb} /> : null;
 }
 
-/** `Knowledge / {KB} / {Mục}` above the content of every page inside a knowledge base. */
+/** `Knowledge Base / {KB} / {Mục}` above the content of every page inside a knowledge base. */
 export function KnowledgeBaseBreadcrumb({ kb }: { kb: string }) {
   const pathname = usePathname() ?? '';
   const base = useKnowledgeBase(kb);
@@ -81,7 +81,7 @@ export function KnowledgeBaseBreadcrumb({ kb }: { kb: string }) {
   return (
     <nav aria-label="Breadcrumb" className="mb-3 min-w-0">
       <ol className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-        <li className="shrink-0"><Link href="/admin/knowledge" className={linkClass}>Knowledge</Link></li>
+        <li className="shrink-0"><Link href="/admin/knowledge" className={linkClass}>Knowledge Base</Link></li>
         <li className="flex min-w-0 items-center gap-1">
           {separator}
           {base.isLoading ? <Skeleton className="h-3.5 w-24" /> : (

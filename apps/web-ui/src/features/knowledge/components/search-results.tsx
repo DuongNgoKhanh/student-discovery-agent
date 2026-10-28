@@ -1,14 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, FileSearch, Info, SearchX } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronsDownUp, ChevronsUpDown, FileSearch, Info, SearchX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils/cn';
 import type { MetadataField, SearchResult } from '../types';
 import type { SearchSettings } from './build-search-request';
 import { DocumentDetailSheet, type RetrievedChunk } from './document-detail-sheet';
 import { highlightSegments } from './highlight';
+import { MarkdownPreview } from './markdown-preview';
+import { CopyButton } from './shared/copy-button';
 import { EmptyState } from './shared/empty-state';
 import { SearchSummary, isNarrowed } from './search-summary';
 
@@ -16,6 +19,7 @@ type SearchRecord = SearchResult['records'][number];
 
 const CLAMP_CHARS = 280;
 const CLAMP_LINES = 4;
+const isLong = (content: string) => content.length > CLAMP_CHARS || content.split('\n').length > CLAMP_LINES;
 
 const SCORE_HINT = 'Điểm 0–1 kết hợp độ tương đồng ngữ nghĩa (cosine) và tỉ lệ từ của câu hỏi có trong đoạn, theo trọng số đang dùng. Không phải độ chính xác hay %.';
 const SCORE_HINT_KEYWORD = 'Điểm 0–1 chỉ gồm tỉ lệ từ của câu hỏi có trong đoạn (đang chỉ tìm theo từ khoá). Không phải độ chính xác hay %.';
@@ -69,40 +73,55 @@ function ScoreBadge({ score, degraded }: { score: number; degraded: boolean }) {
   );
 }
 
-function ResultCard({ rank, record, query, fields, degraded, onOpen }: {
+export type ChunkView = 'markdown' | 'raw';
+
+function ResultCard({ rank, record, query, fields, degraded, view, expanded, onToggle, onOpen }: {
   rank: number; record: SearchRecord; query: string; fields: MetadataField[]; degraded: boolean;
+  view: ChunkView; expanded: boolean; onToggle: () => void;
   onOpen: (docId: string, chunk: RetrievedChunk) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const long = record.content.length > CLAMP_CHARS || record.content.split('\n').length > CLAMP_LINES;
+  const long = isLong(record.content);
   const documentId = typeof record.metadata.document_id === 'string' && record.metadata.document_id ? record.metadata.document_id : null;
   const chunk = asInt(record.metadata.chunk);
   const revision = asInt(record.metadata.revision);
   const position = positionLabel(chunk, revision);
   const meta = metadataLine(record.metadata, fields);
+  const clamped = long && !expanded;
   const open = () => documentId && onOpen(documentId, { content: record.content, chunk, revision, score: record.score, query });
   return (
-    <li className="space-y-2 rounded-xl border p-4" aria-label={`#${rank} ${record.title}`}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="shrink-0 font-mono text-13 font-semibold text-primary">#{rank}</span>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium" title={record.title}>{record.title}</span>
-        <ScoreBadge score={record.score} degraded={degraded} />
+    <li className="rounded-lg border bg-card" aria-label={`#${rank} ${record.title}`}>
+      <div className="space-y-1 px-3 pt-3">
+        <div className="flex items-center gap-2">
+          <span className="w-7 shrink-0 font-mono text-13 font-semibold text-primary">#{rank}</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium" title={record.title}>{record.title}</span>
+          <ScoreBadge score={record.score} degraded={degraded} />
+        </div>
+        {(position || meta) && (
+          <p className="flex min-w-0 gap-1.5 pl-9 text-xs text-muted-foreground">
+            {position && <span className="shrink-0 font-mono">{position}</span>}
+            {position && meta && <span aria-hidden>·</span>}
+            {meta && <span className="truncate" title={meta}>{meta}</span>}
+          </p>
+        )}
       </div>
-      {position && <p className="font-mono text-xs text-muted-foreground">{position}</p>}
-      <p className={expanded ? 'whitespace-pre-wrap break-words text-sm' : 'line-clamp-4 whitespace-pre-wrap break-words text-sm'}>
-        <Highlighted text={record.content} query={query} />
-      </p>
-      {meta && <p className="truncate text-xs text-muted-foreground" title={meta}>{meta}</p>}
-      <div className="flex items-center gap-3">
+      <div id={`chunk-${rank}`} className={cn('relative mx-3 mt-2 pl-9', clamped && 'max-h-24 overflow-hidden')}>
+        {view === 'markdown'
+          ? <MarkdownPreview source={record.content} highlight={query} compact />
+          : <p className="whitespace-pre-wrap break-words font-mono text-13 leading-6"><Highlighted text={record.content} query={query} /></p>}
+        {clamped && <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-card" />}
+      </div>
+      <div className="flex items-center gap-1 px-3 pb-2 pt-1 pl-12">
         {long && (
-          <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}
-            className="text-13 text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <button type="button" aria-expanded={expanded} aria-controls={`chunk-${rank}`} onClick={onToggle}
+            className="inline-flex items-center gap-1 rounded-sm py-1 text-13 text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform motion-reduce:transition-none', expanded && 'rotate-180')} aria-hidden />
             {expanded ? 'Thu gọn' : 'Xem thêm'}
           </button>
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1">
+          <CopyButton value={record.content} label="Copy đoạn" copiedLabel="Đã copy đoạn" iconOnly variant="ghost" className="h-8 w-8 text-muted-foreground" />
           {documentId ? (
-            <Button type="button" variant="outline" size="sm" onClick={open}>
+            <Button type="button" variant="ghost" size="sm" className="h-8" onClick={open}>
               <FileSearch className="h-4 w-4" aria-hidden />Xem nguồn
             </Button>
           ) : (
@@ -110,7 +129,7 @@ function ResultCard({ rank, record, query, fields, degraded, onOpen }: {
               <TooltipTrigger asChild>
                 {/* A disabled button gets no pointer events, so the wrapper carries the tooltip. */}
                 <span tabIndex={0} className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Button type="button" variant="outline" size="sm" disabled>
+                  <Button type="button" variant="ghost" size="sm" className="h-8" disabled>
                     <FileSearch className="h-4 w-4" aria-hidden />Xem nguồn
                   </Button>
                 </span>
@@ -124,14 +143,41 @@ function ResultCard({ rank, record, query, fields, degraded, onOpen }: {
   );
 }
 
+const TOGGLE = 'rounded px-2 py-0.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+/** How chunks render and whether long ones are open; sits between the summary and the list. */
+function ResultsToolbar({ view, onView, canExpand, allExpanded, onExpandAll }: {
+  view: ChunkView; onView: (view: ChunkView) => void; canExpand: boolean; allExpanded: boolean; onExpandAll: (open: boolean) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div role="group" aria-label="Cách hiển thị đoạn" className="inline-flex rounded-md border bg-card p-0.5">
+        {([['markdown', 'Markdown'], ['raw', 'Văn bản gốc']] as const).map(([value, label]) => (
+          <button key={value} type="button" aria-pressed={view === value} onClick={() => onView(value)}
+            className={cn(TOGGLE, view === value ? 'bg-primary-subtle font-medium text-primary' : 'text-muted-foreground hover:text-foreground')}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {canExpand && (
+        <button type="button" onClick={() => onExpandAll(!allExpanded)}
+          className="inline-flex items-center gap-1 rounded-sm text-13 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          {allExpanded ? <ChevronsDownUp className="h-4 w-4" aria-hidden /> : <ChevronsUpDown className="h-4 w-4" aria-hidden />}
+          {allExpanded ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function SearchResultsSkeleton({ count = 3 }: { count?: number }) {
   return (
     <div className="space-y-3">
       <p role="status" className="sr-only">Đang tìm…</p>
       <Skeleton className="h-9 w-full rounded-lg" />
-      <ul aria-hidden className="space-y-3">
+      <ul aria-hidden className="space-y-2">
         {Array.from({ length: count }, (_, index) => (
-          <li key={index} className="space-y-2.5 rounded-xl border p-4">
+          <li key={index} className="space-y-2.5 rounded-lg border p-3">
             <div className="flex items-center gap-3"><Skeleton className="h-4 w-6" /><Skeleton className="h-4 flex-1" /><Skeleton className="h-4 w-24" /></div>
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-3 w-full" />
@@ -156,6 +202,16 @@ export interface SearchResultsProps {
 export function SearchResults({ kb, result, query, fields, settings, elapsedMs }: SearchResultsProps) {
   const [source, setSource] = useState<{ docId: string; chunk: RetrievedChunk } | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [view, setView] = useState<ChunkView>('markdown');
+  // Ranks of the long chunks shown in full; results are remounted per search, so this starts empty each time.
+  const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
+  const longRanks = result.records.flatMap((record, index) => (isLong(record.content) ? [index + 1] : []));
+  const allExpanded = longRanks.length > 0 && longRanks.every(rank => expanded.has(rank));
+  const toggle = (rank: number) => setExpanded(current => {
+    const next = new Set(current);
+    if (!next.delete(rank)) next.add(rank);
+    return next;
+  });
   return (
     <div className="space-y-3">
       <SearchSummary count={result.records.length} elapsedMs={elapsedMs} degraded={result.degraded} settings={settings} fields={fields} />
@@ -172,12 +228,17 @@ export function SearchResults({ kb, result, query, fields, settings, elapsedMs }
               : 'Thử diễn đạt câu hỏi khác hoặc kiểm tra tài liệu đã index xong chưa.'} />
         )
         : (
-          <ol aria-label="Kết quả truy xuất" className="space-y-3">
-            {result.records.map((record, index) => (
-              <ResultCard key={index} rank={index + 1} record={record} query={query} fields={fields} degraded={result.degraded}
-                onOpen={(docId, chunk) => { setSource({ docId, chunk }); setSheetOpen(true); }} />
-            ))}
-          </ol>
+          <>
+            <ResultsToolbar view={view} onView={setView} canExpand={longRanks.length > 0} allExpanded={allExpanded}
+              onExpandAll={open => setExpanded(open ? new Set(longRanks) : new Set())} />
+            <ol aria-label="Kết quả truy xuất" className="space-y-2">
+              {result.records.map((record, index) => (
+                <ResultCard key={index} rank={index + 1} record={record} query={query} fields={fields} degraded={result.degraded}
+                  view={view} expanded={expanded.has(index + 1)} onToggle={() => toggle(index + 1)}
+                  onOpen={(docId, chunk) => { setSource({ docId, chunk }); setSheetOpen(true); }} />
+              ))}
+            </ol>
+          </>
         )}
       <DocumentDetailSheet kb={kb} docId={source?.docId ?? null} open={sheetOpen} onOpenChange={setSheetOpen} chunk={source?.chunk} />
     </div>
