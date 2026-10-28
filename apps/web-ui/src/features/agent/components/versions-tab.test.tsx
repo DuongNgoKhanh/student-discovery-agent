@@ -58,8 +58,8 @@ describe('VersionsTab', () => {
   it('copies the release content into the draft after confirming', async () => {
     const { onCopy } = setup();
     vi.mocked(agentApi.getRelease).mockResolvedValue({ ...row('agr_1', 1, false), content: { greeting_text: 'Cũ' } } as never);
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Chép vào nháp' }))[1]);
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Chép vào nháp' }).at(-1)).not.toBeDisabled());
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Chép vào nháp' }))[1]!);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Chép vào nháp' }).at(-1)!).not.toBeDisabled());
     fireEvent.click(screen.getAllByRole('button', { name: 'Chép vào nháp' }).at(-1)!);
     await waitFor(() => expect(onCopy).toHaveBeenCalledWith({ greeting_text: 'Cũ' }));
   });
