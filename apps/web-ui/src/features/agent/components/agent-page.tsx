@@ -8,6 +8,7 @@ import { ApiError } from '@/lib/api/errors';
 import { canonical, setIn, type Path } from '../model/config';
 import { bindKnowledge, type ToolBinding } from '../model/tools';
 import type { SectionId } from '../model/sections';
+import { agentApi } from '../api/agent';
 import { useAgentActive, useAgentDraft, useSaveDraft, useValidateDraft } from '../hooks/use-agent';
 import type { AgentConfig, AgentDraft } from '../types';
 import { AgentStatusBar, type DraftState } from './agent-status-bar';
@@ -82,6 +83,16 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     }
   };
 
+  // After a publish 409 the draft may have moved: adopt the server copy, or surface the conflict banner if we have local edits.
+  const reloadDraft = async () => {
+    try {
+      const fresh = await agentApi.getDraft();
+      if (fresh.revision === base.revision) return;
+      if (dirty) setConflict(fresh);
+      else { setBase(fresh); setConfig(fresh.content); }
+    } catch (error) { toast.error(errorMessage(error)); }
+  };
+
   const runValidation = async () => {
     if (jsonError) return;
     if (!(await persist())) return;
@@ -131,6 +142,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
 
       {publishing && active.data && (
         <PublishDialog open={publishing} onOpenChange={setPublishing} draft={base} active={active.data}
+          onConflict={() => void reloadDraft()}
           onIssues={issues => { setValidation({ issues, valid: false, checkedAt: new Date().toISOString(), stale: false }); setTab('config'); }} />
       )}
 

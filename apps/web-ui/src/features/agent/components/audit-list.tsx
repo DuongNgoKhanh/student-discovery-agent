@@ -3,15 +3,30 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { QueryState, fullDateTime } from '@/features/knowledge';
-import { useAgentAudit } from '../hooks/use-agent';
+import { useAgentAudit, useAgentReleases } from '../hooks/use-agent';
+import type { AuditEvent } from '../types';
 
 const ACTION: Record<string, string> = {
   'agent.draft.save': 'Lưu nháp', 'agent.release.publish': 'Phát hành', 'agent.release.restore': 'Khôi phục',
 };
 
+const shortRef = (ref: string) => (ref.length > 12 ? `${ref.slice(0, 12)}…` : ref);
+
 export function AuditList() {
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const audit = useAgentAudit(cursors.at(-1) ?? null);
+  // Release ids -> version labels, from the (cached) newest releases page.
+  const versionOf = new Map((useAgentReleases(null).data?.items ?? []).map(r => [r.id, `v${r.version}`]));
+
+  const label = (ref: string | null, event: AuditEvent, side: 'before' | 'after') => {
+    if (!ref) return '—';
+    if (ref.startsWith('draft@')) return ref;
+    const known = versionOf.get(ref);
+    if (known) return known;
+    if (side === 'after' && typeof event.details?.version === 'number') return `v${event.details.version}`;
+    return shortRef(ref);
+  };
+
   return (
     <QueryState query={audit}>{page => (
       <div className="space-y-2">
@@ -19,7 +34,13 @@ export function AuditList() {
           {page.items.length === 0 && <li className="p-3 text-muted-foreground">Chưa có thao tác nào.</li>}
           {page.items.map(event => (
             <li key={event.id} className="flex flex-wrap justify-between gap-2 p-3">
-              <span><strong>{ACTION[event.action] ?? event.action}</strong>{typeof event.details?.version === 'number' && ` → v${event.details.version}`}</span>
+              <span>
+                <strong>{ACTION[event.action] ?? event.action}</strong>
+                {(event.before_ref || event.after_ref) && ` · ${label(event.before_ref, event, 'before')} → ${label(event.after_ref, event, 'after')}`}
+                <span className={event.outcome === 'success' ? 'ml-2 rounded bg-primary-subtle px-1.5 text-xs text-primary' : 'ml-2 rounded bg-destructive/10 px-1.5 text-xs text-destructive'}>
+                  {event.outcome === 'success' ? 'Thành công' : 'Bị từ chối'}
+                </span>
+              </span>
               <span className="text-muted-foreground">{event.actor} · {fullDateTime(event.at)}</span>
             </li>
           ))}

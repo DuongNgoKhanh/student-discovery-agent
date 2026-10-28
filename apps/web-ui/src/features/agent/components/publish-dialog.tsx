@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -8,15 +9,19 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { errorMessage } from '@/features/knowledge';
 import { ApiError } from '@/lib/api/errors';
-import { actionKey, useAgentRelease, usePublish } from '../hooks/use-agent';
+import { actionKey, agentKeys, useAgentRelease, usePublish } from '../hooks/use-agent';
+import { conflictMessage } from '../model/conflict';
 import { changedSections, SECTIONS } from '../model/sections';
 import type { AgentActive, AgentDraft, AgentIssue } from '../types';
 
 export interface PublishDialogProps {
   open: boolean; onOpenChange: (open: boolean) => void; draft: AgentDraft; active: AgentActive; onIssues: (issues: AgentIssue[]) => void;
+  /** Called after a 409 so the editor can reload its draft copy. */
+  onConflict?: () => void;
 }
 
-export function PublishDialog({ open, onOpenChange, draft, active, onIssues }: PublishDialogProps) {
+export function PublishDialog({ open, onOpenChange, draft, active, onIssues, onConflict }: PublishDialogProps) {
+  const client = useQueryClient();
   const current = useAgentRelease(active.release_id);
   const publish = usePublish();
   const [note, setNote] = useState('');
@@ -34,6 +39,14 @@ export function PublishDialog({ open, onOpenChange, draft, active, onIssues }: P
     } catch (error) {
       if (error instanceof ApiError && error.code === 'PUBLISH_GATE_FAILED') {
         onIssues(((error.details as { issues?: AgentIssue[] } | undefined)?.issues) ?? []);
+        onOpenChange(false);
+        return;
+      }
+      const conflict = conflictMessage(error);
+      if (conflict) {
+        void client.invalidateQueries({ queryKey: agentKeys.all });
+        onConflict?.();
+        toast.error(conflict);
         onOpenChange(false);
         return;
       }

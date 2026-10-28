@@ -34,4 +34,18 @@ describe('PublishDialog', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Phát hành v2' }));
     await waitFor(() => expect(onIssues).toHaveBeenCalledWith([{ path: 'model.ref', code: 'value_error', message: 'Sai' }]));
   });
+
+  it('reloads state and closes on a revision conflict', async () => {
+    vi.mocked(agentApi.getRelease).mockResolvedValue({ content: {} } as never);
+    vi.mocked(agentApi.publish).mockRejectedValue(new ApiError({ code: 'CONFLICT_REVISION', message: 'x', httpStatus: 409, details: { kind: 'revision_conflict' } }));
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const onOpenChange = vi.fn();
+    const onConflict = vi.fn();
+    render(<QueryClientProvider client={client}><PublishDialog open onOpenChange={onOpenChange} draft={draft} active={active} onIssues={() => {}} onConflict={onConflict} /></QueryClientProvider>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Phát hành v2' }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['agent'] });
+    expect(onConflict).toHaveBeenCalled();
+  });
 });
