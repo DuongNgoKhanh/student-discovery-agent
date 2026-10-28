@@ -42,6 +42,8 @@ export function ChatShell() {
   const started = useRef(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const activeConvIdRef = useRef<string | null>(null);
+  /** Gỡ echo của lượt đang lỗi chờ retry, khi người dùng bỏ lượt đó để sang hội thoại khác. */
+  const dropFailedEcho = useRef<(() => void) | null>(null);
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
@@ -61,16 +63,20 @@ export function ChatShell() {
 
   const appendEntries = useCallback((items: Omit<Entry, 'id'>[], targetConvId?: string) => {
     const convId = targetConvId ?? activeConvIdRef.current;
-    if (!convId) return;
+    if (!convId) return [];
+    const added = items.map((item) => ({ ...item, id: nextEntryId.current++ }));
+    setEntriesByConversation((prev) => ({
+      ...prev,
+      [convId]: [...(prev[convId] ?? []), ...added],
+    }));
+    return added.map((entry) => entry.id);
+  }, []);
+
+  const removeEntry = useCallback((convId: string, entryId: number) => {
     setEntriesByConversation((prev) => {
-      const existing = prev[convId] ?? [];
-      return {
-        ...prev,
-        [convId]: [
-          ...existing,
-          ...items.map((item) => ({ ...item, id: nextEntryId.current++ })),
-        ],
-      };
+      const existing = prev[convId];
+      if (!existing) return prev;
+      return { ...prev, [convId]: existing.filter((entry) => entry.id !== entryId) };
     });
   }, []);
 
@@ -141,43 +147,75 @@ export function ChatShell() {
     (draft: TurnDraft, echo: string) => {
       if (!view) return;
       const turnConvId = view.id;
-      appendEntries([{ role: 'user', text: echo }], turnConvId);
-      turns.submit(draft, view.revision, (result: TurnResult) => {
-        appendEntries(
-          result.blocks.map((block) => ({ role: 'bot' as const, block })),
-          turnConvId,
-        );
-      });
+      // Gửi lượt mới thay cho lượt lỗi đang chờ retry: lượt cũ bị bỏ cùng echo của nó.
+      dropFailedEcho.current?.();
+      // Echo hiện ngay khi gửi; lượt bị bỏ hẳn (conflict, hết hạn, lỗi không retry) thì gỡ echo đi.
+      const [echoId] = appendEntries([{ role: 'user', text: echo }], turnConvId);
+      const dropEcho = () => {
+        if (echoId !== undefined) removeEntry(turnConvId, echoId);
+      };
+      dropFailedEcho.current = dropEcho;
+      turns.submit(
+        draft,
+        view.revision,
+        (result: TurnResult) => {
+          dropFailedEcho.current = null;
+          appendEntries(
+            result.blocks.map((block) => ({ role: 'bot' as const, block })),
+            turnConvId,
+          );
+        },
+        () => {
+          dropFailedEcho.current = null;
+          dropEcho();
+        },
+      );
     },
-    [appendEntries, turns, view],
+    [appendEntries, removeEntry, turns, view],
   );
 
   const retryTurn = () => {
     if (!view) return;
     const turnConvId = view.id;
-    turns.retry((result: TurnResult) => {
-      appendEntries(
-        result.blocks.map((block) => ({ role: 'bot' as const, block })),
-        turnConvId,
-      );
-    });
+    const dropEcho = dropFailedEcho.current;
+    turns.retry(
+      (result: TurnResult) => {
+        dropFailedEcho.current = null;
+        appendEntries(
+          result.blocks.map((block) => ({ role: 'bot' as const, block })),
+          turnConvId,
+        );
+      },
+      () => {
+        dropFailedEcho.current = null;
+        dropEcho?.();
+      },
+    );
   };
+
+  /** Rời hội thoại hiện tại: lượt lỗi đang chờ retry bị bỏ cùng echo của nó. */
+  const abandonFailedTurn = useCallback(() => {
+    dropFailedEcho.current?.();
+    dropFailedEcho.current = null;
+  }, []);
 
   const busy = turns.isPending || createConversation.isPending;
 
   const handleNewChat = useCallback(() => {
     if (busy) return;
+    abandonFailedTurn();
     startSession();
     setIsMobileSidebarOpen(false);
-  }, [busy, startSession]);
+  }, [abandonFailedTurn, busy, startSession]);
 
   const handleSelectChat = useCallback(
     (id: string) => {
       if (busy || id === conversationId) return;
+      abandonFailedTurn();
       setConversationId(id);
       setIsMobileSidebarOpen(false);
     },
-    [busy, conversationId],
+    [abandonFailedTurn, busy, conversationId],
   );
 
   const handleDeleteChat = useCallback(
@@ -189,6 +227,7 @@ export function ChatShell() {
         return next;
       });
       if (conversationId === id) {
+        dropFailedEcho.current = null;
         const remaining = threads.filter((t) => t.id !== id);
         if (remaining.length > 0 && remaining[0]) {
           setConversationId(remaining[0].id);
@@ -351,7 +390,7 @@ export function ChatShell() {
                 })}
 
                 {turns.isPending && (
-                  <li className="w-full animate-message-pop animation-delay-150" aria-label="Trợ lý đang trả lời">
+                  <li className="w-full animate-message-pop animation-delay-150">
                     <div className="flex w-full items-start justify-start gap-3">
                       <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                         <Image
@@ -362,7 +401,9 @@ export function ChatShell() {
                           className="h-6 w-6 object-contain"
                         />
                       </div>
-                      <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800">
+                      <div
+                        role="status"
+                        className="flex items-center gap-1.5 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800">
                         <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0ms' }} />
                         <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '150ms' }} />
                         <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -377,7 +418,7 @@ export function ChatShell() {
         </div>
 
         {!isInitial && (
-          <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur-md dark:border-white/5 dark:bg-panel/90 md:px-8 lg:px-10 animate-in fade-in slide-in-from-bottom-4 duration-400 ease-out fill-mode-both">
+          <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur-md dark:border-white/5 dark:bg-panel/90 md:px-8 lg:px-10 animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out fill-mode-both">
             <div className="mx-auto max-w-2xl md:max-w-3xl">
               {turnError && (
                 <div className="mb-2">

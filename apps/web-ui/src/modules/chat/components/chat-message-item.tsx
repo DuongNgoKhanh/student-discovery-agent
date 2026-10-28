@@ -50,34 +50,9 @@ export function ChatMessageItem({
     if (!textToCopy) return;
     if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
 
-    let success = false;
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(textToCopy);
-        success = true;
-      } else if (typeof document !== 'undefined' && typeof document.execCommand === 'function') {
-        const textarea = document.createElement('textarea');
-        textarea.value = textToCopy;
-        textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        textarea.style.top = '0';
-        textarea.setAttribute('readonly', '');
-        document.body.appendChild(textarea);
-        textarea.select();
-        success = document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-    } catch {
-      success = false;
-    }
-
-    if (success) {
-      setCopyStatus('copied');
-      copyTimerRef.current = setTimeout(() => setCopyStatus('idle'), 2000);
-    } else {
-      setCopyStatus('failed');
-      copyTimerRef.current = setTimeout(() => setCopyStatus('idle'), 2000);
-    }
+    const success = (await copyWithClipboardApi(textToCopy)) || copyWithExecCommand(textToCopy);
+    setCopyStatus(success ? 'copied' : 'failed');
+    copyTimerRef.current = setTimeout(() => setCopyStatus('idle'), 2000);
   };
 
   const handleReaction = (type: 'up' | 'down') => {
@@ -189,4 +164,34 @@ export function ChatMessageItem({
       </div>
     </div>
   );
+}
+
+async function copyWithClipboardApi(text: string): Promise<boolean> {
+  // Clipboard API chỉ có trong ngữ cảnh an toàn (HTTPS/localhost) và có thể bị từ chối quyền.
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function copyWithExecCommand(text: string): boolean {
+  if (typeof document === 'undefined' || typeof document.execCommand !== 'function') return false;
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  textarea.style.top = '0';
+  textarea.setAttribute('readonly', '');
+  document.body.appendChild(textarea);
+  try {
+    textarea.select();
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(textarea);
+  }
 }

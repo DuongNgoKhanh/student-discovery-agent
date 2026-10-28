@@ -270,7 +270,7 @@ export function ChatSidebar({
                           e.stopPropagation();
                           onDeleteChat(item.id);
                         }}
-                        className="ml-1 shrink-0 cursor-pointer rounded-lg p-1 text-slate-400 opacity-0 transition-all hover:bg-slate-200 hover:text-rose-500 group-hover/item:opacity-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-fog/50 dark:hover:bg-edge dark:hover:text-rose-400"
+                        className="ml-1 shrink-0 cursor-pointer rounded-lg p-1 text-slate-400 opacity-0 transition-all hover:bg-slate-200 hover:text-rose-500 group-hover/item:opacity-100 disabled:invisible dark:text-fog/50 dark:hover:bg-edge dark:hover:text-rose-400"
                         title="Xóa cuộc trò chuyện"
                       >
                         <X className="h-3.5 w-3.5" />

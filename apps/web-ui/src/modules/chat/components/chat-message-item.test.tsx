@@ -107,6 +107,39 @@ describe('ChatMessageItem', () => {
     expect(screen.getByRole('button', { name: 'Đã sao chép' })).toBeInTheDocument();
   });
 
+  it('fallback sang document.execCommand khi navigator.clipboard từ chối ghi', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockRejectedValue(new Error('Permission denied')) },
+      writable: true,
+      configurable: true,
+    });
+    const execCommandSpy = vi.fn().mockReturnValue(true);
+    document.execCommand = execCommandSpy;
+
+    render(<ChatMessageItem role="bot" text="Clipboard bị từ chối" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sao chép' }));
+
+    expect(await screen.findByRole('button', { name: 'Đã sao chép' })).toBeInTheDocument();
+    expect(execCommandSpy).toHaveBeenCalledWith('copy');
+  });
+
+  it('textarea tạm được gỡ khỏi DOM kể cả khi execCommand ném lỗi', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: undefined,
+      writable: true,
+      configurable: true,
+    });
+    document.execCommand = vi.fn(() => {
+      throw new Error('blocked');
+    });
+
+    render(<ChatMessageItem role="bot" text="execCommand ném lỗi" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sao chép' }));
+
+    expect(await screen.findByRole('button', { name: 'Không thể sao chép' })).toBeInTheDocument();
+    expect(document.querySelector('textarea')).toBeNull();
+  });
+
   it('hiển thị trạng thái lỗi khi cả clipboard và fallback đều thất bại', async () => {
     const writeTextMock = vi.fn().mockRejectedValue(new Error('Permission denied'));
     Object.defineProperty(navigator, 'clipboard', {
@@ -114,6 +147,7 @@ describe('ChatMessageItem', () => {
       writable: true,
       configurable: true,
     });
+    document.execCommand = vi.fn().mockReturnValue(false);
 
     render(<ChatMessageItem role="bot" text="Thất bại sao chép" />);
 

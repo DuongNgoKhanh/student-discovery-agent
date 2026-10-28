@@ -7,6 +7,7 @@ import { BlockRenderer } from './block-renderer';
 import { FIXTURE_QUESTIONS, GREETING_TEXT } from '../fixtures';
 import { parseBlock } from '../schemas/blocks';
 import { getChatApi } from '../api';
+import { ApiError } from '@/lib/api/errors';
 
 function renderShell() {
   return render(
@@ -167,6 +168,64 @@ describe('ChatShell với mock', () => {
     expect(screen.getByRole('button', { name: 'Bắt đầu' })).toBeInTheDocument();
   });
 
+  it('lượt bị bỏ hẳn (lỗi không retry được) thì gỡ echo của người dùng', async () => {
+    const api = getChatApi();
+    vi.spyOn(api, 'sendTurn').mockRejectedValueOnce(
+      new ApiError({ code: 'VALIDATION_ERROR', message: 'Lượt không hợp lệ.', httpStatus: 400 }),
+    );
+    renderShell();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu' }, TIMEOUT));
+
+    expect(await screen.findByText('Lượt không hợp lệ.', {}, TIMEOUT)).toBeInTheDocument();
+    // Không còn echo "Bắt đầu" giả như đã gửi: màn chào vẫn giữ nguyên.
+    expect(screen.getByRole('heading', { level: 2, name: GREETING_TEXT })).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Hội thoại' })).not.toBeInTheDocument();
+  });
+
+  it('lỗi retry được không đi theo sang hội thoại khác', async () => {
+    const api = getChatApi();
+    renderShell();
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu' }, TIMEOUT));
+    await screen.findByLabelText('Mình gọi bạn là gì nhỉ?', {}, TIMEOUT);
+
+    vi.spyOn(api, 'sendTurn').mockRejectedValueOnce(
+      new ApiError({ code: 'SYS_503', message: 'Mất kết nối.', retryable: true, httpStatus: 503 }),
+    );
+    fireEvent.change(screen.getByLabelText('Mình gọi bạn là gì nhỉ?'), {
+      target: { value: 'Ngân' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+    expect(await screen.findByText('Mất kết nối.', {}, TIMEOUT)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Cuộc trò chuyện mới/i }));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: GREETING_TEXT }, TIMEOUT),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Mất kết nối.')).not.toBeInTheDocument();
+  });
+
+  it('chọn lại thread cũ trên sidebar khôi phục đúng transcript của thread đó', async () => {
+    renderShell();
+    fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu' }, TIMEOUT));
+    await screen.findByLabelText('Mình gọi bạn là gì nhỉ?', {}, TIMEOUT);
+
+    fireEvent.click(screen.getByRole('button', { name: /Cuộc trò chuyện mới/i }));
+    await screen.findByRole('heading', { level: 2, name: GREETING_TEXT }, TIMEOUT);
+
+    // Thread mới nhất đứng đầu; thread cũ là phần tử thứ hai.
+    const threadButtons = await screen.findAllByRole('button', { name: /Vừa xong/ }, TIMEOUT);
+    expect(threadButtons).toHaveLength(2);
+    fireEvent.click(threadButtons[1]!);
+
+    const list = await screen.findByRole('list', { name: 'Hội thoại' }, TIMEOUT);
+    expect(within(list).getByText('Bắt đầu', { selector: 'div' })).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText('Mình gọi bạn là gì nhỉ?', {}, TIMEOUT),
+    ).toBeInTheDocument();
+  });
+
   it('đi hết luồng: tên, trả lời, tiến độ tăng đúng một lần', async () => {
     renderShell();
     fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu' }, TIMEOUT));
@@ -248,6 +307,7 @@ describe('BlockRenderer', () => {
       },
     });
     render(<BlockRenderer block={block} />);
+    expect(screen.getByRole('article', { name: 'Thẻ tính cách' })).toBeInTheDocument();
     expect(screen.getByText('Demo')).toBeInTheDocument();
   });
 });
