@@ -8,7 +8,7 @@ import { PublishDialog } from './publish-dialog';
 const draft = { content: { greeting_text: 'Mới', model: { ref: 'a' } }, revision: 4, content_hash: 'h2', updated_at: '', updated_by: 'admin' };
 const active = { release_id: 'agr_1', version: 1, content_hash: 'h1', revision: 2, updated_at: '', updated_by: 'admin' };
 
-vi.mock('../api/agent', () => ({ agentApi: { publish: vi.fn(), getRelease: vi.fn() } }));
+vi.mock('../api/agent', () => ({ agentApi: { publish: vi.fn(), getRelease: vi.fn(), listReleases: vi.fn(async () => ({ items: [], next_cursor: null })) } }));
 
 const wrap = (ui: React.ReactNode) => render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
 
@@ -23,6 +23,14 @@ describe('PublishDialog', () => {
     await waitFor(() => expect(agentApi.publish).toHaveBeenCalledWith(expect.objectContaining({
       expected_draft_revision: 4, expected_active_revision: 2, note: 'đổi lời chào', idempotency_key: expect.stringMatching(/^publish-/),
     })));
+  });
+
+  it('names the next real version when an older release was restored', async () => {
+    vi.mocked(agentApi.getRelease).mockResolvedValue({ content: {} } as never);
+    vi.mocked(agentApi.listReleases).mockResolvedValueOnce({ items: [{ version: 3 }, { version: 2 }, { version: 1 }], next_cursor: null } as never);
+    wrap(<PublishDialog open onOpenChange={() => {}} draft={draft} active={active} onIssues={() => {}} />);
+    expect(await screen.findByRole('button', { name: 'Phát hành v4' })).toBeInTheDocument();
+    expect(screen.getByText('Phát hành v4', { selector: 'h2' })).toBeInTheDocument();
   });
 
   it('hands validation issues back to the editor', async () => {

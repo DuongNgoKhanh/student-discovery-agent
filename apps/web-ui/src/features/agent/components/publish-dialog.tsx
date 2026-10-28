@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { errorMessage } from '@/features/knowledge';
 import { ApiError } from '@/lib/api/errors';
-import { actionKey, agentKeys, useAgentRelease, usePublish } from '../hooks/use-agent';
+import { actionKey, agentKeys, useAgentRelease, useAgentReleases, usePublish } from '../hooks/use-agent';
 import { conflictMessage } from '../model/conflict';
 import { changedSections, SECTIONS } from '../model/sections';
 import type { AgentActive, AgentDraft, AgentIssue } from '../types';
@@ -28,7 +28,9 @@ export function PublishDialog({ open, onOpenChange, draft, active, onIssues, onC
   // One key per open dialog: a retry after a network error replays instead of publishing twice.
   const [key] = useState(() => actionKey('publish'));
   const changed = useMemo(() => (current.data ? changedSections(current.data.content, draft.content) : []), [current.data, draft.content]);
-  const next = active.version + 1;
+  // A restore can make an older release active; the next version follows the newest release (list is newest-first).
+  const releases = useAgentReleases(null);
+  const next = (releases.data?.items[0]?.version ?? active.version) + 1;
 
   const submit = async () => {
     try {

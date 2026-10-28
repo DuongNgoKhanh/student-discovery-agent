@@ -16,7 +16,8 @@ export const agentKeys = {
 export const actionKey = (prefix: string) =>
   `${prefix}-${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}${Math.random().toString(36).slice(2)}`}`;
 
-export const useAgentDraft = () => useQuery({ queryKey: agentKeys.draft(), queryFn: agentApi.getDraft });
+// No focus refetch: the editor keeps its own copy and conflicts are detected on save.
+export const useAgentDraft = () => useQuery({ queryKey: agentKeys.draft(), queryFn: agentApi.getDraft, refetchOnWindowFocus: false });
 export const useAgentActive = () => useQuery({ queryKey: agentKeys.active(), queryFn: agentApi.getActive });
 export const useAgentReleases = (cursor: string | null) =>
   useQuery({ queryKey: agentKeys.releases(cursor), queryFn: () => agentApi.listReleases(cursor), placeholderData: keepPreviousData });

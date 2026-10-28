@@ -22,7 +22,20 @@ export function AgentPage() {
   return (
     <div className="space-y-4">
       <PageTitle title="Agent" description="Cấu hình trợ lý tư vấn: lời chào, persona, model và công cụ." />
-      <QueryState query={draft}>{data => <AgentEditor draft={data} />}</QueryState>
+      {draft.data ? (
+        // Once loaded, a failed background refetch must not unmount the editor and drop unsaved edits.
+        <>
+          {draft.error && (
+            <p role="status" className="rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-2 text-13">
+              Không tải lại được bản nháp: {errorMessage(draft.error)}. Nội dung đang sửa vẫn được giữ.
+            </p>
+          )}
+          <AgentEditor draft={draft.data} />
+        </>
+      ) : (
+        // Explicit type: in this branch `draft` is narrowed to "no data yet".
+        <QueryState<AgentDraft> query={draft}>{data => <AgentEditor draft={data} />}</QueryState>
+      )}
     </div>
   );
 }
@@ -42,6 +55,9 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
   const [publishing, setPublishing] = useState(false);
 
   const dirty = canonical(config) !== canonical(base.content);
+  // A report for another draft revision (raced save, reloaded copy) no longer describes what is on screen.
+  const shownValidation = validation && validation.draftRevision !== undefined && validation.draftRevision !== base.revision
+    ? { ...validation, stale: true } : validation;
   const guard = useUnsavedGuard(dirty);
   const draftState: DraftState = dirty ? 'unsaved' : base.content_hash === active.data?.content_hash ? 'same' : 'differs';
 
@@ -98,7 +114,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     if (!(await persist())) return;
     try {
       const report = await validate.mutateAsync();
-      setValidation({ issues: report.issues, valid: report.valid, checkedAt: new Date().toISOString(), stale: false });
+      setValidation({ issues: report.issues, valid: report.valid, checkedAt: new Date().toISOString(), stale: false, draftRevision: report.draft_revision });
     } catch (error) { toast.error(errorMessage(error)); }
   };
 
@@ -135,7 +151,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
       {tab === 'config' ? (
         <ConfigTab config={config} onChange={change} onReplace={next => { setConfig(next); setValidation(v => (v ? { ...v, stale: true } : v)); }}
           section={section} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
-          validation={validation} onBindKb={kb => void bindKb(kb)} />
+          validation={shownValidation} onBindKb={kb => void bindKb(kb)} />
       ) : (
         <VersionsTab active={active.data ?? null} onCopyToDraft={content => { setConfig(content); setValidation(v => (v ? { ...v, stale: true } : v)); setTab('config'); }} />
       )}
@@ -143,7 +159,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
       {publishing && active.data && (
         <PublishDialog open={publishing} onOpenChange={setPublishing} draft={base} active={active.data}
           onConflict={() => void reloadDraft()}
-          onIssues={issues => { setValidation({ issues, valid: false, checkedAt: new Date().toISOString(), stale: false }); setTab('config'); }} />
+          onIssues={issues => { setValidation({ issues, valid: false, checkedAt: new Date().toISOString(), stale: false, draftRevision: base.revision }); setTab('config'); }} />
       )}
 
       <ConfirmDialog open={guard.open} onOpenChange={guard.onOpenChange} onConfirm={guard.onConfirm}

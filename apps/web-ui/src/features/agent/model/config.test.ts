@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canonical, fieldId, getIn, parsePath, setIn } from './config';
 import { changedSections, sectionOf } from './sections';
+import { bindKnowledge } from './tools';
 
 describe('config paths', () => {
   it('parses runtime issue paths', () => {
@@ -38,5 +39,37 @@ describe('canonical', () => {
   it('ignores object key order but not array order', () => {
     expect(canonical({ a: 1, b: { y: 1, x: [{ n: 1, m: 2 }] } })).toBe(canonical({ b: { x: [{ m: 2, n: 1 }], y: 1 }, a: 1 }));
     expect(canonical([1, 2])).not.toBe(canonical([2, 1]));
+  });
+});
+
+describe('bindKnowledge', () => {
+  const suggested = (display: unknown[]) => ({
+    'knowledge.search': { knowledge_base_id: 'kb_new', top_k: 4, auto_filter_fields: ['school'] },
+    'knowledge.show': { display },
+    warnings: [],
+  });
+  const tools = [
+    { name: 'ui.suggest_replies', version: 1 },
+    { name: 'knowledge.search', version: 1, params: { knowledge_base_id: 'kb_old', top_k: 8, score_threshold: 0.3, semantic_weight: 0.7,
+      max_chunks_per_doc: 2, auto_filter_fields: ['old'] } },
+    { name: 'knowledge.show', version: 1, params: { display: [{ field: 'old', label: 'Cũ' }] } },
+  ];
+
+  it('takes the KB id and filter fields from the suggestion and keeps the existing search tuning', () => {
+    const next = bindKnowledge(tools, suggested([{ field: 'school', label: 'Trường' }]));
+    expect(next.find(t => t.name === 'knowledge.search')!.params).toEqual({ knowledge_base_id: 'kb_new', top_k: 8, score_threshold: 0.3,
+      semantic_weight: 0.7, max_chunks_per_doc: 2, auto_filter_fields: ['school'] });
+    expect(next.find(t => t.name === 'knowledge.show')!.params).toEqual({ display: [{ field: 'school', label: 'Trường' }] });
+    expect(next[0]!.name).toBe('ui.suggest_replies');
+  });
+
+  it('uses the suggested defaults when search was not bound yet', () => {
+    const next = bindKnowledge([], suggested([{ field: 'school', label: 'Trường' }]));
+    expect(next.find(t => t.name === 'knowledge.search')!.params).toEqual({ knowledge_base_id: 'kb_new', top_k: 4, auto_filter_fields: ['school'] });
+  });
+
+  it('omits knowledge.show when the KB suggests no display fields', () => {
+    const next = bindKnowledge(tools, suggested([]));
+    expect(next.map(t => t.name)).toEqual(['ui.suggest_replies', 'knowledge.search']);
   });
 });

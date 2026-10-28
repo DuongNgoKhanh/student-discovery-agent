@@ -5,7 +5,11 @@ import { focusIssue } from '../model/config';
 import { SECTIONS, sectionOf, type SectionId } from '../model/sections';
 import type { AgentIssue } from '../types';
 
-export interface ValidationState { issues: AgentIssue[]; valid: boolean; checkedAt: string; stale: boolean }
+export interface ValidationState {
+  issues: AgentIssue[]; valid: boolean; checkedAt: string; stale: boolean;
+  /** Draft revision the report was computed for; a different current revision marks it stale. */
+  draftRevision?: number;
+}
 
 export function IssuesPanel({ state, onOpenSection }: { state: ValidationState; onOpenSection: (id: SectionId) => void }) {
   const label = (path: string) => SECTIONS.find(s => s.id === sectionOf(path))?.label ?? 'JSON';
@@ -19,8 +23,8 @@ export function IssuesPanel({ state, onOpenSection }: { state: ValidationState; 
       </p>
       {state.issues.length > 0 && (
         <ul className="mt-3 space-y-1">
-          {state.issues.map(issue => (
-            <li key={`${issue.path}:${issue.code}`}>
+          {state.issues.map((issue, index) => (
+            <li key={`${index}:${issue.path}:${issue.code}`}>
               <button type="button" className="text-left hover:underline" onClick={() => { onOpenSection(sectionOf(issue.path)); setTimeout(() => focusIssue(issue.path), 0); }}>
                 <span className="text-muted-foreground">{label(issue.path)} · <code>{issue.path || '(toàn bộ)'}</code>:</span> {issue.message}
               </button>

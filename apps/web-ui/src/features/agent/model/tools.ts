@@ -14,10 +14,20 @@ export const TOOL_CATALOG: { name: string; version: 1; label: string; descriptio
 
 export type ToolBinding = { name: string; version: number; params?: Record<string, unknown> };
 
-/** Replace the knowledge tools with the params the knowledge base suggests (used at apply time on current state). */
+/**
+ * Bind the knowledge tools to a knowledge base using the params it suggests (applied at apply time on current state).
+ * The KB id and filter fields come from the suggestion; other search tuning already set (top_k, score_threshold, …) is kept.
+ * knowledge.show is dropped when the KB suggests no display fields — an empty card would fail validation.
+ */
 export function bindKnowledge(tools: ToolBinding[], params: Record<string, unknown>): ToolBinding[] {
+  const existing = tools.find(t => t.name === 'knowledge.search')?.params ?? {};
+  const suggestedSearch = (params['knowledge.search'] ?? {}) as Record<string, unknown>;
+  const kept = Object.fromEntries(Object.entries(existing).filter(([key]) => key !== 'knowledge_base_id' && key !== 'auto_filter_fields'));
+  const search: ToolBinding = { name: 'knowledge.search', version: 1, params: { ...suggestedSearch, ...kept,
+    knowledge_base_id: suggestedSearch.knowledge_base_id, auto_filter_fields: suggestedSearch.auto_filter_fields ?? [] } };
+  const show = params['knowledge.show'] as { display?: unknown[] } | undefined;
   const rest = tools.filter(t => t.name !== 'knowledge.search' && t.name !== 'knowledge.show');
-  return [...rest,
-    { name: 'knowledge.search', version: 1, params: params['knowledge.search'] as Record<string, unknown> },
-    { name: 'knowledge.show', version: 1, params: params['knowledge.show'] as Record<string, unknown> }];
+  return show?.display?.length
+    ? [...rest, search, { name: 'knowledge.show', version: 1, params: show as Record<string, unknown> }]
+    : [...rest, search];
 }
