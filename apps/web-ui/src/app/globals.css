@@ -73,6 +73,21 @@
     --success-foreground: 152 60% 55%;
   }
 
+  /* Student chat: IHRD blue of the login shell (#4963a8; #7c9bff in dark), scoped so Studio keeps its navy. */
+  .chat-theme {
+    --primary: 224 39% 47%;
+    --primary-foreground: 0 0% 100%;
+    --primary-subtle: 224 45% 95%;
+    --ring: 224 39% 47%;
+  }
+
+  .dark .chat-theme {
+    --primary: 226 100% 74%;
+    --primary-foreground: 222 47% 11%;
+    --primary-subtle: 225 35% 20%;
+    --ring: 226 100% 74%;
+  }
+
   * {
     @apply border-border;
   }

@@ -90,10 +90,7 @@ export function ChatShell() {
   const handleCreated = useCallback(
     (created: CreatedConversation) => {
       const newId = created.conversation.id;
-      queryClient.setQueryData(
-        queryKeys.chat.conversation(newId),
-        created.conversation,
-      );
+      queryClient.setQueryData(queryKeys.chat.conversation(newId), created.conversation);
       setConversationId(newId);
       setEntriesByConversation((prev) => ({
         ...prev,
@@ -272,13 +269,13 @@ export function ChatShell() {
       .map((e) =>
         e.block && e.block.kind === 'known' && e.block.block.type === 'text'
           ? e.block.block.content
-          : e.text ?? '',
+          : (e.text ?? ''),
       )
       .filter(Boolean)
       .join('\n\n') || GREETING_TEXT;
 
   return (
-    <div className="relative flex h-dvh w-full gap-3 overflow-hidden bg-gray-bg p-0 font-sans text-foreground antialiased transition-colors duration-300 selection:bg-primary/20 dark:bg-ink md:p-3">
+    <div className="chat-theme relative flex h-dvh w-full gap-3 overflow-hidden bg-gray-bg p-0 font-sans text-foreground antialiased transition-colors duration-300 selection:bg-primary/20 dark:bg-ink md:p-3">
       <ChatSidebar
         threads={threads}
         activeThreadId={conversationId ?? 'new'}
@@ -317,8 +314,8 @@ export function ChatShell() {
           )}
 
           {activity?.is_demo && (
-            <div className="mx-auto flex w-full max-w-2xl justify-center animate-in fade-in duration-300 md:max-w-3xl">
-              <p className="inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-1.5 text-xs font-medium text-amber-900 sm:rounded-full dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+            <div className="mx-auto flex w-full max-w-2xl justify-center duration-300 animate-in fade-in md:max-w-3xl">
+              <p className="inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-1.5 text-xs font-medium text-amber-900 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200 sm:rounded-full">
                 <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 {DEMO_NOTICE_TEXT}
               </p>
@@ -342,21 +339,30 @@ export function ChatShell() {
             </div>
           ) : isInitial ? (
             <div className="mx-auto flex h-full min-h-[460px] w-full max-w-2xl flex-1 flex-col items-center justify-center py-10 text-center">
-              <div className="relative mb-6 animate-in fade-in zoom-in-95 duration-500">
-                <div className="absolute inset-0 -z-10 scale-150 rounded-full bg-primary/10 blur-2xl" aria-hidden="true" />
+              <div className="relative mb-6 duration-500 animate-in fade-in zoom-in-95">
+                <div
+                  className="absolute inset-0 -z-10 scale-150 rounded-full bg-primary/10 blur-2xl"
+                  aria-hidden="true"
+                />
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-md ring-1 ring-border dark:ring-white/10">
-                  <Image src="/bot-avatar.png" alt="" width={44} height={44} className="h-11 w-11 object-contain" />
+                  <Image
+                    src="/bot-avatar.png"
+                    alt=""
+                    width={44}
+                    height={44}
+                    className="h-11 w-11 object-contain"
+                  />
                 </div>
               </div>
-              <h2 className="mb-3 max-w-xl whitespace-pre-wrap text-balance text-2xl font-semibold tracking-tight text-foreground animate-in fade-in slide-in-from-bottom-2 duration-500 sm:text-3xl">
+              <h2 className="mb-3 max-w-xl whitespace-pre-wrap text-balance text-2xl font-semibold tracking-tight text-foreground duration-500 animate-in fade-in slide-in-from-bottom-2 sm:text-3xl">
                 {initialBotText}
               </h2>
-              <p className="mb-8 max-w-md text-balance text-[15px] text-muted-foreground animate-in fade-in duration-700">
+              <p className="mb-8 max-w-md text-balance text-[15px] text-muted-foreground duration-700 animate-in fade-in">
                 Trả lời vài câu hỏi ngắn để khám phá nhóm ngành phù hợp với bạn.
               </p>
 
               {turns.isPending && (
-                <p role="status" className="mb-3 text-xs text-muted-foreground animate-pulse">
+                <p role="status" className="mb-3 animate-pulse text-xs text-muted-foreground">
                   Đang gửi...
                 </p>
               )}
@@ -369,7 +375,7 @@ export function ChatShell() {
                 </div>
               )}
 
-              <div className="flex items-center justify-center animate-in fade-in duration-700">
+              <div className="flex items-center justify-center duration-700 animate-in fade-in">
                 {view && (
                   <ActivityControls
                     conversation={view}
@@ -394,7 +400,7 @@ export function ChatShell() {
               </ul>
             </div>
           ) : (
-            <div className="mx-auto w-full max-w-2xl md:max-w-3xl animate-in fade-in duration-300">
+            <div className="mx-auto w-full max-w-2xl duration-300 animate-in fade-in md:max-w-3xl">
               <ol aria-label="Hội thoại" className="flex flex-col gap-6">
                 {entries.map((entry, index) => {
                   const isConsecutiveBot =
@@ -419,16 +425,25 @@ export function ChatShell() {
                 })}
 
                 {turns.isPending && (
-                  <li className="w-full animate-message-pop animation-delay-150">
+                  <li className="animation-delay-150 w-full animate-message-pop">
                     <div className="flex w-full items-start justify-start gap-3">
                       <BotAvatar />
                       <div
                         role="status"
                         className="flex h-10 items-center gap-1.5 rounded-2xl rounded-tl-md bg-muted px-4 dark:bg-white/5"
                       >
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/70" style={{ animationDelay: '0ms' }} />
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/70" style={{ animationDelay: '150ms' }} />
-                        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/70" style={{ animationDelay: '300ms' }} />
+                        <span
+                          className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/70"
+                          style={{ animationDelay: '0ms' }}
+                        />
+                        <span
+                          className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/70"
+                          style={{ animationDelay: '150ms' }}
+                        />
+                        <span
+                          className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground/70"
+                          style={{ animationDelay: '300ms' }}
+                        />
                         <span className="sr-only">Đang gửi...</span>
                       </div>
                     </div>
@@ -440,7 +455,7 @@ export function ChatShell() {
         </div>
 
         {!isInitial && (
-          <div className="relative shrink-0 px-4 pb-4 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out fill-mode-both md:px-8 md:pb-6 lg:px-10">
+          <div className="relative shrink-0 px-4 pb-4 pt-2 duration-300 ease-out animate-in fade-in slide-in-from-bottom-4 fill-mode-both md:px-8 md:pb-6 lg:px-10">
             <div
               className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-card to-transparent dark:from-panel"
               aria-hidden="true"
