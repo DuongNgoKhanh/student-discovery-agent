@@ -54,58 +54,61 @@ export function ChatHeader({
   };
 
   return (
-    <header className="z-10 flex h-[72px] shrink-0 items-center justify-between border-b border-slate-100 bg-transparent px-6 dark:border-white/5 lg:px-10">
-      <div className="flex items-center gap-3">
+    <header className="z-10 flex h-16 shrink-0 items-center justify-between border-b border-border/70 px-4 dark:border-white/5 md:px-6 lg:px-8">
+      <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
           onClick={onToggleMobileSidebar}
-          className="p-1 text-slate-500 hover:text-slate-900 dark:text-fog dark:hover:text-white md:hidden"
+          className={`${ICON_BUTTON_CLASS} md:hidden`}
           aria-label="Mở thanh bên"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={onToggleDesktopSidebar}
-          className="hidden items-center justify-center rounded-lg p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-fog dark:hover:bg-edge/40 dark:hover:text-white md:flex"
+          className={`${ICON_BUTTON_CLASS} hidden md:flex`}
           title={isDesktopSidebarOpen ? 'Đóng sidebar' : 'Mở sidebar'}
           aria-label={isDesktopSidebarOpen ? 'Đóng sidebar' : 'Mở sidebar'}
         >
           {isDesktopSidebarOpen ? (
-            <PanelLeftClose className="h-5 w-5" />
+            <PanelLeftClose className="h-5 w-5" aria-hidden="true" />
           ) : (
-            <PanelLeft className="h-5 w-5" />
+            <PanelLeft className="h-5 w-5" aria-hidden="true" />
           )}
         </button>
-        <div>
-          <h1 className="text-sm font-semibold text-slate-900 dark:text-white">{title}</h1>
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-fog/60">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[#4963a8] dark:bg-[#7c9bff]" />{' '}
+        <div className="ml-1 min-w-0">
+          <h1 className="truncate text-[15px] font-semibold text-foreground">{title}</h1>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="h-1.5 w-1.5 rounded-full bg-status-success" aria-hidden="true" />
             {subtitle}
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={toggleTheme}
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 dark:border-line dark:text-gray-300 dark:hover:bg-edge/40"
+          className={ICON_BUTTON_CLASS}
           title={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
           aria-label="Chuyển chế độ màu"
         >
-          {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {isDark ? <Sun className="h-[18px] w-[18px]" aria-hidden="true" /> : <Moon className="h-[18px] w-[18px]" aria-hidden="true" />}
         </button>
         <button
           type="button"
           disabled
-          className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-xl border border-slate-200 text-slate-500 opacity-40 transition-colors dark:border-line dark:text-fog"
+          className={ICON_BUTTON_CLASS}
           aria-label="Tùy chọn khác"
           title="Tùy chọn khác (chưa khả dụng)"
         >
-          <MoreVertical className="h-4 w-4" />
+          <MoreVertical className="h-[18px] w-[18px]" aria-hidden="true" />
         </button>
       </div>
     </header>
   );
 }
+
+const ICON_BUTTON_CLASS =
+  'flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-white/5';

@@ -4,6 +4,7 @@
  */
 const MESSAGES: Record<string, string> = {
   AUTH_401: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.',
+  AUTH_INVALID_CREDENTIALS: 'Tên đăng nhập hoặc mật khẩu không đúng.',
   AUTHZ_403: 'Bạn không có quyền thực hiện thao tác này.',
   RES_404: 'Không tìm thấy dữ liệu yêu cầu.',
   VAL_400: 'Dữ liệu nhập không hợp lệ.',
@@ -32,6 +33,11 @@ const MESSAGES: Record<string, string> = {
   REQUEST_TIMEOUT: 'Yêu cầu quá thời gian, vui lòng thử lại.',
   INTERNAL_ERROR: 'Hệ thống đang gặp sự cố, vui lòng thử lại sau.',
   CLIENT_INVALID_ENVELOPE: 'Phản hồi từ máy chủ không đúng định dạng.',
+  CONFLICT_TURN_IN_PROGRESS: 'Trợ lý vẫn đang trả lời lượt trước, vui lòng đợi một chút.',
+  SYS_ENGINE_FAILURE: 'Không xử lý được bài đánh giá lúc này, vui lòng thử lại.',
+  SYS_TURN_ABANDONED: 'Lượt trả lời bị gián đoạn, vui lòng gửi lại.',
+  VAL_INCOMPATIBLE_SCHEMA: 'Phiên bản giao diện chưa tương thích với cấu hình hiện tại.',
+  VAL_INCOMPATIBLE_RELEASE: 'Phiên bản giao diện chưa tương thích với cấu hình hiện tại.',
 };
 
 /** Fallback theo prefix module khi không có message cụ thể. */

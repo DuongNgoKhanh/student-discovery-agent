@@ -1,4 +1,4 @@
-"""The sampled fixture and the agent-chat demo release are seeded, capped at 15 and replay their golden case."""
+"""The sampled fixture and the local demo release are seeded, capped at 15 and replay their golden case."""
 import json
 from pathlib import Path
 
@@ -10,7 +10,7 @@ from agent_runtime.evaluations.schemas.validation import ValidationStatus
 from agent_runtime.evaluations.services.compatibility import PILOT_ENGINE_REGISTRY, CompatibilityChecker
 from agent_runtime.evaluations.services.validator import ExperienceValidator
 
-RELEASE = Path(__file__).resolve().parents[4] / "prototypes/agent-chat/releases/experiences/exp_riasec.json"
+RELEASE = Path(__file__).resolve().parents[4] / "infra/local-releases/experiences/exp_riasec.json"
 
 
 @pytest.mark.parametrize("load", [

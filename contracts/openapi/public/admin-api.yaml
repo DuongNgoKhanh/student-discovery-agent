@@ -62,6 +62,8 @@ tags:
     description: Metadata/draft, validation/evaluation and isolated preview.
   - name: Studio Releases
     description: Publish immutable snapshot, environment activation/rollback.
+  - name: Studio Agent
+    description: Agent draft, validation, releases, active pointer and audit.
   - name: Studio Audit
     description: Server-authorized administrative audit.
 paths:
@@ -111,6 +113,20 @@ paths:
     $ref: audit-api.yaml#/paths/~1admin~1audit-logs~1{event_id}
   /admin/experiences/{id}/audit-logs:
     $ref: audit-api.yaml#/paths/~1admin~1experiences~1{id}~1audit-logs
+  /admin/agent/draft:
+    $ref: agent-api.yaml#/paths/~1admin~1agent~1draft
+  /admin/agent/draft/validations:
+    $ref: agent-api.yaml#/paths/~1admin~1agent~1draft~1validations
+  /admin/agent/releases:
+    $ref: agent-api.yaml#/paths/~1admin~1agent~1releases
+  /admin/agent/releases/{release_id}:
+    $ref: agent-api.yaml#/paths/~1admin~1agent~1releases~1{release_id}
+  /admin/agent/releases/{release_id}:restore:
+    $ref: agent-api.yaml#/paths/~1admin~1agent~1releases~1{release_id}:restore
+  /admin/agent/active:
+    $ref: agent-api.yaml#/paths/~1admin~1agent~1active
+  /admin/agent/audit-logs:
+    $ref: agent-api.yaml#/paths/~1admin~1agent~1audit-logs
 components:
   securitySchemes:
     AccessCookie:

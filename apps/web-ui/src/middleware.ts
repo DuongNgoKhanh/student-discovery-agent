@@ -8,18 +8,31 @@ const ACCESS = process.env.AUTH_COOKIE_ACCESS ?? 'sda_access';
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (pathname === '/admin/login') return NextResponse.next();
-
+  // Service-to-service routes stay off the public origin even when rewrites proxy /api/* (gateway does the same).
+  if (pathname.startsWith('/api/v1/internal/')) return new NextResponse(null, { status: 404 });
+  if (pathname.startsWith('/api/')) return NextResponse.next();
   const token = req.cookies.get(ACCESS)?.value;
   const payload = token ? decodeJwt(token) : null;
   const authed = !!payload?.sub && !isExpired(payload);
+  const isAdmin = authed && payload?.admin === true;
+
+  // Admin đã đăng nhập không cần thấy lại form.
+  if (pathname === '/admin/login') {
+    if (!isAdmin) return NextResponse.next();
+    const url = req.nextUrl.clone();
+    url.pathname = '/admin/agent';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
+
   const isAdminArea = pathname === '/admin' || pathname.startsWith('/admin/');
 
-  // Admin luôn về admin login (không dùng refresh user).
-  if (isAdminArea && !(authed && payload?.admin === true)) {
+  // Admin luôn về admin login (không dùng refresh user); giữ trang đích để quay lại sau khi đăng nhập.
+  if (isAdminArea && !isAdmin) {
     const url = req.nextUrl.clone();
     url.pathname = '/admin/login';
     url.search = '';
+    if (pathname !== '/admin') url.searchParams.set('next', safeNext(pathname, '/admin'));
     return NextResponse.redirect(url);
   }
 
@@ -36,5 +49,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*'],
+  matcher: ['/dashboard/:path*', '/admin/:path*', '/api/v1/internal/:path*'],
 };

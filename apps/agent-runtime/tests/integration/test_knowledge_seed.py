@@ -4,6 +4,7 @@ from agent_runtime.cli import knowledge_indexer, knowledge_seed
 from agent_runtime.infrastructure.db.grants import grant_knowledge_roles
 from agent_runtime.infrastructure.db.migrate import upgrade_database
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
+from agent_runtime.knowledge.embedding import by_model
 from agent_runtime.knowledge.fake import FakeEmbedding
 from agent_runtime.knowledge.retrieval import PgKnowledge
 from agent_runtime.knowledge.schemas import RetrievalRequest
@@ -24,7 +25,7 @@ def test_seed_then_index_makes_the_demo_searchable(test_database, monkeypatch, c
         assert capsys.readouterr().out.splitlines() == ["created=4", "created=0"]
         assert knowledge_indexer.main(["--once", "--fake-embedding"]) == 0
         assert capsys.readouterr().out.strip() == "indexed=4 failed=0 embedded=8 reused=0 reclaimed=0 purged=0"
-        result = PgKnowledge(RuntimeUnitOfWork(engine), FakeEmbedding()).retrieve(RetrievalRequest.model_validate({
+        result = PgKnowledge(RuntimeUnitOfWork(engine), by_model(FakeEmbedding())).retrieve(RetrievalRequest.model_validate({
             "knowledge_id": "kb_ihrd_demo", "query": "công tác xã hội Đà Nẵng",
             "metadata_condition": {"conditions": [{"name": "kind", "comparison_operator": "is",
                                                    "value": "school_program"}]}}))

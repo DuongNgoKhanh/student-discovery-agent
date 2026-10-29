@@ -1,0 +1,77 @@
+# Rehearsal of the Render pilot images on Free-instance limits (512 MB, 0.1 CPU). Own project name, network
+# and disposable database: never touches the sda / sda-full-local stacks or their volumes.
+# Usage (from the repo root):
+#   docker build -f infra/render/studio-api.Dockerfile -t sda-pilot-api:local .
+#   docker build -f infra/render/agent-runtime.Dockerfile -t sda-pilot-runtime:local .
+#   PILOT_KEY_A=... PILOT_KEY_B=... PILOT_KEY_C=... PILOT_KEY_D=... \
+#     docker compose -f infra/render/docker-compose.pilot.yaml up -d
+# The web UI runs outside Docker the way Vercel builds it:
+#   cd apps/web-ui && API_PROXY_ORIGIN=http://127.0.0.1:18101 NEXT_PUBLIC_CHAT_MOCK=false pnpm build && pnpm start
+name: sda-pilot-rehearsal
+
+x-free-instance: &free-instance
+  mem_limit: 512m
+  cpus: 0.1
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: pilot_owner
+      POSTGRES_PASSWORD: pilot_owner
+      POSTGRES_DB: sda_product
+    ports:
+      - "127.0.0.1:18100:5432"
+    volumes:
+      - ./rehearsal-init.sql:/docker-entrypoint-initdb.d/rehearsal-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pilot_owner -d sda_product"]
+      interval: 5s
+      retries: 10
+
+  api:
+    <<: *free-instance
+    image: sda-pilot-api:local
+    ports:
+      - "127.0.0.1:18101:10000"
+    environment:
+      # development: rehearsal runs over plain HTTP, so cookies cannot carry Secure.
+      NODE_ENV: development
+      PRODUCT_BASE_URL: http://127.0.0.1:3000
+      DATABASE_URL: postgresql://pilot_owner:pilot_owner@db:5432/sda_product
+      SECRET_KEY: rehearsal-only-secret-key-rehearsal-only-secret-key
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: Rehearsal1!admin
+      RUNTIME_INTERNAL_URL: http://runtime:10000
+      RUNTIME_READY_URL: http://runtime:10000/ready
+      PRODUCT_RUNTIME_SIGNING_KEY: ${PILOT_KEY_A:?}
+      PRODUCT_RUNTIME_SIGNING_KID: pilot
+      STUDIO_RUNTIME_SIGNING_KEY: ${PILOT_KEY_B:?}
+      STUDIO_RUNTIME_SIGNING_KID: studio
+      PRODUCT_DELIVERY_VERIFY_KEY: ${PILOT_KEY_C:?}
+      PRODUCT_DELIVERY_VERIFY_KID: runtime
+      AGENT_DELIVERY_ENVIRONMENT: demo
+    depends_on:
+      db:
+        condition: service_healthy
+
+  runtime:
+    <<: *free-instance
+    image: sda-pilot-runtime:local
+    ports:
+      - "127.0.0.1:18102:10000"
+    environment:
+      RUNTIME_ENVIRONMENT: demo
+      RUNTIME_DATABASE_URL: postgresql+psycopg://pilot_owner:pilot_owner@db:5432/sda_runtime
+      RUNTIME_INTERNAL_KEYRING: '{"pilot":"${PILOT_KEY_A:?}"}'
+      RUNTIME_STUDIO_KEYRING: '{"studio":"${PILOT_KEY_B:?}"}'
+      RUNTIME_CURSOR_SIGNING_KEY: ${PILOT_KEY_D:?}
+      RUNTIME_AGENT_RELEASE_SOURCE: product
+      RUNTIME_PRODUCT_URL: http://api:10000
+      RUNTIME_PRODUCT_SIGNING_KEY: ${PILOT_KEY_C:?}
+      RUNTIME_PRODUCT_SIGNING_KID: runtime
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      KNOWLEDGE_EMBEDDING_MODELS: gemini-embedding-2
+    depends_on:
+      db:
+        condition: service_healthy

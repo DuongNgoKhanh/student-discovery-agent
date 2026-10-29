@@ -152,3 +152,13 @@ def retrieve_knowledge(request: Request):
             raise RuntimeSessionError(404, "RESOURCE_NOT_FOUND")
         raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"})
     return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)
+
+
+@router.post("/agent-snapshots:validate", operation_id="internalValidateAgentSnapshot")
+def validate_agent_snapshot(request: Request):
+    _query(request, ())
+    data = read_strict_json(request.state.raw_body)
+    if not isinstance(data, dict) or set(data) != {"content"}:
+        raise RuntimeSessionError(422, "INVALID_INPUT")
+    result = _service(request, "agent_validation").validate(data["content"])
+    return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)

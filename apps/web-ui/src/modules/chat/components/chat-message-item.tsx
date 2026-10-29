@@ -40,7 +40,9 @@ export function ChatMessageItem({
 
   const textToCopy =
     text ||
-    (block && block.kind === 'known' && block.block.type === 'text' ? block.block.content : '');
+    (block && block.kind === 'known' && block.block.type === 'text'
+      ? block.block.content
+      : '');
 
   const hasActions = !isUser && Boolean(textToCopy);
 
@@ -63,13 +65,11 @@ export function ChatMessageItem({
 
   if (isUser) {
     return (
-      <div
-        className={cn('flex w-full animate-message-pop items-start justify-end gap-3', className)}
-      >
-        <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl border border-slate-200/90 bg-white px-5 py-3.5 text-sm leading-relaxed text-slate-800 shadow-sm dark:border-slate-700/60 dark:bg-slate-800 dark:text-slate-100 sm:max-w-xl">
+      <div className={cn('flex w-full items-end justify-end gap-2.5 animate-message-pop', className)}>
+        <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-[15px] leading-relaxed text-primary-foreground shadow-sm sm:max-w-xl">
           {text}
         </div>
-        <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-slate-200/80 bg-slate-100 shadow-sm dark:border-slate-700">
+        <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full bg-muted ring-1 ring-border">
           <Image
             src="/user-avatar.png"
             alt="Avatar người dùng"
@@ -82,92 +82,81 @@ export function ChatMessageItem({
     );
   }
 
+  const copyLabel =
+    copyStatus === 'copied' ? 'Đã sao chép' : copyStatus === 'failed' ? 'Không thể sao chép' : 'Sao chép';
+
   return (
-    <div
-      className={cn('flex w-full animate-message-pop items-start justify-start gap-3', className)}
-    >
-      {showAvatar ? (
-        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/80 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          <Image
-            src="/bot-avatar.png"
-            alt="Avatar trợ lý"
-            width={24}
-            height={24}
-            className="h-6 w-6 object-contain"
-          />
-        </div>
-      ) : (
-        <div className="w-8 shrink-0" aria-hidden="true" />
-      )}
-      <div className="min-w-0 flex-1 pt-0.5">
-        <div className="text-sm leading-relaxed text-slate-800 dark:text-slate-100">
-          {block ? (
-            <BlockRenderer block={block} />
-          ) : (
-            <p className="whitespace-pre-wrap break-words">{text}</p>
-          )}
+    <div className={cn('group/msg flex w-full items-start justify-start gap-3 animate-message-pop', className)}>
+      {showAvatar ? <BotAvatar /> : <div className="w-8 shrink-0" aria-hidden="true" />}
+      <div className="min-w-0 flex-1 pt-1">
+        <div className="text-[15px] leading-7 text-foreground">
+          {block ? <BlockRenderer block={block} /> : <p className="whitespace-pre-wrap break-words">{text}</p>}
         </div>
 
         {hasActions && (
-          <div className="mt-2 flex items-center gap-1 text-slate-400">
+          <div className="-ml-1.5 mt-1 flex items-center gap-0.5 text-muted-foreground transition-opacity duration-200 md:opacity-0 md:focus-within:opacity-100 md:group-hover/msg:opacity-100">
             <button
               type="button"
               onClick={handleCopy}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              title={
-                copyStatus === 'copied'
-                  ? 'Đã sao chép'
-                  : copyStatus === 'failed'
-                    ? 'Không thể sao chép'
-                    : 'Sao chép'
-              }
-              aria-label={
-                copyStatus === 'copied'
-                  ? 'Đã sao chép'
-                  : copyStatus === 'failed'
-                    ? 'Không thể sao chép'
-                    : 'Sao chép'
-              }
+              className={ACTION_BUTTON_CLASS}
+              title={copyLabel}
+              aria-label={copyLabel}
             >
               {copyStatus === 'copied' ? (
-                <Check className="h-3.5 w-3.5 text-[#4963a8] dark:text-[#7c9bff]" />
+                <Check className="h-4 w-4 text-status-success" aria-hidden="true" />
               ) : copyStatus === 'failed' ? (
-                <X className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                <X className="h-4 w-4 text-destructive" aria-hidden="true" />
               ) : (
-                <Copy className="h-3.5 w-3.5" />
+                <Copy className="h-4 w-4" aria-hidden="true" />
               )}
             </button>
             <button
               type="button"
               onClick={() => handleReaction('up')}
               aria-pressed={reaction === 'up'}
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-                reaction === 'up'
-                  ? 'bg-[#4963a8]/10 text-[#4963a8] dark:bg-[#4963a8]/25 dark:text-[#7c9bff]'
-                  : 'hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200'
-              }`}
+              className={cn(
+                ACTION_BUTTON_CLASS,
+                reaction === 'up' && 'bg-primary-subtle text-primary hover:bg-primary-subtle',
+              )}
               title="Hài lòng"
               aria-label="Hài lòng"
             >
-              <ThumbsUp className="h-3.5 w-3.5" />
+              <ThumbsUp className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
               type="button"
               onClick={() => handleReaction('down')}
               aria-pressed={reaction === 'down'}
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-                reaction === 'down'
-                  ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
-                  : 'hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200'
-              }`}
+              className={cn(
+                ACTION_BUTTON_CLASS,
+                reaction === 'down' && 'bg-destructive-subtle text-destructive hover:bg-destructive-subtle',
+              )}
               title="Chưa hài lòng"
               aria-label="Chưa hài lòng"
             >
-              <ThumbsDown className="h-3.5 w-3.5" />
+              <ThumbsDown className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+const ACTION_BUTTON_CLASS =
+  'inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+/** Avatar trợ lý, dùng chung cho tin nhắn bot và chỉ báo đang trả lời. */
+export function BotAvatar() {
+  return (
+    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-border dark:ring-white/10">
+      <Image
+        src="/bot-avatar.png"
+        alt="Avatar trợ lý"
+        width={24}
+        height={24}
+        className="h-6 w-6 object-contain"
+      />
     </div>
   );
 }

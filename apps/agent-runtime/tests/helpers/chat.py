@@ -15,6 +15,7 @@ from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_eng
 from agent_runtime.infrastructure.db.tables import conversations as conversations_table
 from agent_runtime.infrastructure.db.tables import messages
 from agent_runtime.knowledge.authoring import KnowledgeWriter
+from agent_runtime.knowledge.embedding import by_model
 from agent_runtime.knowledge.fake import FakeEmbedding
 from agent_runtime.knowledge.fixtures.ihrd_demo import IHRD_DEMO, load_dataset
 from agent_runtime.knowledge.indexer import IndexerService
@@ -57,8 +58,8 @@ def build_chat(test_database, valid_v2_doc, validator, *, with_knowledge: bool =
     knowledge = None
     if with_knowledge:
         load_dataset(KnowledgeWriter(uow), IHRD_DEMO, embedding_model=FakeEmbedding.model)
-        IndexerService(uow, FakeEmbedding()).run_once()
-        knowledge = PgKnowledge(uow, FakeEmbedding())
+        IndexerService(uow, by_model(FakeEmbedding())).run_once()
+        knowledge = PgKnowledge(uow, by_model(FakeEmbedding()))
     clock = FakeClock(NOW)
     caller = VerifiedCaller("owner", "sda-product-bff", NOW + timedelta(seconds=60))
     product = FakeProductReleaseSource()

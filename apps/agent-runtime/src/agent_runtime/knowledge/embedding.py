@@ -3,7 +3,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
-EMBEDDING_DIMENSIONS = 768  # must match knowledge.embeddings.embedding vector(768)
+# Gemini and fake vectors; knowledge.embeddings.embedding has no fixed size, so other models keep their own.
+EMBEDDING_DIMENSIONS = 768
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,10 @@ class EmbeddingPort(Protocol):
     def embed_documents(self, items: Sequence[DocumentText]) -> list[list[float]] | EmbeddingUnavailable: ...
 
     def embed_query(self, text: str) -> list[float] | EmbeddingUnavailable: ...
+
+
+def by_model(*ports: EmbeddingPort) -> dict[str, EmbeddingPort]:
+    return {port.model: port for port in ports}
 
 
 def vector_literal(values: Sequence[float]) -> str:

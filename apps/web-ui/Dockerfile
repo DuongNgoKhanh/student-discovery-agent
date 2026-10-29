@@ -14,6 +14,9 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts=false
 
 FROM deps AS build
+# Inlined by Next at build time; unset keeps the in-memory chat mock (see src/modules/chat/api/index.ts).
+ARG NEXT_PUBLIC_CHAT_MOCK
+ENV NEXT_PUBLIC_CHAT_MOCK=${NEXT_PUBLIC_CHAT_MOCK}
 COPY . .
 RUN pnpm gen:api && pnpm build
 

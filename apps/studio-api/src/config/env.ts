@@ -76,6 +76,40 @@ export function getKnowledgeEnv(): KnowledgeEnv {
   return configured('knowledge', () => parseKnowledgeEnv(process.env));
 }
 
+// Conversation BFF env: student chat forwarded to the runtime; routes answer 503 while it is incomplete.
+const conversationSchema = z.object({
+  RUNTIME_INTERNAL_URL: z.preprocess(blankToUndefined, z.string().url().optional()),
+  // Same canonical Base64 key as the runtime's RUNTIME_INTERNAL_KEYRING entry `kid`; never the studio key.
+  PRODUCT_RUNTIME_SIGNING_KEY: z.preprocess(blankToUndefined, z.string().optional()),
+  PRODUCT_RUNTIME_SIGNING_KID: z.preprocess(blankToUndefined, z.string().regex(/^[A-Za-z0-9._-]{1,64}$/).default('local')),
+  SECRET_KEY: productSchema.shape.SECRET_KEY,
+  OWNER_COOKIE_MAX_AGE_SECONDS: z.coerce.number().int().min(3600).max(2592000).default(2592000),
+});
+
+export type ConversationEnv = z.infer<typeof conversationSchema>;
+
+export function parseConversationEnv(source: Record<string, string | undefined>): ConversationEnv {
+  return conversationSchema.parse(source);
+}
+
+export function getConversationEnv(): ConversationEnv {
+  return configured('conversation', () => parseConversationEnv(process.env));
+}
+
+// Agent delivery env: verify key for runtime -> studio-api calls; routes answer 503 while it is missing.
+const agentSchema = z.object({
+  PRODUCT_DELIVERY_VERIFY_KEY: z.preprocess(blankToUndefined, z.string().optional()),
+  PRODUCT_DELIVERY_VERIFY_KID: z.preprocess(blankToUndefined, z.string().regex(/^[A-Za-z0-9._-]{1,64}$/).default('runtime')),
+  // The only environment this studio delivers releases for.
+  AGENT_DELIVERY_ENVIRONMENT: z.preprocess(blankToUndefined, z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/).default('demo')),
+});
+
+export type AgentEnv = z.infer<typeof agentSchema>;
+
+export function getAgentEnv(): AgentEnv {
+  return configured('agent', () => agentSchema.parse(process.env));
+}
+
 // Storage env: parsed only when storage is used. No provider keys live in the web app.
 const storageSchema = z.object({
   S3_ENDPOINT: z.string().url(),

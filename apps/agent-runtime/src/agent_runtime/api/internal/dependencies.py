@@ -19,6 +19,7 @@ from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_eng
 from agent_runtime.infrastructure.db.trace import DatabaseTraceSink
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
 from agent_runtime.infrastructure.http.trace import request_trace_context
+from agent_runtime.infrastructure.product.delivery import CompositeReleaseSource, HttpProductReleaseSource
 from agent_runtime.infrastructure.product.local_files import LocalReleaseSource
 from agent_runtime.infrastructure.product.releases import ProductUnavailable
 from agent_runtime.sessions.errors import RuntimeSessionError
@@ -40,7 +41,10 @@ if TYPE_CHECKING:
     from agent_runtime.config.settings import Settings
 
 PREFIX = "/api/v1/internal"
-SERVICE_ROUTES = frozenset({("POST", PREFIX + "/knowledge/retrieval")})
+SERVICE_ROUTES: dict[tuple[str, str], str] = {
+    ("POST", PREFIX + "/knowledge/retrieval"): "knowledge.retrieval",
+    ("POST", PREFIX + "/agent-snapshots:validate"): "agent.validate",
+}
 
 
 class SystemClock:
@@ -62,6 +66,7 @@ class RuntimeContainer:
     product_ready: bool = False
     engine: object | None = None
     knowledge: object | None = None
+    agent_validation: object | None = None
 
 
 def _decode_key(value):
@@ -85,6 +90,38 @@ def _build_service_verifier(settings: Settings, student_keys: dict[str, bytes]) 
         return ServiceVerifier(keys, SystemClock())
     except Exception:
         return None
+
+
+def _other_runtime_keys(settings: Settings, student_keys: dict[str, bytes]) -> set[bytes]:
+    """Every runtime key a delivery key must differ from: student, Studio service and cursor keys."""
+    others = set(student_keys.values())
+    for secret, is_keyring in ((settings.RUNTIME_STUDIO_KEYRING, True), (settings.RUNTIME_CURSOR_SIGNING_KEY, False)):
+        if not secret:
+            continue
+        try:
+            if is_keyring:
+                raw = read_strict_json(secret.get_secret_value().encode("utf-8"))
+                others |= {_decode_key(value) for value in raw.values()}
+            else:
+                others.add(_decode_key(secret.get_secret_value()))
+        except Exception:
+            continue
+    return others
+
+
+def _choose_agent_source(settings: Settings, local, student_keys: dict[str, bytes]):
+    """Local files, or the signed studio-api delivery; a missing/colliding delivery config means no agent source."""
+    if settings.RUNTIME_AGENT_RELEASE_SOURCE != "product":
+        return local
+    if not (settings.RUNTIME_PRODUCT_URL and settings.RUNTIME_PRODUCT_SIGNING_KEY):
+        return None
+    try:
+        delivery_key = _decode_key(settings.RUNTIME_PRODUCT_SIGNING_KEY.get_secret_value())
+    except Exception:
+        return None
+    if delivery_key in _other_runtime_keys(settings, student_keys):
+        return None
+    return HttpProductReleaseSource(settings.RUNTIME_PRODUCT_URL, delivery_key, settings.RUNTIME_PRODUCT_SIGNING_KID)
 
 
 def build_runtime(settings: Settings) -> RuntimeContainer | None:
@@ -122,21 +159,25 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         engine = build_engine(settings.RUNTIME_DATABASE_URL.get_secret_value())
         uow = RuntimeUnitOfWork(engine)
         trace_sink = DatabaseTraceSink(uow)
-        product = (LocalReleaseSource(settings.RUNTIME_LOCAL_RELEASES_DIR) if settings.RUNTIME_LOCAL_RELEASES_DIR
-                   else ProductUnavailable())
+        local = LocalReleaseSource(settings.RUNTIME_LOCAL_RELEASES_DIR) if settings.RUNTIME_LOCAL_RELEASES_DIR else None
+        agent_source = _choose_agent_source(settings, local, keys)
+        product = CompositeReleaseSource(agent=agent_source or ProductUnavailable(),
+                                         experience=local or ProductUnavailable())
         validator = ExperienceValidator()
         conversations = ConversationService(uow, product, validator, policy=policy, trace_sink=trace_sink)
         store = TurnStore(uow, ActivityPersistence(uow, product, validator), conversations)
         handler = TurnHandler(PinnedAssessmentEngine(), completion=EngineCompletionPort())
         # Imported lazily: provider SDKs load only when a runtime with a database is built.
-        from agent_runtime.infrastructure.llm.gemini_embedding import build_embedding_port
+        from agent_runtime.infrastructure.llm.embedding_registry import build_embedding_ports
         from agent_runtime.infrastructure.llm.model_registry import build_model_port
         from agent_runtime.knowledge.retrieval import PgKnowledge
         # Query path: no retries; a failed embed degrades to keyword search. The embedding timeout and the
         # SQL statement timeout run in sequence, so the worst case is their sum, not one shared budget.
-        knowledge = PgKnowledge(uow, build_embedding_port(
+        knowledge = PgKnowledge(uow, build_embedding_ports(
             settings, timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS, max_retries=0),
             timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS)
+        from agent_runtime.agent.validation import AgentSnapshotValidator
+        agent_validation = AgentSnapshotValidator(knowledge, product, policy.environment)
         responses = ResponseService(uow, trace_sink=trace_sink)
         turns = TurnService(store, handler, models=functools.cache(build_model_port), responses=responses,
                             knowledge=knowledge, trace_sink=trace_sink)
@@ -145,8 +186,8 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
-            knowledge=knowledge,
-            product_ready=isinstance(product, LocalReleaseSource))
+            knowledge=knowledge, agent_validation=agent_validation,
+            product_ready=agent_source is not None)
     except Exception:
         if engine is not None:
             engine.dispose()
@@ -227,7 +268,7 @@ class InternalBoundary:
                 if error.status == 401:
                     raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID") from None
                 raise
-            if service and (scope["method"], target) not in SERVICE_ROUTES:
+            if service and SERVICE_ROUTES.get((scope["method"], target)) != caller.purpose:
                 raise RuntimeSessionError(403, "FORBIDDEN")
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)
 

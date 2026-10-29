@@ -1,0 +1,72 @@
+openapi: 3.0.3
+info:
+  title: Student Discovery Internal Product Delivery
+  version: 1.0.0
+  description: |
+    Studio API (Product) endpoint read only by agent-runtime to load the active agent release.
+    Not routed by the public gateway. The caller proves itself with a short-lived runtime-signed token.
+servers:
+  - url: /api/v1/internal
+security:
+  - InternalCallerContext: []
+    InternalCallerIssuer: []
+paths:
+  /releases/active:
+    get:
+      operationId: internalReadActiveRelease
+      summary: Active agent release descriptor for an environment
+      description: |
+        Only kind=agent is delivered, and only for the environment configured by AGENT_DELIVERY_ENVIRONMENT (default demo);
+        any other kind or environment, or a malformed environment, returns 422 VAL_INVALID_REQUEST.
+        No active release returns 422 RES_EXPERIENCE_NOT_CONFIGURED. Missing verification key configuration
+        returns 503 SYS_UNAVAILABLE (details.kind not_configured). Bad or missing token returns 401
+        AUTH_CALLER_CONTEXT_INVALID; a valid token with another purpose returns 403 AUTHZ_FORBIDDEN.
+      parameters:
+        - {name: kind, in: query, required: true, schema: {type: string, enum: [agent]}}
+        - {name: environment, in: query, required: true, schema: {type: string, pattern: "^[a-z][a-z0-9_-]{0,31}$"}}
+      responses:
+        '200':
+          description: Active release descriptor.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ActiveDeliveryEnvelope'}
+        '401': {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        '403': {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        '422': {$ref: ../schemas/common.yaml#/components/responses/ChatError422}
+        '503': {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+components:
+  securitySchemes:
+    InternalCallerContext:
+      type: apiKey
+      in: header
+      name: X-Caller-Context
+      description: |
+        HS256 JWT, JOSE typ=sda-internal+jwt and kid equal to the configured delivery kid. Required claims:
+        iss=sda-agent-runtime, aud=sda-studio-api, caller_type=runtime_service, purpose=release.delivery,
+        integer iat/exp with 0 < exp-iat <= 60, method (uppercase), request_target (raw path plus query)
+        and body_sha256 (lowercase SHA-256 hex of the raw body; empty for GET). The key is dedicated to this
+        purpose and is never shared with cookie/login or runtime-ingress keys.
+    InternalCallerIssuer:
+      type: apiKey
+      in: header
+      name: X-Internal-Caller
+      description: Must equal sda-agent-runtime; the header alone grants no permission.
+  schemas:
+    ActiveDelivery:
+      type: object
+      additionalProperties: false
+      required: [environment, kind, release_id, content_hash, delivery_schema_version, content, is_demo]
+      properties:
+        environment: {type: string}
+        kind: {type: string, enum: [agent]}
+        release_id: {type: string, pattern: "^agr_[0-9a-f]{24}$"}
+        content_hash: {type: string}
+        delivery_schema_version: {type: string, enum: [agent.snapshot.v1]}
+        content: {type: object, additionalProperties: true, description: agent.snapshot.v1 content}
+        is_demo: {type: boolean, enum: [true]}
+    ActiveDeliveryEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: '#/components/schemas/ActiveDelivery'}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope

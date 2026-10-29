@@ -285,6 +285,50 @@ paths:
                 $ref: ../public/result-api.yaml#/components/schemas/ShareCardEnvelope
         default:
           $ref: '#/components/responses/RuntimeError'
+  /agent-snapshots:validate:
+    post:
+      operationId: internalValidateAgentSnapshot
+      summary: Validate an agent config exactly as the runtime would load it
+      description: |
+        Studio as a service (`X-Internal-Caller: sda-studio-api`, claims `caller_type=studio_service`,
+        `purpose=agent.validate`, no `owner_id`, keyring `RUNTIME_STUDIO_KEYRING`). Checks the agent.snapshot.v1 schema
+        and its references (knowledge bases, display fields, allowed activity profiles). An invalid config is still
+        200 with `valid=false` and `issues`; 422 INVALID_INPUT is only for a malformed request body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [content]
+              properties:
+                content: {type: object, additionalProperties: true}
+      responses:
+        '200':
+          description: Validation report bound to the canonical hash of the content.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [valid, content_hash, issues]
+                    properties:
+                      valid: {type: boolean}
+                      content_hash: {type: string}
+                      issues:
+                        type: array
+                        items:
+                          type: object
+                          required: [path, code, message]
+                          properties:
+                            path: {type: string}
+                            code: {type: string}
+                            message: {type: string}
+        default:
+          $ref: '#/components/responses/RuntimeError'
   /knowledge/retrieval:
     post:
       operationId: internalRetrieveKnowledge

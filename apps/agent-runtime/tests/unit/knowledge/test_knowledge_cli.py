@@ -23,7 +23,10 @@ def test_indexer_rejects_bad_arguments():
 
 def test_indexer_refuses_to_start_without_an_api_key(monkeypatch, capsys):
     monkeypatch.setenv("RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL", "postgresql+psycopg://x:y@127.0.0.1:1/none")
-    monkeypatch.setenv("GOOGLE_API_KEY", "")
+    # Empty env values fall back to .env, so pick a model whose provider a developer .env does not configure.
+    monkeypatch.setenv("KNOWLEDGE_EMBEDDING_MODELS", "nomic-embed-text-v1.5")
+    monkeypatch.setenv("VLLM_BASE_URL", "")
+    monkeypatch.setenv("VLLM_API_KEY", "")
     assert knowledge_indexer.main(["--once"]) == 2
     assert capsys.readouterr().out.strip() == "KNOWLEDGE_INDEXER_CONFIGURATION_REQUIRED"
 

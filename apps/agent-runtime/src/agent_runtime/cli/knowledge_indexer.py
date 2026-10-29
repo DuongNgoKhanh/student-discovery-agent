@@ -27,15 +27,15 @@ def drain(service: IndexerService, batch_size: int) -> IndexReport:
             return total
 
 
-def _embedding(fake: bool):
-    """None when a real embedding is required but no API key is configured."""
+def _embeddings(fake: bool):
+    """Ports by model id; empty when real embeddings are required but none is configured."""
     if fake:
+        from agent_runtime.knowledge.embedding import by_model
         from agent_runtime.knowledge.fake import FakeEmbedding
-        return FakeEmbedding()
+        return by_model(FakeEmbedding())
     from agent_runtime.config.settings import Settings
-    from agent_runtime.infrastructure.llm.gemini_embedding import build_embedding_port
-    settings = Settings()
-    return build_embedding_port(settings) if settings.GOOGLE_API_KEY else None
+    from agent_runtime.infrastructure.llm.embedding_registry import build_embedding_ports
+    return build_embedding_ports(Settings())
 
 
 def main(argv=None) -> int:
@@ -54,12 +54,12 @@ def main(argv=None) -> int:
         return 2
     engine = None
     try:
-        embedding = _embedding(args.fake_embedding)
-        if embedding is None:
+        embeddings = _embeddings(args.fake_embedding)
+        if not embeddings:
             print("KNOWLEDGE_INDEXER_CONFIGURATION_REQUIRED")
             return 2
         engine = build_engine(url)
-        service = IndexerService(RuntimeUnitOfWork(engine), embedding)
+        service = IndexerService(RuntimeUnitOfWork(engine), embeddings)
         if args.retry_errors is not None:
             print(f"retried={service.retry_errors(args.retry_errors or None)}")
             return 0
