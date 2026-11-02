@@ -59,7 +59,8 @@ export function Divider({ width, className }: { width: number; className?: strin
 
 /**
  * Thin orbit around the title: bright at its left and right ends, nearly gone where it
- * crosses the letters, with a sparkle on the left end and one high on the right.
+ * crosses the letters, with a sparkle on the left end and one high on the right, outside the
+ * title's width so it never lands on the last letter.
  */
 export function TitleRing({ width, height }: { width: number; height: number }) {
   // React ids contain characters some SVG rasterisers reject inside url(#...).
@@ -91,7 +92,7 @@ export function TitleRing({ width, height }: { width: number; height: number }) 
       <path
         d={SPARKLE}
         fill="currentColor"
-        transform={`translate(${width / 2 + rx * 0.8 - 6} ${height / 2 - ry * 0.6 - 6}) scale(0.5)`}
+        transform={`translate(${width / 2 + rx * 0.93 - 6} ${height / 2 - ry * 0.37 - 6}) scale(0.5)`}
       />
     </svg>
   );

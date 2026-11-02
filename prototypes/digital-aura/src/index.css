@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Playfair+Display:wght@500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Noto+Serif+Display:wght@500&display=swap');
 @import 'tailwindcss';
 
 @font-face {
@@ -23,8 +23,8 @@
 @theme {
   --font-sans: 'Montserrat', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Cormorant Garamond', 'Times New Roman', serif;
-  /* Share card headline: a high-contrast serif with full Vietnamese diacritics. */
-  --font-title: 'Playfair Display', 'Times New Roman', serif;
+  /* Share card headline: a high-contrast serif whose stacked Vietnamese diacritics sit cleanly. */
+  --font-title: 'Noto Serif Display', 'Times New Roman', serif;
   --color-ink: #08071a;
 }
 

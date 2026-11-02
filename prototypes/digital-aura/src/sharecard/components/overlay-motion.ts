@@ -56,8 +56,13 @@ export function useFitText(
     fit();
     let live = true;
     void document.fonts?.ready.then(() => live && fit());
+    // `fonts.ready` can settle before a lazily loaded web font arrives; the swap resizes the
+    // element, so fit again then. Fitting lands on the same size, so it does not loop.
+    const resize = new ResizeObserver(() => live && fit());
+    resize.observe(el);
     return () => {
       live = false;
+      resize.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [max, min, maxWidth, ...deps]);
