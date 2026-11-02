@@ -17,6 +17,9 @@ export default {
       fontFamily: {
         sans: ['var(--font-sans)', ...fontFamily.sans],
         mono: ['var(--font-mono)', ...fontFamily.mono],
+        // Result share card (modules/aura-card): its own faces, loaded with next/font in the card.
+        card: ['var(--font-card)', ...fontFamily.sans],
+        'card-title': ['var(--font-card-title)', ...fontFamily.serif],
       },
       fontSize: {
         13: ['0.8125rem', { lineHeight: '1.25rem' }],
@@ -43,9 +46,17 @@ export default {
         background: hsl('background'),
         foreground: hsl('foreground'),
         brand: hsl('brand'),
-        primary: { DEFAULT: hsl('primary'), foreground: hsl('primary-foreground'), subtle: hsl('primary-subtle') },
+        primary: {
+          DEFAULT: hsl('primary'),
+          foreground: hsl('primary-foreground'),
+          subtle: hsl('primary-subtle'),
+        },
         secondary: { DEFAULT: hsl('secondary'), foreground: hsl('secondary-foreground') },
-        destructive: { DEFAULT: hsl('destructive'), foreground: hsl('destructive-foreground'), subtle: hsl('destructive-subtle') },
+        destructive: {
+          DEFAULT: hsl('destructive'),
+          foreground: hsl('destructive-foreground'),
+          subtle: hsl('destructive-subtle'),
+        },
         muted: { DEFAULT: hsl('muted'), foreground: hsl('muted-foreground') },
         accent: { DEFAULT: hsl('accent'), foreground: hsl('accent-foreground') },
         card: { DEFAULT: hsl('card'), foreground: hsl('card-foreground') },
