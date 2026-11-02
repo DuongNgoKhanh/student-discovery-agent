@@ -241,6 +241,8 @@ export interface ArchetypeTheme {
     chipBorder: string;
     frame: readonly string[];
     particles: readonly string[];
+    /** Gold of the dividers and sparkles around the identity text (#rrggbb). Defaults to warm gold. */
+    ornament?: string;
     /** Outer glow around the card in the studio (#rrggbb). Defaults to violet. */
     glow?: string;
   };

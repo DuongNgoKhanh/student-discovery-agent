@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { Strength, StrengthIcon } from '../types';
+import { Sparkle } from './Ornaments';
 import { trackProps, useOverlayMotion } from './overlay-motion';
 
 export const strengthIcons: Record<StrengthIcon, LucideIcon> = {
@@ -38,12 +39,14 @@ interface StrengthChipsProps {
   time: MotionValue<number>;
 }
 
-const LABEL_MAX = 13;
-const LABEL_MIN = 10.5;
+const LABEL_MAX = 14;
+const LABEL_MIN = 9.5;
 
 /**
- * Shrink every chip label together (keeping the row's typography uniform) until none is
- * truncated. Runs on content and font changes only, never per frame.
+ * Shrink every chip label together (keeping the row's typography uniform) until the row fits.
+ * Labels never truncate, so the row overflows instead; any sub-pixel overflow left by the
+ * rounded widths falls into the capsule's padding. Runs on content, font and row-size changes
+ * only, never per frame.
  */
 function useFitChipLabels(list: React.RefObject<HTMLUListElement | null>, key: string) {
   useLayoutEffect(() => {
@@ -53,14 +56,19 @@ function useFitChipLabels(list: React.RefObject<HTMLUListElement | null>, key: s
       const labels = Array.from(ul.querySelectorAll<HTMLElement>('[data-chip-label]'));
       for (let size = LABEL_MAX; size >= LABEL_MIN; size -= 0.5) {
         labels.forEach((l) => (l.style.fontSize = `${size}px`));
-        if (labels.every((l) => l.scrollWidth <= l.clientWidth + 0.5)) return;
+        if (ul.scrollWidth <= ul.clientWidth) return;
       }
     };
     fit();
     let live = true;
     void document.fonts?.ready.then(() => live && fit());
+    // The row can mount before it has its final width; fit again once it is laid out. The row's
+    // width is fixed by its container, so resizing the labels never re-triggers this.
+    const resize = new ResizeObserver(() => live && fit());
+    resize.observe(ul);
     return () => {
       live = false;
+      resize.disconnect();
     };
   }, [list, key]);
 }
@@ -69,7 +77,7 @@ export function StrengthChips({ strengths, time }: StrengthChipsProps) {
   const list = useRef<HTMLUListElement>(null);
   useFitChipLabels(list, strengths.map((s) => s.label).join('|'));
   return (
-    <ul ref={list} className="flex w-full gap-2" aria-label="Điểm mạnh">
+    <ul ref={list} className="flex w-full gap-3" aria-label="Điểm mạnh">
       {strengths.map((strength, i) => (
         <Chip key={i} strength={strength} index={i} count={strengths.length} time={time} />
       ))}
@@ -89,49 +97,22 @@ function Chip({
   time: MotionValue<number>;
 }) {
   const style = useOverlayMotion(time, 'chips', index, count);
-  const Icon = strength.icon ? strengthIcons[strength.icon] : null;
+  // Sparkles alternate gold and violet across the row, as on the reference card.
+  const tone = index % 2 ? 'text-[var(--card-accent)]' : 'text-[var(--card-ornament)]';
   return (
-    <motion.li {...trackProps('chips', index, count)} style={style} className="min-w-0 flex-auto">
-      <div
-        data-paint="box"
-        className="relative flex h-[42px] items-center justify-center gap-[6px] overflow-hidden rounded-full px-2 shadow-[0_0_18px_var(--card-glow)]"
+    <motion.li
+      {...trackProps('chips', index, count)}
+      style={style}
+      className="flex flex-auto items-center justify-center gap-[7px]"
+    >
+      <Sparkle size={11} className={tone} />
+      <span
+        data-paint="text"
+        data-chip-label
+        className="font-sans text-[14px] leading-[24px] font-normal whitespace-nowrap text-[var(--card-text)]"
       >
-        {/* Gradient rim only: a masked layer that keeps the border ring and clears the inside, so the chip fill stays transparent. */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-full p-[1.5px]"
-          style={{
-            background: 'var(--card-chip-border)',
-            WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
-            WebkitMaskComposite: 'xor',
-            mask: 'linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)',
-          }}
-        />
-        {Icon ? (
-          <span
-            data-paint="svg"
-            aria-hidden="true"
-            className="inline-block size-[16px] shrink-0 text-[var(--card-lavender)]"
-          >
-            <Icon size={16} strokeWidth={1.75} className="block" />
-          </span>
-        ) : strength.glyph ? (
-          <span
-            data-paint="text"
-            aria-hidden="true"
-            className="text-[12px] leading-none text-[var(--card-lavender)]"
-          >
-            {strength.glyph}
-          </span>
-        ) : null}
-        <span
-          data-paint="text"
-          data-chip-label
-          className="truncate font-sans text-[13px] leading-[16px] font-normal text-[var(--card-text)]"
-        >
-          {strength.label}
-        </span>
-      </div>
+        {strength.label}
+      </span>
     </motion.li>
   );
 }

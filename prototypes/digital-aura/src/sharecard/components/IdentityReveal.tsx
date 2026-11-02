@@ -4,6 +4,7 @@ import { scrambleGlyph } from '../animation/timeline';
 import type { RatioLayout } from '../layout';
 import type { ShareCardData } from '../types';
 import { TitleStyleContext, trackProps, useFitText, useOverlayMotion } from './overlay-motion';
+import { Divider, TitleRing } from './Ornaments';
 import { StrengthChips } from './StrengthChips';
 
 interface IdentityRevealProps {
@@ -13,6 +14,8 @@ interface IdentityRevealProps {
 }
 
 const CONTENT_WIDTH = 344;
+/** Keeps long titles inside the frame drawn into every artwork (~45 units from each edge). */
+const TITLE_WIDTH = 300;
 
 const graphemes = (text: string) =>
   typeof Intl.Segmenter === 'function'
@@ -40,17 +43,17 @@ export function IdentityReveal({ data, layout, time }: IdentityRevealProps) {
 
   const words = useMemo(() => wordIndices(letters), [letters]);
 
-  useFitText(nameRef, [data.name], { max: 12.5, min: 9, maxWidth: CONTENT_WIDTH });
-  useFitText(titleRef, [data.archetype.title], { ...layout.title, maxWidth: CONTENT_WIDTH });
+  useFitText(nameRef, [data.name], { max: compact ? 14 : 15.5, min: 10, maxWidth: CONTENT_WIDTH });
+  useFitText(titleRef, [data.archetype.title], { ...layout.title, maxWidth: TITLE_WIDTH });
   // Subtitle and footer shrink to fit the card width, so long lines never run past the frame.
   useFitText(subtitleRef, [data.archetype.subtitle, data.archetype.edition], {
-    max: 11,
+    max: 10,
     min: 7,
     maxWidth: CONTENT_WIDTH,
   });
   useFitText(footerRef, [fields.join('|'), data.tagline], {
-    max: 10.5,
-    min: 7,
+    max: 12,
+    min: 8,
     maxWidth: CONTENT_WIDTH,
   });
 
@@ -66,95 +69,122 @@ export function IdentityReveal({ data, layout, time }: IdentityRevealProps) {
       }}
       className="absolute inset-x-0 bottom-0 flex flex-col items-center px-7"
     >
-      <motion.span {...trackProps('name')} style={name} className="block w-max mx-auto rounded-full bg-[image:var(--card-zone)] px-5 py-1.5" data-paint="box">
+      <motion.div {...trackProps('name')} style={name} className="flex flex-col items-center">
         <span
           ref={nameRef}
           data-paint="text"
-          className="inline-block font-sans leading-[18px] font-semibold tracking-[0.28em] whitespace-nowrap text-white uppercase"
+          className="inline-block font-sans leading-[22px] font-light tracking-[0.04em] whitespace-nowrap text-[var(--card-text)] [text-shadow:0_0_10px_var(--card-ink)]"
         >
           {data.name}
         </span>
-      </motion.span>
-
-      <h2 className={compact ? 'mt-1' : 'mt-2'} aria-label={data.archetype.title}>
-        <span
-          ref={titleRef}
-          key={data.archetype.title}
-          aria-hidden="true"
-          className="font-sans inline-block leading-[1.12] font-normal whitespace-nowrap text-[var(--card-text)] [text-shadow:0_0_18px_var(--card-glow)]"
-        >
-          {letters.map((letter, i) => {
-            // The `word` style staggers whole words: letters share their word's slot.
-            const [index, count] =
-              titleStyle === 'word' ? [words.indexOf[i]!, words.count] : [i, letters.length];
-            return (
-              <Letter
-                key={i}
-                letter={letter}
-                index={index}
-                count={count}
-                time={time}
-                scramble={titleStyle === 'scramble'}
-              />
-            );
-          })}
-        </span>
-      </h2>
-
-      <motion.span {...trackProps('subtitle')} style={subtitle} className="mt-[2px] block">
-        <span
-          ref={subtitleRef}
-          data-paint="text"
-          className="inline-block font-sans text-[11px] leading-[16px] tracking-[0.32em] whitespace-nowrap text-[var(--card-subtle)] uppercase"
-        >
-          {subtitleText}
-        </span>
-      </motion.span>
-
-      {/* Chips and footer move up by `identity.lift` without shifting the name and title. */}
-      <div style={{ transform: `translateY(${-(layout.identity.lift ?? 0)}px)` }}>
-      {/* 320 wide: sits inside the frame, which is inset 26 from each card edge. */}
-      {/* mt-10 keeps the chips clear of the subtitle after the lift. */}
-      <motion.div
-        {...trackProps('chips')}
-        style={chipZone}
-        className={`mx-auto w-[300px] rounded-[20px] bg-[image:var(--card-zone)] p-2 ${compact ? 'mt-4' : 'mt-10'}`}
-        data-paint="box"
-      >
-        <StrengthChips strengths={data.strengths} time={time} />
+        <Divider width={compact ? 150 : 180} className="mt-1 text-[var(--card-ornament)]" />
       </motion.div>
 
-      <motion.div
-        {...trackProps('footer')}
-        style={footer}
-        className={`flex w-full flex-col items-center ${compact ? 'mt-3' : 'mt-3'}`}
+      {/* The ring sits behind the title and subtitle; it is painted first, so it stays underneath. */}
+      <div className="relative flex flex-col items-center">
+        <motion.span
+          {...trackProps('subtitle')}
+          // Centred on the title block with margins, not a transform, so export offsets stay exact.
+          style={{ ...subtitle, ...ringBox(compact) }}
+          data-paint="svg"
+          aria-hidden="true"
+          className="absolute top-1/2 left-1/2 block text-[var(--card-lavender)]"
+        >
+          <TitleRing {...ringSize(compact)} />
+        </motion.span>
+
+        <h2 className={compact ? 'mt-0' : 'mt-0.5'} aria-label={data.archetype.title}>
+          <span
+            ref={titleRef}
+            key={data.archetype.title}
+            aria-hidden="true"
+            className="inline-block font-title leading-[1.18] font-medium whitespace-nowrap"
+          >
+            {letters.map((letter, i) => {
+              // The `word` style staggers whole words: letters share their word's slot.
+              const [index, count] =
+                titleStyle === 'word' ? [words.indexOf[i]!, words.count] : [i, letters.length];
+              return (
+                <Letter
+                  key={i}
+                  letter={letter}
+                  index={index}
+                  count={count}
+                  time={time}
+                  scramble={titleStyle === 'scramble'}
+                />
+              );
+            })}
+          </span>
+        </h2>
+
+        <motion.span {...trackProps('subtitle')} style={subtitle} className="block">
+          {/* The negative margin cancels the tracking after the last letter, so the line centres. */}
+          <span
+            ref={subtitleRef}
+            data-paint="text"
+            className="mr-[-0.6em] inline-block font-sans text-[10px] leading-[16px] font-light tracking-[0.6em] whitespace-nowrap text-[var(--card-subtle)] uppercase"
+          >
+            {subtitleText}
+          </span>
+        </motion.span>
+      </div>
+
+      {/* Chips and footer move up by `identity.lift` without shifting the name and title. */}
+      <div
+        style={{ transform: `translateY(${-(layout.identity.lift ?? 0)}px)` }}
+        className="flex flex-col items-center"
       >
-        {fields.length ? (
-          <>
+        <motion.div
+          {...trackProps('chips')}
+          style={chipZone}
+          className={`flex flex-col items-center ${compact ? 'mt-2' : 'mt-4'}`}
+        >
+          <Divider width={compact ? 150 : 180} className="text-[var(--card-ornament)]" />
+          {/* 324 wide: sits inside the frame, which is inset 26 from each card edge. */}
+          <div
+            data-paint="box"
+            className={`mt-1 w-[324px] rounded-full border border-[rgba(255,255,255,0.18)] bg-[var(--card-glass)] px-2 ${compact ? 'py-1.5' : 'py-2'}`}
+          >
+            <StrengthChips strengths={data.strengths} time={time} />
+          </div>
+        </motion.div>
+
+        <motion.div
+          {...trackProps('footer')}
+          style={footer}
+          className={`flex w-full flex-col items-center ${compact ? 'mt-2.5' : 'mt-4'}`}
+        >
+          {fields.length ? (
             <span
               ref={footerRef}
               data-paint="text"
-              className={`inline-block font-sans text-[10.5px] leading-[16px] font-normal tracking-[0.26em] whitespace-nowrap text-white uppercase rounded-full bg-[image:var(--card-zone)] px-4 py-1 ${compact ? 'mt-2' : 'mt-3'}`}
+              className="inline-block font-sans text-[12px] leading-[16px] font-normal tracking-[0.02em] whitespace-pre text-[var(--card-lavender)] [text-shadow:0_0_8px_var(--card-ink)]"
             >
-              {fields.join(' · ')}
+              {fields.join('   ·   ')}
             </span>
-          </>
-        ) : (
-          <>
-            <div data-paint="box" className="h-px w-full bg-[var(--card-rule)]" />
+          ) : (
             <span
               data-paint="text"
-              className={`inline-block font-sans text-[12px] leading-[16px] whitespace-nowrap text-[var(--card-muted)] ${compact ? 'mt-2.5' : 'mt-3.5'}`}
+              className="inline-block font-sans text-[12px] leading-[16px] font-light whitespace-nowrap text-[var(--card-muted)]"
             >
               {data.tagline}
             </span>
-          </>
-        )}
-      </motion.div>
+          )}
+        </motion.div>
       </div>
     </div>
   );
 }
+
+/** Orbit around the title block, wider than the title so its ends clear the letters. */
+const ringSize = (compact: boolean) =>
+  compact ? { width: 352, height: 84 } : { width: 372, height: 100 };
+
+const ringBox = (compact: boolean) => {
+  const { width, height } = ringSize(compact);
+  return { width, height, marginLeft: -width / 2, marginTop: -height / 2 + 4 };
+};
 
 /** Word index for every grapheme (spaces belong to the preceding word) and the word count. */
 function wordIndices(letters: readonly string[]) {
@@ -193,11 +223,11 @@ function Letter({
       className="relative inline-block"
     >
       {/* The real letter always holds the width, so scrambling never shifts the line. */}
-      <motion.span data-paint="text" style={{ opacity: real }} className="inline-block">
+      <motion.span data-paint="text" style={{ opacity: real }} className="title-ink inline-block">
         {blank ? '\u00a0' : letter}
       </motion.span>
       {scramble && !blank && (
-        <motion.span aria-hidden="true" className="absolute inset-0 text-center">
+        <motion.span aria-hidden="true" className="title-ink absolute inset-0 text-center">
           {glyph}
         </motion.span>
       )}

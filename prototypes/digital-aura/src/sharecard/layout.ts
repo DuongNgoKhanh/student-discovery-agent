@@ -32,7 +32,7 @@ export const layouts: Record<CardRatio, RatioLayout> = {
     art: { x: -110, y: -40, size: 640 },
     veil: { start: 330, solid: 470 },
     heroScale: 1,
-    title: { max: 38, min: 28 },
+    title: { max: 46, min: 30 },
     // Deliberately above `safe.top`: the brand sits near the top edge (Story UI may overlap it).
     header: { top: 38 },
     identity: { bottom: 100 },

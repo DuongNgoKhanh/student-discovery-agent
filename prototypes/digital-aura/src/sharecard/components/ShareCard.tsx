@@ -62,6 +62,8 @@ function resolveTheme(theme: ArchetypeTheme, ratio: CardRatio): ArchetypeTheme {
   return {
     ...theme,
     veil: landscape.veil ?? theme.veil,
+    // The panel is placed in 9:16 units; the 4:5 card relies on its veil instead.
+    panel: undefined,
     identity: landscape.identity ?? theme.identity,
     header: landscape.header ?? theme.header,
     frame: landscape.frame ?? theme.frame,
@@ -228,11 +230,14 @@ export const ShareCard = forwardRef<ShareCardHandle, ShareCardProps>(function Sh
     '--card-chip-border': theme.palette.chipBorder,
     '--card-rule': theme.palette.lavender + '40',
     '--card-glow': theme.palette.accent + 'b0',
+    '--card-accent': theme.palette.accent,
+    '--card-ornament': theme.palette.ornament ?? '#f3cf8e',
+    '--card-title-low': theme.palette.lavender,
+    // Dark halo behind small text, and the translucent fill of the strengths capsule.
+    '--card-ink': theme.palette.veil + 'e6',
+    '--card-glass': theme.palette.veil + '73',
     '--card-shadow': (theme.palette.glow ?? '#5949d3') + '99',
     '--card-halo': (theme.palette.glow ?? '#8b5cf6') + '33',
-    // Gradient backing behind the name, the chip row and the footer, taken from the theme's own
-    // backdrop colours and darkened by a high-opacity overlay of the lower backdrop tone.
-    '--card-zone': `linear-gradient(180deg, ${theme.palette.backdrop[0]}e6, ${theme.palette.backdrop[1]}f2)`,
   } as CSSProperties;
 
   return (
