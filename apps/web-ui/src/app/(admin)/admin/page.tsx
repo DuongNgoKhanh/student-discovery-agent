@@ -1,16 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { useAdminUsers } from '@/features/users';
-
-export default function AdminUsersPage() {
-  const { data, isLoading, error } = useAdminUsers();
-
-  if (isLoading) return <p>Đang tải...</p>;
-  if (error) return <p className="text-red-600">{(error as Error).message}</p>;
-
-  return (
-    <ul className="list-disc pl-5">
-      {data?.map((u) => <li key={u.id}>{u.email}</li>)}
-    </ul>
-  );
+// "Người dùng" is hidden for the MVP (students chat anonymously); the Studio starts at the agent.
+export default function AdminHome() {
+  redirect('/admin/agent');
 }

@@ -14,8 +14,11 @@
 | `AUTH_TOKEN_INVALID` | `AUTH_INVALID_TOKEN` | Show sign-in; do not automatically refresh a revoked or invalid session. |
 | `AUTH_TOKEN_MISSING` | `AUTH_REQUIRED` | Show sign-in; do not automatically refresh. |
 | `CONFLICT_ACTIVE_RELEASE` | `ACTIVE_RELEASE_CONFLICT` | Reload current state and ask for a new action; do not automatically retry. |
+| `CONFLICT_ALREADY_EXISTS` |  | Choose a different identifier or open the existing resource. |
 | `CONFLICT_EMAIL_EXISTS` | `VAL_EMAIL_ALREADY_EXISTS` | Choose another email or sign in to the existing account. |
 | `CONFLICT_IDEMPOTENCY_KEY` | `IDEMPOTENCY_KEY_COLLISION` | Create a new key for a new action; retry an existing key only with its original payload. |
+| `CONFLICT_INVALID_STATE` |  | Reload the resource and check its current state before retrying. |
+| `CONFLICT_RESOURCE_IN_USE` |  | Remove the references listed in details first. |
 | `CONFLICT_RESPONSE_NOT_CANCELLABLE` | `RESPONSE_NOT_CANCELLABLE` | Read the response and show its final state; do not retry the cancel. |
 | `CONFLICT_REVISION` | `REVISION_CONFLICT` | Reload current state and ask for a new action; do not automatically retry. |
 | `CONFLICT_STALE_CLARIFICATION` | `STALE_CLARIFICATION` | Reload current state and ask for a new action; do not automatically retry. |

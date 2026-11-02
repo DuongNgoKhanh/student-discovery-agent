@@ -222,7 +222,8 @@ components:
         case_id:
           type: string
           minLength: 1
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          description: Echoes the golden case id (experience-api.yaml), so it accepts the same alphabet.
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
         mandatory:
           type: boolean
         passed:

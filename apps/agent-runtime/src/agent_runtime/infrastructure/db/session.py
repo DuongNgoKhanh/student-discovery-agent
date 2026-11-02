@@ -7,15 +7,18 @@ from datetime import datetime, timezone
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import Pool
 
 
-def build_engine(url: str) -> Engine:
+def build_engine(url: str, poolclass: type[Pool] | None = None) -> Engine:
+    """`poolclass=NullPool` closes each connection after use (no idle connection keeps a serverless DB awake)."""
     parsed = make_url(url)
     if parsed.get_backend_name() != "postgresql":
         raise ValueError("runtime persistence requires PostgreSQL")
+    options = {"poolclass": poolclass} if poolclass is not None else {}
     return create_engine(
         parsed.set(drivername="postgresql+psycopg"), isolation_level="READ COMMITTED",
-        pool_pre_ping=True, hide_parameters=True, connect_args={"options": "-c timezone=UTC"},
+        pool_pre_ping=True, hide_parameters=True, connect_args={"options": "-c timezone=UTC"}, **options,
     )
 
 

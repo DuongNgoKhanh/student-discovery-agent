@@ -104,5 +104,6 @@ def test_completed_result_is_explained_from_the_stored_card(chat):
                         ModelReply(text="Bạn thuộc **" + card["house"]["name"] + "**.")]
     explained = send("giải thích thêm về card này đi", revision=data["revision"], key="explain").data
     assert model.calls[-1][0][-1].content["house"] == card["house"]["name"]
+    assert model.calls[-1][0][-1].content["house_id"] == card["house"]["house_id"]
     assert blocks(explained)[0]["content"] == "Bạn thuộc **" + card["house"]["name"] + "**."
     assert explained["activity"]["status"] == "completed"

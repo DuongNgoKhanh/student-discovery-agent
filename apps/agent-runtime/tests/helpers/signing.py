@@ -34,3 +34,32 @@ def sign_request(
         algorithm="HS256",
         headers={"typ": "sda-internal+jwt", "kid": kid},
     )
+
+
+def sign_service_request(
+    request: RawRequestContext,
+    *,
+    now: datetime,
+    key: bytes,
+    kid: str,
+    purpose: str = "knowledge.retrieval",
+    caller_type: str = "studio_service",
+    ttl_seconds: int = 60,
+) -> str:
+    issued_at = int(now.timestamp())
+    return jwt.encode(
+        {
+            "iss": "sda-studio-api",
+            "aud": "sda-agent-runtime",
+            "caller_type": caller_type,
+            "purpose": purpose,
+            "iat": issued_at,
+            "exp": issued_at + ttl_seconds,
+            "method": request.method.upper(),
+            "request_target": request.request_target,
+            "body_sha256": sha256(request.body).hexdigest(),
+        },
+        key,
+        algorithm="HS256",
+        headers={"typ": "sda-internal+jwt", "kid": kid},
+    )

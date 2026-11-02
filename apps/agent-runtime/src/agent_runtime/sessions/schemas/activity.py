@@ -36,7 +36,8 @@ class BlockCapabilityInput(ContractModel):
 
 class SupportedBlock(BlockCapabilityInput):
     type: Literal[
-        "text", "markdown", "suggestions", "assessment_question", "assessment_clarification", "personality_card"
+        "text", "markdown", "suggestions", "assessment_question", "assessment_clarification", "personality_card",
+        "knowledge_card",
     ]
 
     @model_validator(mode="after")
@@ -387,6 +388,24 @@ class PersonalityCardBlock(ContractModel):
     data: PersonalityCardData
 
 
+class KnowledgeCardField(ContractModel):
+    label: Annotated[str, StringConstraints(min_length=1, max_length=60, pattern=r"\S")]
+    value: Annotated[str, StringConstraints(min_length=1, max_length=500, pattern=r"\S")]
+
+
+class KnowledgeCardBlock(ContractModel):
+    """Built by the server from a knowledge revision the model saw in this turn; the model only picks which."""
+    block_id: OpaqueId
+    type: Literal["knowledge_card"]
+    schema_version: Literal[1]
+    title: Annotated[str, StringConstraints(min_length=1, max_length=300, pattern=r"\S")]
+    fields: Annotated[tuple[KnowledgeCardField, ...], Field(min_length=1, max_length=8)]
+    source_url: Annotated[str, StringConstraints(max_length=2000, pattern=r"^https://\S+$")] | None = None
+    document_id: OpaqueId
+    revision: PositiveRevision
+    updated_at: UtcDatetime
+
+
 QuestionBlock = Annotated[
     AssessmentQuestionBlockV1 | AssessmentQuestionBlockV2, Field(discriminator="schema_version")
 ]
@@ -394,7 +413,8 @@ ClarificationBlock = Annotated[
     AssessmentClarificationBlockV1 | AssessmentClarificationBlockV2, Field(discriminator="schema_version")
 ]
 TypedBlock = Annotated[
-    TextBlock | MarkdownBlock | SuggestionsBlock | QuestionBlock | ClarificationBlock | PersonalityCardBlock,
+    TextBlock | MarkdownBlock | SuggestionsBlock | QuestionBlock | ClarificationBlock | PersonalityCardBlock
+    | KnowledgeCardBlock,
     Field(discriminator="type"),
 ]
 

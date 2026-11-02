@@ -285,6 +285,263 @@ paths:
                 $ref: ../public/result-api.yaml#/components/schemas/ShareCardEnvelope
         default:
           $ref: '#/components/responses/RuntimeError'
+  /agent-snapshots:validate:
+    post:
+      operationId: internalValidateAgentSnapshot
+      summary: Validate an agent config exactly as the runtime would load it
+      description: |
+        Studio as a service (`X-Internal-Caller: sda-studio-api`, claims `caller_type=studio_service`,
+        `purpose=agent.validate`, no `owner_id`, keyring `RUNTIME_STUDIO_KEYRING`). Checks the agent.snapshot.v1 schema
+        and its references (knowledge bases, display fields, allowed activity profiles). An invalid config is still
+        200 with `valid=false` and `issues`; 422 INVALID_INPUT is only for a malformed request body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [content]
+              properties:
+                content: {type: object, additionalProperties: true}
+      responses:
+        '200':
+          description: Validation report bound to the canonical hash of the content.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [valid, content_hash, issues]
+                    properties:
+                      valid: {type: boolean}
+                      content_hash: {type: string}
+                      issues:
+                        type: array
+                        items:
+                          type: object
+                          required: [path, code, message]
+                          properties:
+                            path: {type: string}
+                            code: {type: string}
+                            message: {type: string}
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /experience-validations:run:
+    post:
+      operationId: internalRunExperienceValidation
+      summary: Validate a captured Experience definition snapshot and store the report
+      description: |
+        Studio as a service (`purpose=experience.validate`; see /agent-snapshots:validate for the token). The body
+        is SnapshotCommandInput (experience-validation-api.yaml) plus the exact definition Studio captured. A
+        content_hash that is not the RFC 8785 hash of `definition` is 409 CONFLICT_REVISION before any work; the
+        runtime keeps no drafts, so expected_revision is recorded, not checked. The same idempotency_key returns
+        the stored report; reusing it for another hash or revision is 409 CONFLICT_IDEMPOTENCY_KEY. Reports are
+        held in bounded process memory: they do not survive a restart, and a later verify then fails closed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExperienceSnapshotCommand'
+      responses:
+        '200':
+          description: The validation report (status may be failed or unsupported).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: ../public/experience-validation-api.yaml#/components/schemas/ValidationReport
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /experience-evaluations:run:
+    post:
+      operationId: internalRunExperienceEvaluation
+      summary: Replay the golden cases of a captured Experience definition snapshot and store the report
+      description: |
+        Same caller, body, hash, idempotency and storage rules as /experience-validations:run, with
+        `purpose=experience.evaluate`. Cases replay on the runtime selector and scorer. The report may carry
+        report-level `issues` (validation failures, no mandatory case) in addition to per-case issues.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExperienceSnapshotCommand'
+      responses:
+        '200':
+          description: The evaluation report (status may be failed or unsupported).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: ../public/experience-validation-api.yaml#/components/schemas/EvaluationReport
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /experience-reports:verify:
+    post:
+      operationId: internalVerifyExperienceReports
+      summary: Publish gate for an Experience release
+      description: |
+        Studio as a service (`purpose=experience.verify`). Mirrors studio-api PublishReportInput. Verified only when
+        both reports are stored here, the validation report passed, the evaluation report has mandatory_passed
+        (non-mandatory case failures do not block), and both match experience_id, definition_hash, schema and
+        engine version. Anything else is 200 with verified=false and a reason.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [experience_id, definition_hash, definition_schema_version, engine_version, validation_id,
+                evaluation_id]
+              properties:
+                experience_id: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+                definition_hash: {type: string, pattern: '^sha256:[a-f0-9]{64}$'}
+                definition_schema_version: {type: string, minLength: 1}
+                engine_version: {type: string, minLength: 1}
+                validation_id: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+                evaluation_id: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+      responses:
+        '200':
+          description: Gate verdict.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [verified, reason]
+                    properties:
+                      verified: {type: boolean}
+                      reason: {type: string, nullable: true}
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /knowledge/retrieval:
+    post:
+      operationId: internalRetrieveKnowledge
+      tags:
+        - Knowledge
+      summary: Tìm kiếm trong knowledge base (hình dạng External Knowledge API của Dify)
+      description: >-
+        Tìm kết hợp vector + từ khoá trên revision đang active của từng document, lọc theo metadata
+        (chỉ field filterable). Mỗi record là một chunk; top_k đếm theo chunk, mỗi document tối đa
+        max_chunks_per_doc chunk. Điểm từ khoá là tỉ lệ từ (không dấu) của câu hỏi có trong chunk, kể cả heading.
+        degraded=true khi không embed được câu hỏi (chỉ dùng điểm từ khoá).
+        Ví dụ đầy đủ ở contracts/fixtures/knowledge-retrieval.json.
+        Caller: Studio as a service (`X-Internal-Caller: sda-studio-api`, claims `caller_type=studio_service`,
+        `purpose=knowledge.retrieval`, no `owner_id`, keyring `RUNTIME_STUDIO_KEYRING`). Studio tokens are rejected
+        with 403 on every other route, and student tokens with 403 on every service route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [knowledge_id, query]
+              properties:
+                knowledge_id: {type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+                query: {type: string, minLength: 1, maxLength: 300}
+                retrieval_setting:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    top_k: {type: integer, minimum: 1, maximum: 20, default: 4}
+                    score_threshold: {type: number, minimum: 0, maximum: 1, default: 0}
+                    semantic_weight: {type: number, minimum: 0, maximum: 1, default: 0.7}
+                    max_chunks_per_doc: {type: integer, minimum: 1, maximum: 10, default: 3}
+                metadata_condition:
+                  type: object
+                  additionalProperties: false
+                  required: [conditions]
+                  properties:
+                    logical_operator: {type: string, enum: [and, or], default: and}
+                    conditions:
+                      type: array
+                      minItems: 1
+                      maxItems: 10
+                      items:
+                        type: object
+                        additionalProperties: false
+                        required: [name, comparison_operator]
+                        properties:
+                          name: {type: string}
+                          comparison_operator:
+                            type: string
+                            enum: [is, is not, contains, not contains, start with, end with, empty, not empty,
+                                   '=', '≠', '>', '<', '≥', '≤', before, after]
+                          value:
+                            oneOf:
+                              - {type: string}
+                              - {type: number}
+                              - {type: array, items: {type: string}}
+      responses:
+        '200':
+          description: Các record khớp, điểm cao trước.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [records, degraded]
+                    properties:
+                      degraded: {type: boolean}
+                      records:
+                        type: array
+                        items:
+                          type: object
+                          required: [content, score, title, metadata]
+                          properties:
+                            content: {type: string}
+                            score: {type: number, minimum: 0, maximum: 1}
+                            title: {type: string}
+                            metadata: {type: object}
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /knowledge/index-runs:
+    post:
+      operationId: internalStartKnowledgeIndexRun
+      tags:
+        - Knowledge
+      summary: Bắt đầu một lượt index các revision đang chờ (không chờ hoàn tất)
+      description: >-
+        Chỉ Studio service (`X-Internal-Caller: sda-studio-api`, `purpose=knowledge.index`, không có `owner_id`).
+        Body phải đúng `{}`. Trả 202 ngay; `already_running` nghĩa là một lượt đang chạy và sẽ chạy thêm một vòng.
+        Một lượt xử lý hàng đợi của mọi knowledge base (không có tham số KB). Runtime cũng tự chạy một lượt khi
+        khởi động.
+        503 `SERVICE_UNAVAILABLE` (`kind=not_configured`) khi RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL chưa được cấu hình.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, additionalProperties: false, maxProperties: 0}
+      responses:
+        '202':
+          description: Đã nhận yêu cầu.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [status]
+                    properties:
+                      status: {type: string, enum: [started, already_running]}
+        default:
+          $ref: '#/components/responses/RuntimeError'
+
 components:
   securitySchemes:
     InternalCallerContext:
@@ -321,6 +578,17 @@ components:
         minimum: 1
         maximum: 9007199254740991
   schemas:
+    ExperienceSnapshotCommand:
+      description: SnapshotCommandInput (experience-validation-api.yaml) plus the experience id and captured definition.
+      type: object
+      required: [experience_id, definition, expected_revision, content_hash, idempotency_key]
+      properties:
+        experience_id: {type: string, minLength: 1, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+        definition: {type: object, additionalProperties: true, description: Exact captured definition snapshot.}
+        expected_revision: {type: integer, minimum: 0, maximum: 9007199254740991}
+        content_hash: {type: string, pattern: '^sha256:[a-f0-9]{64}$'}
+        idempotency_key: {type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'}
+      additionalProperties: false
     AgentSnapshotV1:
       $ref: ../schemas/session-lifecycle.yaml#/components/schemas/AgentSnapshotV1
     ReleaseDescriptor:

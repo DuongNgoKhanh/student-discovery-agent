@@ -4,6 +4,7 @@ Pure apart from the injected engine/Product calls in ``plan_message_turn``; no D
 validates a call against the preflight snapshot and records it; every state change is committed afterwards
 under the parent lock by ``TurnStore.commit_message``.
 """
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -11,11 +12,12 @@ from typing import Any
 from uuid import uuid4
 
 from agent_runtime.agent.catalog import StartAssessmentParams, render_placeholders
+from agent_runtime.agent.knowledge_tools import KnowledgeTools
 from agent_runtime.agent.loop import AgentTurn
 from agent_runtime.agent.model import AssistantMessage, ChatMessage, UserMessage
 from agent_runtime.agent.prompt import AgentContext, AssessmentPhase
 from agent_runtime.sessions.errors import RuntimeSessionError
-from agent_runtime.sessions.schemas.activity import ActivityRecord, TextBlock, TypedBlock
+from agent_runtime.sessions.schemas.activity import ActivityRecord, KnowledgeCardBlock, TextBlock, TypedBlock
 from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.conversation import ConversationRecord
 from agent_runtime.sessions.schemas.history import MessageView
@@ -81,6 +83,8 @@ def _block_text(block) -> str | None:
         return "[Hệ thống hỏi lại để xác nhận đáp án]"
     if block.type == "personality_card":
         return f"[Hệ thống hiển thị thẻ kết quả: {block.data.house.name}]"
+    if block.type == "knowledge_card":
+        return f"[Hệ thống hiển thị: {block.title}]"
     return None  # suggestions are UI affordances, not conversation
 
 
@@ -101,14 +105,28 @@ def chat_history(views: Sequence[MessageView]) -> list[ChatMessage]:
                 history.append(AssistantMessage("\n".join(parts)))
     return history
 
+logger = logging.getLogger(__name__)
+
 
 class SnapshotToolExecutor:
     """Checks each call against the captured snapshot; results are what the model sees."""
 
-    def __init__(self, snapshot: MessageSnapshot):
+    def __init__(self, snapshot: MessageSnapshot, knowledge: KnowledgeTools | None = None):
         self.snapshot = snapshot
+        self.knowledge = knowledge
+
+    def cards(self) -> tuple[KnowledgeCardBlock, ...]:
+        return self.knowledge.cards() if self.knowledge else ()
 
     def execute(self, name: str, arguments: ContractModel) -> Mapping[str, Any]:
+        if name in {"knowledge.search", "knowledge.show"}:
+            if self.knowledge is None:
+                return {"error": "knowledge_unavailable"}
+            try:  # a knowledge failure never fails the turn: the model sees an error result instead
+                return self.knowledge.search(arguments) if name == "knowledge.search" else self.knowledge.show(arguments)
+            except Exception as error:
+                logger.warning("knowledge tool %s failed: %s", name, type(error).__name__)
+                return {"error": "knowledge_unavailable"}
         snapshot, current = self.snapshot, phase(self.snapshot)
         if name == "assessment.start":
             binding = snapshot.agent.tool(name)
@@ -137,7 +155,8 @@ class SnapshotToolExecutor:
             if snapshot.result_card is None:
                 return {"error": "no_result", "phase": current}
             card = snapshot.result_card
-            return {"house": card["house"]["name"], "strengths": card["strengths"], "tendencies": card["tendencies"],
+            return {"house": card["house"]["name"], "house_id": card["house"]["house_id"],
+                    "strengths": card["strengths"], "tendencies": card["tendencies"],
                     "career_groups": card["career_groups"], "quote": card["quote"]}
         return {"error": "unsupported_tool"}
 
@@ -146,11 +165,19 @@ def _text(content: str) -> TextBlock:
     return TextBlock(block_id=uuid4().hex, type="text", schema_version=1, content=content)
 
 
+def _with_cards(blocks: tuple[TypedBlock, ...], cards: tuple[KnowledgeCardBlock, ...]) -> tuple[TypedBlock, ...]:
+    """Cards follow the agent's lead-in and precede its suggestions; a handoff block is appended after both."""
+    split = next((index for index, block in enumerate(blocks) if block.type == "suggestions"), len(blocks))
+    return (*blocks[:split], *cards, *blocks[split:])
+
+
 def plan_message_turn(snapshot: MessageSnapshot, turn: AgentTurn, request: MessageTurnInput, *,
-                      handler, persistence) -> MessagePlan:
+                      handler, persistence, cards: tuple[KnowledgeCardBlock, ...] = ()) -> MessagePlan:
     """Turn an agent turn into server blocks and one activity change. Engine/Product calls run here,
     outside any transaction; ``handler`` is the TurnHandler, ``persistence`` the ActivityPersistence."""
-    blocks, handoff = turn.blocks, turn.handoff
+    # A template fallback has no lead-in from the model, so cards would stand alone out of context.
+    blocks = _with_cards(turn.blocks, cards if turn.fallback is None else ())
+    handoff = turn.handoff
     if handoff is None:
         return MessagePlan(blocks)
     agent, activity = snapshot.agent, snapshot.activity

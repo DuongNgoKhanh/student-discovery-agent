@@ -1,0 +1,72 @@
+{
+  "description": "content_hash parity between agent_runtime.knowledge.hashing and studio-api knowledgeContentHash. Python is the reference; regenerate hash values with the snippet in the Knowledge Studio plan, Task 3.",
+  "cases": [
+    {
+      "name": "vietnamese",
+      "title": "Trường Đại học Công nghệ — Học phí",
+      "body": "# Học phí\n\nNăm nhất: 25.000.000 đ/năm",
+      "source_url": "https://ihrd.vn/hutech",
+      "metadata": {
+        "f_province": "Hồ Chí Minh",
+        "f_houses": [
+          "S",
+          "E"
+        ]
+      },
+      "hash": "sha256:40bef870535360ec13d58ec088bbec42783bb86c1a7d7aa76cbc20fad4b3668b"
+    },
+    {
+      "name": "null-source-empty-metadata",
+      "title": "T",
+      "body": "",
+      "source_url": null,
+      "metadata": {},
+      "hash": "sha256:bb4957d61f82d91bda4a8da4fe191c564c7ad072432aa7ce8e84726a39140615"
+    },
+    {
+      "name": "numbers",
+      "title": "Số",
+      "body": "x",
+      "source_url": null,
+      "metadata": {
+        "f_fee": 25.0,
+        "f_ratio": 0.1,
+        "f_big": 1e+21,
+        "f_small": 1e-07,
+        "f_int": 42
+      },
+      "hash": "sha256:eab9143351ccb029fdc082a8e07a22cf20d51f0eba45a48a420457e36ce25455"
+    },
+    {
+      "name": "utf16-key-order",
+      "title": "Keys",
+      "body": "x",
+      "source_url": null,
+      "metadata": {
+        "f_ﬀ": "4",
+        "f_😀": "3",
+        "f_é": "2",
+        "f_z": "1"
+      },
+      "hash": "sha256:0f92707ee69c768c37c37d2aca6d5011a17d2afec247a879ebeac09a62a2dca0"
+    },
+    {
+      "name": "nfd-is-not-normalized",
+      "title": "Hoà",
+      "body": "Hoà hòng",
+      "source_url": null,
+      "metadata": {},
+      "hash": "sha256:4041ac2f2e564515ececa1085a48033af5c0f2b8f9ec2b17250d21182bbcebc0"
+    },
+    {
+      "name": "escapes",
+      "title": "Ghi chú \"đặc biệt\"",
+      "body": "dòng 1\ndòng\t2 \u0001 \\ /",
+      "source_url": "http://example.com/a?b=1&c=2",
+      "metadata": {
+        "f_note": "a\"b"
+      },
+      "hash": "sha256:ac9af48ba17bce6c6401f441ccdc2efdbe5f40f60513c8908144539603b721b1"
+    }
+  ]
+}

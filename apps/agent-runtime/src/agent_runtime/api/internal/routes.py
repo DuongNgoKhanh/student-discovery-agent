@@ -1,11 +1,16 @@
-"""Nine synchronous operations; FastAPI dispatches all service/DB work to its pool."""
+"""Ten synchronous operations; FastAPI dispatches all service/DB work to its pool."""
 import re
 
 from fastapi import APIRouter, Request
 from pydantic import ValidationError
 from starlette.responses import StreamingResponse
 
+from agent_runtime.evaluations.schemas.validation import ExperienceSnapshotCommand, PublishReportInput
+from agent_runtime.evaluations.services.publish_gate import IdempotencyConflict
+from agent_runtime.evaluations.services.runner import SnapshotHashMismatch
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
+from agent_runtime.knowledge.filters import FilterError
+from agent_runtime.knowledge.schemas import KnowledgeUnavailable, RetrievalRequest
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import ServiceResponse
 from agent_runtime.sessions.schemas.conversation import CreateConversationInput, EndConversationInput
@@ -135,3 +140,68 @@ def read_share_card(request: Request, result_id: str):
     response = _service(request, "results").read_share_card(request.state.caller, _id(result_id),
         expected_result_revision=_integer(query.get("expected_result_revision")))
     return success(response, *request.state.meta)
+
+
+@router.post("/knowledge/retrieval", operation_id="internalRetrieveKnowledge")
+def retrieve_knowledge(request: Request):
+    _query(request, ())
+    data = _input(request, RetrievalRequest)
+    try:
+        result = _service(request, "knowledge").retrieve(data)
+    except FilterError:
+        raise RuntimeSessionError(422, "INVALID_INPUT") from None
+    if isinstance(result, KnowledgeUnavailable):
+        if result.reason == "not_found":
+            raise RuntimeSessionError(404, "RESOURCE_NOT_FOUND")
+        raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"})
+    return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)
+
+
+@router.post("/agent-snapshots:validate", operation_id="internalValidateAgentSnapshot")
+def validate_agent_snapshot(request: Request):
+    _query(request, ())
+    data = read_strict_json(request.state.raw_body)
+    if not isinstance(data, dict) or set(data) != {"content"}:
+        raise RuntimeSessionError(422, "INVALID_INPUT")
+    result = _service(request, "agent_validation").validate(data["content"])
+    return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)
+
+
+@router.post("/knowledge/index-runs", status_code=202, operation_id="internalStartKnowledgeIndexRun")
+def start_knowledge_index_run(request: Request):
+    _query(request, ())
+    if read_strict_json(request.state.raw_body) != {}:
+        raise RuntimeSessionError(422, "INVALID_INPUT")
+    status = _service(request, "knowledge_indexer").request()
+    return success(ServiceResponse(status=202, data={"status": status}), *request.state.meta)
+
+
+def _snapshot_run(request, store):
+    _query(request, ())
+    command = _input(request, ExperienceSnapshotCommand)
+    try:
+        report = store(_service(request, "evaluations"), command)
+    except SnapshotHashMismatch:
+        raise RuntimeSessionError(409, "REVISION_CONFLICT") from None
+    except IdempotencyConflict:
+        raise RuntimeSessionError(409, "IDEMPOTENCY_KEY_COLLISION") from None
+    return success(ServiceResponse(status=200, data=report.model_dump(mode="json")), *request.state.meta)
+
+
+@router.post("/experience-validations:run", operation_id="internalRunExperienceValidation")
+def run_experience_validation(request: Request):
+    return _snapshot_run(request, lambda service, command: service.validate_and_store(command))
+
+
+@router.post("/experience-evaluations:run", operation_id="internalRunExperienceEvaluation")
+def run_experience_evaluation(request: Request):
+    return _snapshot_run(request, lambda service, command: service.evaluate_and_store(command))
+
+
+@router.post("/experience-reports:verify", operation_id="internalVerifyExperienceReports")
+def verify_experience_reports(request: Request):
+    _query(request, ())
+    data = _input(request, PublishReportInput)
+    verdict = _service(request, "evaluations").verify_publish_gate(data)
+    return success(ServiceResponse(status=200, data={"verified": verdict.verified, "reason": verdict.reason}),
+                   *request.state.meta)

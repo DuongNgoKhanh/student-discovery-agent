@@ -203,15 +203,18 @@ export function createMockTransport(options: MockTransportOptions = {}): MockTra
   function turnResponse(conv: MockConversation, blocks: unknown[]): RawResponse {
     return {
       status: 200,
+      // Response của POST /messages (contracts/openapi/public/conversation-api.yaml).
       body: successEnvelope(200, {
+        id: nextId('resp'),
         conversation_id: conv.id,
-        schema_version: 1,
+        status: 'completed',
         revision: conv.revision,
-        turn_id: nextId('turn'),
-        message_id: nextId('msg'),
-        committed_at: '2026-10-14T03:00:00Z',
+        input_message_id: nextId('msg'),
+        output: { message_id: nextId('msg'), blocks },
         activity: conv.activity ? activityView(conv, conv.activity) : null,
-        blocks,
+        error: null,
+        created_at: '2026-10-14T03:00:00Z',
+        completed_at: '2026-10-14T03:00:00Z',
       }),
     };
   }
@@ -529,6 +532,15 @@ export function createMockTransport(options: MockTransportOptions = {}): MockTra
     return turnResponse(conv, blocks);
   }
 
+  /** Body /messages → dạng turn nội bộ của mock: một content part, text hoặc interaction. */
+  function fromMessageBody(body: Record<string, unknown>): Record<string, unknown> {
+    const { content, ...base } = body;
+    const part = (Array.isArray(content) ? content[0] : null) as Record<string, unknown> | null;
+    if (!part) return base;
+    if (part.type === 'text') return { ...base, type: 'message', content: { text: part.text } };
+    return { ...base, ...part, type: 'interaction' };
+  }
+
   async function request(
     method: 'GET' | 'POST',
     path: string,
@@ -539,8 +551,8 @@ export function createMockTransport(options: MockTransportOptions = {}): MockTra
 
     if (method === 'POST' && path === 'conversations') return handleCreate(payload);
 
-    const turnMatch = /^conversations\/([^/]+)\/turns$/.exec(path);
-    if (method === 'POST' && turnMatch) return handleTurn(turnMatch[1]!, payload);
+    const turnMatch = /^conversations\/([^/]+)\/messages$/.exec(path);
+    if (method === 'POST' && turnMatch) return handleTurn(turnMatch[1]!, fromMessageBody(payload));
 
     const readMatch = /^conversations\/([^/]+)$/.exec(path);
     if (method === 'GET' && readMatch) return handleRead(readMatch[1]!);

@@ -1,0 +1,19 @@
+{
+  "knowledge.search": {
+    "knowledge_base_id": "kb-demo",
+    "top_k": 4,
+    "auto_filter_fields": ["f01", "f02", "f03", "f04", "f05", "f06", "f07", "f08", "f09", "f10"]
+  },
+  "knowledge.show": {
+    "display": [
+      {"field": "f01", "label": "Nhãn 1"},
+      {"field": "f02", "label": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"},
+      {"field": "f03", "label": "f03"},
+      {"field": "f04", "label": "Nhãn 4"},
+      {"field": "f05", "label": "Nhãn 5"},
+      {"field": "f06", "label": "Nhãn 6"},
+      {"field": "f07", "label": "Nhãn 7"},
+      {"field": "f08", "label": "Nhãn 8"}
+    ]
+  }
+}

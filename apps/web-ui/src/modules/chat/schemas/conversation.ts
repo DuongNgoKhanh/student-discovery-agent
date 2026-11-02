@@ -20,19 +20,26 @@ export const conversationViewSchema = z
 
 export type ConversationView = z.infer<typeof conversationViewSchema>;
 
-/** Dữ liệu trong `data` của một turn sau khi server commit. `blocks` còn ở dạng thô. */
-export const turnResultSchema = z
+/**
+ * `data` của POST /conversations/{id}/messages và GET /responses/{id}
+ * (contracts/openapi/public/conversation-api.yaml). `activity` là bản gọn, có thể thiếu `answers`.
+ */
+export const messageResponseSchema = z
   .object({
+    id: idSchema,
     conversation_id: idSchema,
-    schema_version: z.literal(1),
+    status: z.enum(['in_progress', 'completed', 'failed', 'cancelled']),
     revision: z.number().int().min(0),
-    turn_id: idSchema,
-    message_id: idSchema,
-    committed_at: z.string(),
-    activity: activityViewSchema.nullable(),
-    blocks: z.array(z.unknown()).min(1),
+    output: z
+      .object({ message_id: idSchema, blocks: z.array(z.unknown()).min(1) })
+      .passthrough()
+      .nullable(),
+    activity: z.unknown().nullable().optional(),
+    error: z.object({ code: z.string().min(1) }).passthrough().nullable().optional(),
   })
   .passthrough();
+
+export type MessageResponse = z.infer<typeof messageResponseSchema>;
 
 export const conversationCreatedSchema = z
   .object({
@@ -56,17 +63,6 @@ export interface CreatedConversation {
   conversation: ConversationView;
   messageId: string;
   blocks: RenderableBlock[];
-}
-
-export function toTurnResult(raw: z.infer<typeof turnResultSchema>): TurnResult {
-  return {
-    conversationId: raw.conversation_id,
-    revision: raw.revision,
-    turnId: raw.turn_id,
-    messageId: raw.message_id,
-    activity: raw.activity,
-    blocks: raw.blocks.map(parseBlock),
-  };
 }
 
 export function toCreatedConversation(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseBlock } from './blocks';
+import { parseBlock, progressLabel } from './blocks';
 import { DEMO_CARD_DATA, FIXTURE_QUESTIONS } from '../fixtures';
 
 const questionBlock = {
@@ -67,8 +67,21 @@ describe('parseBlock', () => {
     expect(result.kind).toBe('unsupported');
   });
 
-  it('progress không phải tổng 6 bị coi là không tương thích', () => {
-    const result = parseBlock({ ...questionBlock, progress: { completed: 0, total: 5 } });
+  it('progress sai kiểu bị coi là không tương thích', () => {
+    const result = parseBlock({ ...questionBlock, progress: { completed: -1, total: 6 } });
+    expect(result.kind).toBe('unsupported');
+  });
+
+  it('nhận câu hỏi adaptive v2 khi tổng số câu chưa chốt', () => {
+    const progress = { completed: 2, min_total: 12, max_total: 15, total: null, phase: 'baseline' };
+    const result = parseBlock({ ...questionBlock, schema_version: 2, progress });
+    expect(result.kind).toBe('known');
+    expect(progressLabel(progress)).toBe('2/12–15');
+    expect(progressLabel({ completed: 3, total: 6 })).toBe('3/6');
+  });
+
+  it('block không phải câu hỏi vẫn chỉ nhận schema_version 1', () => {
+    const result = parseBlock({ block_id: 'b1', type: 'text', schema_version: 2, content: 'x' });
     expect(result.kind).toBe('unsupported');
   });
 

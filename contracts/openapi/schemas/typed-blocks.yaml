@@ -300,6 +300,46 @@ components:
         - result_revision
         - data
       additionalProperties: true
+    KnowledgeCardField:
+      type: object
+      properties:
+        label: {type: string, minLength: 1, maxLength: 60, pattern: \S}
+        value: {type: string, minLength: 1, maxLength: 500, pattern: \S}
+      required: [label, value]
+      additionalProperties: false
+    KnowledgeCardBlock:
+      type: object
+      properties:
+        block_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        type:
+          type: string
+          enum:
+            - knowledge_card
+        schema_version:
+          type: integer
+          enum:
+            - 1
+        title: {type: string, minLength: 1, maxLength: 300, pattern: \S}
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeCardField'
+          minItems: 1
+          maxItems: 8
+        source_url: {type: string, nullable: true, maxLength: 2000, pattern: '^https://\S+$'}
+        document_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        revision: {type: integer, minimum: 1, maximum: 9007199254740991}
+        updated_at: {type: string, format: date-time}
+      required: [block_id, type, schema_version, title, fields, document_id, revision, updated_at]
+      additionalProperties: true
+      description: Server dựng từ revision knowledge mà model đã thấy trong lượt; value là chuỗi đã định dạng. Server hạ về
+        markdown v1 (rồi text v1) nếu client không khai báo knowledge_card trong supported_blocks.
     TypedBlock:
       oneOf:
       - $ref: '#/components/schemas/TextBlock'
@@ -310,6 +350,7 @@ components:
       - $ref: '#/components/schemas/PersonalityCardBlock'
       - $ref: '#/components/schemas/AssessmentQuestionBlockV2'
       - $ref: '#/components/schemas/AssessmentClarificationBlockV2'
+      - $ref: '#/components/schemas/KnowledgeCardBlock'
       discriminator:
         propertyName: type
         mapping:
@@ -319,6 +360,7 @@ components:
           assessment_question: '#/components/schemas/AssessmentQuestionBlockVersions'
           assessment_clarification: '#/components/schemas/AssessmentClarificationBlockVersions'
           personality_card: '#/components/schemas/PersonalityCardBlock'
+          knowledge_card: '#/components/schemas/KnowledgeCardBlock'
       description: Backend validates every block. IDs/version ổn định qua replay/history; text không thực thi HTML.
         Unknown block/version → incompatibility có kiểm soát trước submit tiếp.
     AssessmentQuestionBlockV2:

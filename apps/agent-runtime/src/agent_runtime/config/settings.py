@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,21 +19,45 @@ class Settings(BaseSettings):
     RUNTIME_CONTENT_RETENTION_SECONDS: int = 86400
     RUNTIME_TRACE_RETENTION_SECONDS: int = 86400
     RUNTIME_INTERNAL_KEYRING: SecretStr | None = None
+    # Studio service tokens (issuer sda-studio-api); same JSON {kid: base64} format, keys distinct from students'.
+    RUNTIME_STUDIO_KEYRING: SecretStr | None = None
     RUNTIME_CURSOR_SIGNING_KEY: SecretStr | None = None
     RUNTIME_INTERNAL_TOKEN_MAX_AGE_SECONDS: int = 60
     # Local development only: read active releases from this directory instead of Product.
     RUNTIME_LOCAL_RELEASES_DIR: str | None = None
+    # Where the active agent comes from: "local" reads RUNTIME_LOCAL_RELEASES_DIR/agent.json, "product" asks studio-api.
+    RUNTIME_AGENT_RELEASE_SOURCE: Literal["local", "product"] = "product"
+    RUNTIME_PRODUCT_URL: str | None = None
+    # Canonical padded standard Base64, >=32 decoded bytes; distinct from every other runtime key.
+    RUNTIME_PRODUCT_SIGNING_KEY: SecretStr | None = None
+    RUNTIME_PRODUCT_SIGNING_KID: str = "runtime"
 
     # Gemini / embeddings
     GOOGLE_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
+    # OpenAI-compatible vLLM endpoint (or a LiteLLM proxy in front of it): chat provider `vllm` and vLLM embeddings
+    VLLM_API_KEY: str = ""
+    VLLM_BASE_URL: str = ""
     GOOGLE_CLOUD_PROJECT: str = ""
     GOOGLE_CLOUD_LOCATION: str = ""
     GOOGLE_EMBEDDING_MODEL: str = "text-embedding-004"
+    # Knowledge bases: comma-separated ids from infrastructure/llm/embedding_registry.py that this runtime serves;
+    # each KB picks one. gemini-embedding-2 ignores GOOGLE_EMBEDDING_MODEL, which belongs to legacy helpers.
+    KNOWLEDGE_EMBEDDING_MODELS: str = "gemini-embedding-2"
+    KNOWLEDGE_RETRIEVAL_TIMEOUT_MS: int = 1500
+    # On-demand indexing started by Studio: kb_indexer role URL (chunks/embeddings only); unset disables it.
+    RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL: SecretStr | None = None
+    RUNTIME_KNOWLEDGE_INDEXER_BATCH_SIZE: int = 20
+    # Offline demo embedding for on-demand indexing (never production); mirrors the CLI --fake-embedding flag.
+    RUNTIME_KNOWLEDGE_FAKE_EMBEDDING: bool = False
 
     # Optional outbound proxy
     PROXY_HOST: str | None = None
     PROXY_PORT: int | None = None
+
+    @property
+    def KNOWLEDGE_EMBEDDING_MODEL_IDS(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(item.strip() for item in self.KNOWLEDGE_EMBEDDING_MODELS.split(",") if item.strip()))
 
     @property
     def PROXY_URL(self) -> str | None:

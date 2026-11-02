@@ -12,7 +12,13 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from agent_runtime.agent.catalog import TOOL_DECLARATIONS, SuggestRepliesArguments, ToolDeclaration, json_schema
+from agent_runtime.agent.catalog import (
+    NO_CONTEXT,
+    TOOL_DECLARATIONS,
+    SuggestRepliesArguments,
+    ToolContext,
+    ToolDeclaration,
+)
 from agent_runtime.agent.model import (
     AssistantMessage,
     ChatMessage,
@@ -33,6 +39,7 @@ from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.services.blocks import markdown_to_text
 
 Fallback = UnavailableReason | Literal["max_tool_steps", "empty_reply", "deadline"]
+_BUSY = frozenset({"rate_limited", "timeout", "provider_error", "deadline"})
 
 
 @dataclass(frozen=True)
@@ -77,13 +84,13 @@ class _Offered:
     definition: ToolDefinition
 
 
-def offered_tools(snapshot: AgentSnapshotV1) -> dict[str, _Offered]:
+def offered_tools(snapshot: AgentSnapshotV1, context: ToolContext = NO_CONTEXT) -> dict[str, _Offered]:
     offered = {}
     for binding in snapshot.tools:
         declaration = TOOL_DECLARATIONS[(binding.name, binding.version)]
         offered[binding.name] = _Offered(declaration, ToolDefinition(
-            name=binding.name, description=declaration.describe(binding.params, binding.description),
-            parameters=json_schema(declaration.arguments_model)))
+            name=binding.name, description=declaration.describe(binding.params, binding.description, context),
+            parameters=declaration.parameters(binding.params, context)))
     return offered
 
 
@@ -101,8 +108,9 @@ def _text_block(block_id: str, text: str, allowed_domains: tuple[str, ...]) -> T
 def _fallback(snapshot: AgentSnapshotV1, reason: Fallback, new_id: Callable[[], str], steps: int,
               usage: ModelUsage) -> AgentTurn:
     templates = snapshot.templates
-    blocks: list[TypedBlock] = [TextBlock(block_id=new_id(), type="text", schema_version=1,
-                                          content=templates.unknown_message)]
+    # Only a reply the agent could not use means "not understood"; the rest are on our side and worth a retry.
+    content = templates.busy_message if reason in _BUSY else templates.unknown_message
+    blocks: list[TypedBlock] = [TextBlock(block_id=new_id(), type="text", schema_version=1, content=content)]
     if templates.fallback_suggestions:
         blocks.append(SuggestionsBlock(block_id=new_id(), type="suggestions", schema_version=1, items=[
             {"label": label, "message_text": label} for label in templates.fallback_suggestions]))
@@ -119,7 +127,8 @@ def run_agent_turn(snapshot: AgentSnapshotV1, model: ModelPort, executor: ToolEx
                    on_event: Callable[[AgentEvent], None] | None = None,
                    should_stop: Callable[[], bool] | None = None,
                    deadline: float | None = None,
-                   clock: Callable[[], float] = time.monotonic) -> AgentTurn:
+                   clock: Callable[[], float] = time.monotonic,
+                   tool_context: ToolContext = NO_CONTEXT) -> AgentTurn:
     emit = on_event or (lambda event: None)
     stop = should_stop or (lambda: False)
 
@@ -131,12 +140,13 @@ def run_agent_turn(snapshot: AgentSnapshotV1, model: ModelPort, executor: ToolEx
     if snapshot.model is None:
         return _fallback(snapshot, "not_configured", new_id, 0, usage)
     limits, domains = snapshot.limits, snapshot.links.allowed_domains
-    offered = offered_tools(snapshot)
+    offered = offered_tools(snapshot, tool_context)
     recent = list(history)[-limits.history_messages:] if limits.history_messages else []
     messages: list[ChatMessage] = [*system_messages(snapshot, context), *recent,
                                    UserMessage(user_text[:limits.max_input_chars])]
     definitions = [item.definition for item in offered.values()]
     suggestions: SuggestRepliesArguments | None = None
+    lead_in = ""  # the last text written alongside tool calls; used when the finishing reply has none
     for step in range(1, limits.max_tool_steps + 1):
         if stop():
             return AgentTurn((), cancelled=True, steps=step - 1, usage=usage)
@@ -170,7 +180,9 @@ def run_agent_turn(snapshot: AgentSnapshotV1, model: ModelPort, executor: ToolEx
                 break  # later calls in the same reply are dropped: the server owns what happens next
             results.append(ToolResultMessage(call.id, call.name, result))
         if handoff is not None or not reply.tool_calls:
-            return _finish(snapshot, reply.text, suggestions, handoff, new_id, step, usage, domains)
+            return _finish(snapshot, reply.text if reply.text.strip() else lead_in, suggestions, handoff, new_id, step, usage, domains)
+        if reply.text.strip():
+            lead_in = reply.text
         messages += [AssistantMessage(reply.text or None, reply.tool_calls), *results]
     return _fallback(snapshot, "max_tool_steps", new_id, limits.max_tool_steps, usage)
 

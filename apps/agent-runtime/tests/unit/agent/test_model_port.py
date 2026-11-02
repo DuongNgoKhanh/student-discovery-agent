@@ -15,6 +15,7 @@ from agent_runtime.agent.model import (
 from agent_runtime.infrastructure.llm.gemini_model import GeminiChatModel
 from agent_runtime.infrastructure.llm.model_registry import MODEL_PROVIDERS, build_model_port
 from agent_runtime.infrastructure.llm.openai_model import OpenAIChatModel
+from agent_runtime.infrastructure.llm.vllm_model import VllmChatModel
 from agent_runtime.sessions.schemas.release import AgentModelConfig
 
 SETTINGS = AgentModelConfig(ref="gemini/gemini-2.5-flash").settings()
@@ -52,6 +53,22 @@ def test_registry_builds_each_provider_only_when_its_key_is_configured():
     assert isinstance(build_model_port("gemini", config=missing), UnconfiguredModel)
     assert isinstance(build_model_port("openai", config=missing), UnconfiguredModel)
     assert isinstance(build_model_port("mistral", config=configured), UnconfiguredModel)
+
+
+def test_vllm_needs_both_a_key_and_a_base_url():
+    vllm = SimpleNamespace(VLLM_API_KEY="v", VLLM_BASE_URL="http://vllm/v1", PROXY_URL=None)
+    port = build_model_port("vllm", config=vllm)
+    assert isinstance(port, VllmChatModel) and port._base_url == "http://vllm/v1"
+    assert isinstance(build_model_port("vllm", config=SimpleNamespace(VLLM_API_KEY="v", VLLM_BASE_URL="",
+                                                                      PROXY_URL=None)), UnconfiguredModel)
+
+
+def test_model_ids_may_contain_slashes():
+    config = AgentModelConfig(ref="vllm/hosted_vllm/Qwen/Qwen3.5-35B-A3B-FP8")
+    assert (config.provider, config.model_id) == ("vllm", "hosted_vllm/Qwen/Qwen3.5-35B-A3B-FP8")
+    for ref in ("vllm/", "vllm//x", "vllm/x/", "gemini"):
+        with pytest.raises(ValueError):
+            AgentModelConfig(ref=ref)
 
 
 def test_every_supported_provider_has_an_adapter():

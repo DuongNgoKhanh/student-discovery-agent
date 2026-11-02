@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from pydantic import ConfigDict, Field, StringConstraints
 
+from agent_runtime.agent.loop import Fallback
 from agent_runtime.sessions.schemas.common import ContractModel, JsonSafeInt, UtcDatetime
 
 Reference = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=128,
@@ -18,6 +19,17 @@ EventId = Annotated[str, StringConstraints(strict=True, pattern=r"^[a-f0-9]{32}$
 CorrelationId = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")]
 Action = Literal["conversation.create", "conversation.read", "conversation.end", "conversation.turn",
                  "history.read", "activity.start", "activity.commit", "result.read", "share.read"]
+
+
+class KnowledgeSearchTrace(ContractModel):
+    """One knowledge.search of a turn: what was found and shown, never the question or the text."""
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    kb_id: Reference
+    hits: Annotated[tuple[tuple[Reference, JsonSafeInt, JsonSafeInt], ...], Field(max_length=8)]
+    shown: Annotated[tuple[Reference, ...], Field(max_length=3)]
+    degraded: bool
+    latency_ms: JsonSafeInt
+    error: Literal["knowledge_base_unavailable", "knowledge_unavailable", "invalid_filter"] | None = None
 
 
 class TraceEvent(ContractModel):
@@ -40,8 +52,13 @@ class TraceEvent(ContractModel):
     algorithm_profile: Literal["riasec.mean.bounds.v2"] | None = None
     engine_version: Reference | None = None
     latency_ms: JsonSafeInt | None = None
-    provider: Literal["openai"] | None = None
+    provider: Literal["gemini", "openai"] | None = None
     fallback: Annotated[bool, Field(strict=True)] | None = None
+    fallback_reason: Fallback | None = None
+    agent_steps: JsonSafeInt | None = None
+    input_tokens: JsonSafeInt | None = None
+    output_tokens: JsonSafeInt | None = None
+    knowledge: Annotated[tuple[KnowledgeSearchTrace, ...], Field(max_length=8)] | None = None
     timestamp: UtcDatetime
 
 
@@ -116,7 +133,8 @@ def describe_metadata(describe, subject) -> dict:
 
 
 _DESCRIBED = frozenset({"conversation_id", "activity_id", "result_id", "before_revision", "after_revision",
-                        "experience_release_id", "algorithm_profile"})
+                        "experience_release_id", "algorithm_profile", "provider", "fallback", "fallback_reason",
+                        "agent_steps", "input_tokens", "output_tokens", "knowledge"})
 
 
 def _describe(describe, response) -> dict:

@@ -1,6 +1,6 @@
 /**
  * Tầng vận chuyển thô: trả HTTP status và body JSON chưa kiểm tra.
- * Có hai cài đặt: HTTP qua BFF (dùng thật) và in-memory (mock, xem mock-transport.ts).
+ * Có hai cài đặt: HTTP qua BFF studio-api (dùng thật) và in-memory (mock, xem mock-transport.ts).
  * Tách như vậy để mock đi qua đúng đường parse envelope như API thật.
  */
 export interface RawResponse {
@@ -12,8 +12,11 @@ export interface ChatTransport {
   request(method: 'GET' | 'POST', path: string, body?: unknown): Promise<RawResponse>;
 }
 
-/** Browser chỉ gọi same-origin qua BFF (docs/templates/02_API_Client_Guideline). */
-const BFF_BASE = '/api/bff';
+/**
+ * Browser chỉ gọi same-origin: studio-api là BFF, cấp cookie owner ẩn danh `sda_owner` (Path=/api/v1)
+ * và ký caller context trước khi chuyển sang runtime.
+ */
+const BFF_BASE = '/api/v1';
 
 export const httpTransport: ChatTransport = {
   async request(method, path, body) {

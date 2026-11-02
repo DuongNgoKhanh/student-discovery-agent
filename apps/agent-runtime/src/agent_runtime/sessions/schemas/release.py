@@ -2,6 +2,7 @@
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, Field, StringConstraints, ValidationError, model_validator
+from pydantic_core import PydanticCustomError
 
 from agent_runtime.agent.catalog import (
     PLACEHOLDER,
@@ -18,16 +19,17 @@ from .common import ContentHash, ContractModel, JsonObject, NonEmptyText, Opaque
 def _known_variables(text: str) -> str:
     unknown = set(PLACEHOLDER.findall(text)) - PROMPT_VARIABLES
     if unknown:
-        raise ValueError(f"unknown prompt variables: {sorted(unknown)}")
+        raise PydanticCustomError("unknown_placeholder", "unknown prompt variables: {names}",
+                                  {"names": ", ".join(sorted(unknown))})
     leftover = PLACEHOLDER.sub("", text)
     if "{{" in leftover or "}}" in leftover:  # e.g. {{display-name}} would reach students verbatim
-        raise ValueError("malformed prompt placeholder")
+        raise PydanticCustomError("malformed_placeholder", "malformed prompt placeholder")
     return text
 
 
 def _unique(items: tuple) -> tuple:
     if len(set(items)) != len(items):
-        raise ValueError("items must be unique")
+        raise PydanticCustomError("duplicate_items", "items must be unique")
     return items
 
 
@@ -53,7 +55,8 @@ class AgentPersona(ContractModel):
 
 
 class AgentModelConfig(ContractModel):
-    ref: Annotated[str, StringConstraints(pattern=r"^[a-z0-9-]+/[A-Za-z0-9._-]+$")]
+    # provider/model_id; the model id may itself contain slashes (e.g. vllm/hosted_vllm/Qwen/Qwen3.5-35B-A3B-FP8)
+    ref: Annotated[str, StringConstraints(pattern=r"^[a-z0-9-]+(/[A-Za-z0-9._-]+)+$")]
     temperature: Annotated[float, Field(strict=True, ge=0, le=2)] = 0.4
     max_output_tokens: Annotated[int, Field(strict=True, ge=1, le=4096)] = 800
     timeout_ms: Annotated[int, Field(strict=True, ge=10000, le=30000)] = 10000  # Gemini rejects deadlines < 10s
@@ -75,7 +78,7 @@ class AgentModelConfig(ContractModel):
     @model_validator(mode="after")
     def supported_provider(self) -> "AgentModelConfig":
         if self.provider not in SUPPORTED_MODEL_PROVIDERS:
-            raise ValueError("unsupported model provider")
+            raise PydanticCustomError("unsupported_provider", "unsupported model provider", {"field": "ref"})
         return self
 
 
@@ -96,7 +99,7 @@ class AgentToolBinding(ContractModel):
     def declared(self) -> "AgentToolBinding":
         declaration = TOOL_DECLARATIONS.get((self.name, self.version))
         if declaration is None:
-            raise ValueError("tool is not declared in the runtime catalog")
+            raise PydanticCustomError("tool_not_declared", "tool is not declared in the runtime catalog")
         try:
             declaration.params_model.model_validate(self.params)
         except ValidationError as error:
@@ -122,6 +125,7 @@ class AgentLinks(ContractModel):
 
 class AgentTemplates(ContractModel):
     unknown_message: TemplateText = "Mình chưa hiểu ý bạn. Bạn thử chọn một gợi ý bên dưới nhé."
+    busy_message: TemplateText = "Hệ thống đang hơi bận, bạn gửi lại câu hỏi sau ít phút nhé."
     fallback_suggestions: Labels = ("Làm bài khám phá",)
     next_question: TemplateText = "Câu tiếp theo nhé, {{display_name}}!"
     completed: TemplateText = "Đây là kết quả của bạn!"
@@ -147,16 +151,25 @@ class AgentSnapshotV1(ContractModel):
 
     @model_validator(mode="after")
     def consistent(self) -> "AgentSnapshotV1":
+        # Whole-snapshot rules have no location of their own; ctx "field" names the one the admin should fix.
         if len(set(self.allowed_activity_profiles)) != len(self.allowed_activity_profiles):
-            raise ValueError("activity profiles must be unique")
+            raise PydanticCustomError("duplicate_items", "activity profiles must be unique",
+                                      {"field": "allowed_activity_profiles"})
         if len({binding.name for binding in self.tools}) != len(self.tools):
-            raise ValueError("a tool can be bound once")
+            raise PydanticCustomError("duplicate_tool", "a tool can be bound once", {"field": "tools"})
         start = self.tool("assessment.start")
         if start and any(item.algorithm_profile not in self.allowed_activity_profiles
                          for item in StartAssessmentParams.model_validate(start.params).experiences):
-            raise ValueError("assessment.start experiences must use allowed activity profiles")
+            raise PydanticCustomError("profile_not_allowed",
+                                      "assessment.start experiences must use allowed activity profiles",
+                                      {"field": f"tools.{self.tools.index(start)}.params.experiences"})
         if self.model and worst_case_ms(self.model.timeout_ms, self.model.max_retries) > self.limits.turn_timeout_ms:
-            raise ValueError("model timeouts and retry backoff must fit within limits.turn_timeout_ms")
+            raise PydanticCustomError("timeout_exceeds_turn",
+                                      "model timeouts and retry backoff must fit within limits.turn_timeout_ms",
+                                      {"field": "model.timeout_ms"})
+        if self.tool("knowledge.show") and not self.tool("knowledge.search"):
+            raise PydanticCustomError("show_requires_search", "knowledge.show requires knowledge.search",
+                                      {"field": "tools"})
         return self
 
 
@@ -173,7 +186,8 @@ class ReleaseDescriptor(ReleaseKey):
     def validate_kind_metadata(self) -> "ReleaseDescriptor":
         if self.kind == "agent":
             if self.delivery_schema_version != "agent.snapshot.v1":
-                raise ValueError("unsupported agent delivery schema")
+                raise PydanticCustomError("unsupported_schema", "unsupported agent delivery schema",
+                                          {"field": "delivery_schema_version"})
             if any((self.definition_schema_version, self.algorithm_profile, self.engine_version)):
                 raise ValueError("agent snapshot cannot carry experience metadata")
             AgentSnapshotV1.model_validate(self.content)

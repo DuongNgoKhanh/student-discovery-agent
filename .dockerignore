@@ -1,0 +1,23 @@
+# Root build context is used only by infra/render/*.Dockerfile. Allowlist: everything else
+# (secrets, .local-docker, tester data, XLSX, docs) never reaches the build.
+*
+!contracts/
+!infra/local-releases/experiences/
+!apps/studio-api/package.json
+!apps/studio-api/pnpm-lock.yaml
+!apps/studio-api/tsconfig.json
+!apps/studio-api/src/
+!apps/agent-runtime/requirements.txt
+!apps/agent-runtime/pyproject.toml
+!apps/agent-runtime/alembic.ini
+!apps/agent-runtime/migrations/
+!apps/agent-runtime/src/
+
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/*.egg-info
+**/.env
+**/.env.*
+apps/studio-api/src/**/*.test.ts
+apps/studio-api/src/generated/api/*.d.ts

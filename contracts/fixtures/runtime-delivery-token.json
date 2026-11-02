@@ -1,0 +1,18 @@
+{
+  "description": "Runtime -> studio-api release delivery tokens signed by agent-runtime (delivery.py); studio-api delivery-auth.ts must accept them byte for byte.",
+  "key_base64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "kid": "runtime",
+  "now": 1800000000,
+  "cases": [
+    {
+      "environment": "demo",
+      "target": "/api/v1/internal/releases/active?kind=agent&environment=demo",
+      "token": "eyJhbGciOiJIUzI1NiIsImtpZCI6InJ1bnRpbWUiLCJ0eXAiOiJzZGEtaW50ZXJuYWwrand0In0.eyJpc3MiOiJzZGEtYWdlbnQtcnVudGltZSIsImF1ZCI6InNkYS1zdHVkaW8tYXBpIiwiY2FsbGVyX3R5cGUiOiJydW50aW1lX3NlcnZpY2UiLCJwdXJwb3NlIjoicmVsZWFzZS5kZWxpdmVyeSIsImlhdCI6MTgwMDAwMDAwMCwiZXhwIjoxODAwMDAwMDYwLCJtZXRob2QiOiJHRVQiLCJyZXF1ZXN0X3RhcmdldCI6Ii9hcGkvdjEvaW50ZXJuYWwvcmVsZWFzZXMvYWN0aXZlP2tpbmQ9YWdlbnQmZW52aXJvbm1lbnQ9ZGVtbyIsImJvZHlfc2hhMjU2IjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9.CaikBZYUxEfwpyIfxVg7VihQf8M_PAxO1RUPIWglgt0"
+    },
+    {
+      "environment": "pilot đợt 1/2026",
+      "target": "/api/v1/internal/releases/active?kind=agent&environment=pilot+%C4%91%E1%BB%A3t+1%2F2026",
+      "token": "eyJhbGciOiJIUzI1NiIsImtpZCI6InJ1bnRpbWUiLCJ0eXAiOiJzZGEtaW50ZXJuYWwrand0In0.eyJpc3MiOiJzZGEtYWdlbnQtcnVudGltZSIsImF1ZCI6InNkYS1zdHVkaW8tYXBpIiwiY2FsbGVyX3R5cGUiOiJydW50aW1lX3NlcnZpY2UiLCJwdXJwb3NlIjoicmVsZWFzZS5kZWxpdmVyeSIsImlhdCI6MTgwMDAwMDAwMCwiZXhwIjoxODAwMDAwMDYwLCJtZXRob2QiOiJHRVQiLCJyZXF1ZXN0X3RhcmdldCI6Ii9hcGkvdjEvaW50ZXJuYWwvcmVsZWFzZXMvYWN0aXZlP2tpbmQ9YWdlbnQmZW52aXJvbm1lbnQ9cGlsb3QrJUM0JTkxJUUxJUJCJUEzdCsxJTJGMjAyNiIsImJvZHlfc2hhMjU2IjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9._xVHLX5-nJuwJPsn1VUkHP4FYcmUyPvwuidobI47u6M"
+    }
+  ]
+}

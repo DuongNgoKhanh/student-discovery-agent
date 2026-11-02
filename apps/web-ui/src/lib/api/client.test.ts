@@ -23,6 +23,13 @@ describe('api', () => {
     );
   });
 
+  it('getWithMeta giữ meta của envelope (pagination)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      success: true, data: { items: [1] }, meta: { pagination: { next_cursor: 'c2' } },
+    }), { status: 200 }));
+    expect(await api.getWithMeta('x')).toEqual({ data: { items: [1] }, meta: { pagination: { next_cursor: 'c2' } } });
+  });
+
   it('401 → refresh đúng một lần rồi retry với cùng body', async () => {
     const spy = vi
       .spyOn(globalThis, 'fetch')

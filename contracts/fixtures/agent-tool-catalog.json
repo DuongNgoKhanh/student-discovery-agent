@@ -1,0 +1,45 @@
+{
+  "description": "Tools agent-runtime declares (agent/catalog.py TOOL_DECLARATIONS). web-ui features/agent/model/tools.ts TOOL_CATALOG must list the same name/version pairs; both sides test against this file.",
+  "tools": [
+    {
+      "name": "assessment.start",
+      "version": 1,
+      "has_params": true
+    },
+    {
+      "name": "assessment.set_name",
+      "version": 1,
+      "has_params": false
+    },
+    {
+      "name": "assessment.current_question",
+      "version": 1,
+      "has_params": false
+    },
+    {
+      "name": "assessment.propose_answer",
+      "version": 1,
+      "has_params": false
+    },
+    {
+      "name": "result.explain",
+      "version": 1,
+      "has_params": false
+    },
+    {
+      "name": "ui.suggest_replies",
+      "version": 1,
+      "has_params": false
+    },
+    {
+      "name": "knowledge.search",
+      "version": 1,
+      "has_params": true
+    },
+    {
+      "name": "knowledge.show",
+      "version": 1,
+      "has_params": true
+    }
+  ]
+}

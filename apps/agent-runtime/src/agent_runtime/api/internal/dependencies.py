@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import functools
+import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -14,11 +15,12 @@ from starlette.requests import Request
 
 from agent_runtime.evaluations.services.validator import ExperienceValidator
 from agent_runtime.infrastructure.auth.caller import RawRequestContext
-from agent_runtime.infrastructure.auth.verifier import CallerVerifier
+from agent_runtime.infrastructure.auth.verifier import CallerVerifier, ServiceVerifier
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork, build_engine
 from agent_runtime.infrastructure.db.trace import DatabaseTraceSink
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
 from agent_runtime.infrastructure.http.trace import request_trace_context
+from agent_runtime.infrastructure.product.delivery import CompositeReleaseSource, HttpProductReleaseSource
 from agent_runtime.infrastructure.product.local_files import LocalReleaseSource
 from agent_runtime.infrastructure.product.releases import ProductUnavailable
 from agent_runtime.sessions.errors import RuntimeSessionError
@@ -38,8 +40,18 @@ from .envelopes import failure
 
 if TYPE_CHECKING:
     from agent_runtime.config.settings import Settings
+    from agent_runtime.evaluations.services.publish_gate import PublishGateService
 
+logger = logging.getLogger(__name__)
 PREFIX = "/api/v1/internal"
+SERVICE_ROUTES: dict[tuple[str, str], str] = {
+    ("POST", PREFIX + "/knowledge/retrieval"): "knowledge.retrieval",
+    ("POST", PREFIX + "/agent-snapshots:validate"): "agent.validate",
+    ("POST", PREFIX + "/knowledge/index-runs"): "knowledge.index",
+    ("POST", PREFIX + "/experience-validations:run"): "experience.validate",
+    ("POST", PREFIX + "/experience-evaluations:run"): "experience.evaluate",
+    ("POST", PREFIX + "/experience-reports:verify"): "experience.verify",
+}
 
 
 class SystemClock:
@@ -51,6 +63,7 @@ class SystemClock:
 class RuntimeContainer:
     policy: RuntimePolicy | None
     verifier: CallerVerifier | None = None
+    service_verifier: ServiceVerifier | None = None
     conversations: ConversationService | None = None
     history: HistoryService | None = None
     lifecycle: LifecycleService | None = None
@@ -59,6 +72,11 @@ class RuntimeContainer:
     responses: ResponseService | None = None
     product_ready: bool = False
     engine: object | None = None
+    knowledge: object | None = None
+    agent_validation: object | None = None
+    knowledge_indexer: object | None = None
+    knowledge_indexer_engine: object | None = None
+    evaluations: PublishGateService | None = None
 
 
 def _decode_key(value):
@@ -68,6 +86,97 @@ def _decode_key(value):
     if len(key) < 32 or base64.b64encode(key).decode("ascii") != value:
         raise ValueError
     return key
+
+
+def _build_service_verifier(settings: Settings, student_keys: dict[str, bytes]) -> ServiceVerifier | None:
+    """A bad Studio keyring disables only the Studio path; student traffic must keep working."""
+    if not settings.RUNTIME_STUDIO_KEYRING:
+        return None
+    try:
+        raw = read_strict_json(settings.RUNTIME_STUDIO_KEYRING.get_secret_value().encode("utf-8"))
+        keys = {kid: _decode_key(value) for kid, value in raw.items()}
+        if set(keys.values()) & set(student_keys.values()):
+            return None
+        return ServiceVerifier(keys, SystemClock())
+    except Exception:
+        return None
+
+
+def _other_runtime_keys(settings: Settings, student_keys: dict[str, bytes]) -> set[bytes]:
+    """Every runtime key a delivery key must differ from: student, Studio service and cursor keys."""
+    others = set(student_keys.values())
+    for secret, is_keyring in ((settings.RUNTIME_STUDIO_KEYRING, True), (settings.RUNTIME_CURSOR_SIGNING_KEY, False)):
+        if not secret:
+            continue
+        try:
+            if is_keyring:
+                raw = read_strict_json(secret.get_secret_value().encode("utf-8"))
+                others |= {_decode_key(value) for value in raw.values()}
+            else:
+                others.add(_decode_key(secret.get_secret_value()))
+        except Exception:  # an unreadable key cannot be compared, so the collision check is incomplete
+            logger.error("runtime key unreadable, delivery key collision check skips it: %s",
+                         "RUNTIME_STUDIO_KEYRING" if is_keyring else "RUNTIME_CURSOR_SIGNING_KEY")
+            continue
+    return others
+
+
+def _choose_agent_source(settings: Settings, local, student_keys: dict[str, bytes]):
+    """Local files, or the signed studio-api delivery; a missing/colliding delivery config means no agent source."""
+    if settings.RUNTIME_AGENT_RELEASE_SOURCE != "product":
+        return local
+    # Fail closed, but say why: names of settings only, never their values.
+    if not (settings.RUNTIME_PRODUCT_URL and settings.RUNTIME_PRODUCT_SIGNING_KEY):
+        logger.error("agent release source disabled: RUNTIME_PRODUCT_URL or RUNTIME_PRODUCT_SIGNING_KEY is not set")
+        return None
+    try:
+        delivery_key = _decode_key(settings.RUNTIME_PRODUCT_SIGNING_KEY.get_secret_value())
+    except Exception:
+        logger.error("agent release source disabled: RUNTIME_PRODUCT_SIGNING_KEY is not canonical base64 >=32 bytes")
+        return None
+    if delivery_key in _other_runtime_keys(settings, student_keys):
+        logger.error("agent release source disabled: RUNTIME_PRODUCT_SIGNING_KEY reuses another runtime key")
+        return None
+    return HttpProductReleaseSource(settings.RUNTIME_PRODUCT_URL, delivery_key, settings.RUNTIME_PRODUCT_SIGNING_KID)
+
+
+def _build_index_runner(settings: Settings):
+    """(runner, engine) over the separate kb_indexer database; (None, None) when unset or misconfigured.
+
+    Logs one warning with the reason only (never the URL or an exception message) when indexing is disabled.
+    """
+    if not settings.RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL:
+        logger.warning("knowledge indexing disabled: RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL is not set")
+        return None, None
+    engine = None
+    try:
+        from sqlalchemy.pool import NullPool
+
+        from agent_runtime.knowledge.index_runner import (
+            AUTO_STALE_AFTER_SECONDS,
+            KnowledgeIndexRunner,
+            build_embeddings,
+            fake_embedding_enabled,
+        )
+        from agent_runtime.knowledge.indexer import IndexerService, drain
+        embeddings = build_embeddings(settings, fake_embedding_enabled(settings))
+        if not embeddings:
+            logger.warning("knowledge indexing disabled: no knowledge embedding model is configured with credentials")
+            return None, None
+        try:
+            engine = build_engine(settings.RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL.get_secret_value(), NullPool)
+        except Exception as error:
+            logger.warning("knowledge indexing disabled: indexer database engine build failed (%s)",
+                           type(error).__name__)
+            return None, None
+        service = IndexerService(RuntimeUnitOfWork(engine), embeddings, stale_after_seconds=AUTO_STALE_AFTER_SECONDS)
+        batch = settings.RUNTIME_KNOWLEDGE_INDEXER_BATCH_SIZE
+        return KnowledgeIndexRunner(lambda: drain(service, batch)), engine
+    except Exception as error:
+        logger.warning("knowledge indexing disabled: indexer setup failed (%s)", type(error).__name__)
+        if engine is not None:
+            engine.dispose()
+        return None, None
 
 
 def build_runtime(settings: Settings) -> RuntimeContainer | None:
@@ -85,7 +194,10 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         verifier = CallerVerifier(keys, SystemClock())
     except Exception:
         return None
-    unavailable = RuntimeContainer(policy=None, verifier=verifier)
+    service_verifier = _build_service_verifier(settings, keys)
+    indexer, indexer_engine = _build_index_runner(settings)
+    unavailable = RuntimeContainer(policy=None, verifier=verifier, service_verifier=service_verifier,
+                                   knowledge_indexer=indexer, knowledge_indexer_engine=indexer_engine)
     engine = None
     try:
         if not settings.RUNTIME_DATABASE_URL:
@@ -104,22 +216,38 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         engine = build_engine(settings.RUNTIME_DATABASE_URL.get_secret_value())
         uow = RuntimeUnitOfWork(engine)
         trace_sink = DatabaseTraceSink(uow)
-        product = (LocalReleaseSource(settings.RUNTIME_LOCAL_RELEASES_DIR) if settings.RUNTIME_LOCAL_RELEASES_DIR
-                   else ProductUnavailable())
+        local = LocalReleaseSource(settings.RUNTIME_LOCAL_RELEASES_DIR) if settings.RUNTIME_LOCAL_RELEASES_DIR else None
+        agent_source = _choose_agent_source(settings, local, keys)
+        product = CompositeReleaseSource(agent=agent_source or ProductUnavailable(),
+                                         experience=local or ProductUnavailable())
         validator = ExperienceValidator()
         conversations = ConversationService(uow, product, validator, policy=policy, trace_sink=trace_sink)
         store = TurnStore(uow, ActivityPersistence(uow, product, validator), conversations)
         handler = TurnHandler(PinnedAssessmentEngine(), completion=EngineCompletionPort())
         # Imported lazily: provider SDKs load only when a runtime with a database is built.
+        from agent_runtime.infrastructure.llm.embedding_registry import build_embedding_ports
         from agent_runtime.infrastructure.llm.model_registry import build_model_port
+        from agent_runtime.knowledge.retrieval import PgKnowledge
+        # Query path: no retries; a failed embed degrades to keyword search. The embedding timeout and the
+        # SQL statement timeout run in sequence, so the worst case is their sum, not one shared budget.
+        knowledge = PgKnowledge(uow, build_embedding_ports(
+            settings, timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS, max_retries=0),
+            timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS)
+        from agent_runtime.agent.validation import AgentSnapshotValidator
+        agent_validation = AgentSnapshotValidator(knowledge, product, policy.environment)
+        from agent_runtime.evaluations.services.publish_gate import PublishGateService
+        evaluations = PublishGateService()
         responses = ResponseService(uow, trace_sink=trace_sink)
         turns = TurnService(store, handler, models=functools.cache(build_model_port), responses=responses,
-                            trace_sink=trace_sink)
-        return RuntimeContainer(policy=policy, verifier=verifier, conversations=conversations,
+                            knowledge=knowledge, trace_sink=trace_sink)
+        return RuntimeContainer(policy=policy, verifier=verifier, service_verifier=service_verifier,
+            conversations=conversations,
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
-            product_ready=isinstance(product, LocalReleaseSource))
+            knowledge=knowledge, agent_validation=agent_validation, evaluations=evaluations,
+            knowledge_indexer=indexer, knowledge_indexer_engine=indexer_engine,
+            product_ready=agent_source is not None)
     except Exception:
         if engine is not None:
             engine.dispose()
@@ -185,19 +313,28 @@ class InternalBoundary:
             issuer = request.headers.get("x-internal-caller")
             if token is None or issuer is None:
                 raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_MISSING")
-            if (issuer != "sda-product-bff" or not token
+            if (issuer not in ("sda-product-bff", "sda-studio-api") or not token
                     or len(token.encode("utf-8")) > (policy.max_jwt_bytes if policy else 8192)):
                 raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID")
-            if runtime is None or runtime.verifier is None:
+            service = issuer == "sda-studio-api"
+            verifier = runtime.service_verifier if service and runtime else runtime.verifier if runtime else None
+            if verifier is None:
                 # No configured trust root: never reveal service readiness to an unverified caller.
                 raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID")
+            context = RawRequestContext(scope["method"], target, bytes(raw))
             try:
-                caller = runtime.verifier.verify(token, issuer,
-                    RawRequestContext(scope["method"], target, bytes(raw)))
+                caller = verifier.verify(token, context) if service else verifier.verify(token, issuer, context)
             except RuntimeSessionError as error:
                 if error.status == 401:
                     raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID") from None
                 raise
+            # Both directions: a service token reaches only its own route, a student token never a service route.
+            route_purpose = SERVICE_ROUTES.get((scope["method"], target))
+            if (route_purpose != caller.purpose) if service else route_purpose is not None:
+                raise RuntimeSessionError(403, "FORBIDDEN")
+            if not service and (scope["method"], target) in SERVICE_ROUTES:
+                # Defence in depth: Studio-only routes never serve a student caller, whatever the route checks.
+                raise RuntimeSessionError(403, "FORBIDDEN")
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)
 
             replayed = False

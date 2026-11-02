@@ -26,6 +26,8 @@ class TestDatabase:
     url: str = field(repr=False)
     runtime_role: str
     cleanup_role: str
+    indexer_role: str
+    studio_role: str
 
 
 @pytest.fixture
@@ -45,7 +47,8 @@ def test_database(request):
         pytest.fail("dedicated test admin database must be postgres or sda_b01_*", pytrace=False)
     suffix = uuid4().hex
     name = f"sda_b01_test_{suffix}"
-    roles = (f"sda_b01_runtime_{suffix}", f"sda_b01_cleanup_{suffix}")
+    roles = (f"sda_b01_runtime_{suffix}", f"sda_b01_cleanup_{suffix}", f"sda_b01_indexer_{suffix}",
+             f"sda_b01_studio_{suffix}")
     created_roles = {}
     database_oid = None
     admin = None

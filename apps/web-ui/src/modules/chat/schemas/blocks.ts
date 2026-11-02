@@ -28,16 +28,38 @@ export const assessmentOptionSchema = z
   .object({ id: idSchema, label: z.string().min(1) })
   .passthrough();
 
+/**
+ * v1: đúng 6 câu (`total` = 6). v2 (adaptive, `riasec.mean.bounds.v2`): số câu nằm trong
+ * [`min_total`, `max_total`] và `total` chỉ có khi engine đã chốt.
+ */
 export const assessmentProgressSchema = z
   .object({
-    completed: z.number().int().min(0).max(6),
-    total: z.literal(6),
+    completed: z.number().int().min(0),
+    total: z.number().int().min(1).nullable(),
+    min_total: z.number().int().min(1).optional(),
+    max_total: z.number().int().min(1).optional(),
   })
   .passthrough();
 
+export type AssessmentProgress = z.infer<typeof assessmentProgressSchema>;
+
+/** "3/6" khi đã biết tổng; "3/12–15" khi engine còn đang quyết định số câu. */
+export function progressLabel(progress: AssessmentProgress): string {
+  if (progress.total) return `${progress.completed}/${progress.total}`;
+  const { min_total: min, max_total: max } = progress;
+  if (min && max) return `${progress.completed}/${min === max ? min : `${min}–${max}`}`;
+  return String(progress.completed);
+}
+
+// Câu hỏi/làm rõ có v1 (6 câu) và v2 (adaptive); cùng field, khác progress.
+const assessmentBlockBase = {
+  block_id: idSchema,
+  schema_version: z.union([z.literal(1), z.literal(2)]),
+};
+
 export const assessmentQuestionBlockSchema = z
   .object({
-    ...blockBase,
+    ...assessmentBlockBase,
     type: z.literal('assessment_question'),
     activity_id: idSchema,
     question_id: idSchema,
@@ -57,7 +79,7 @@ export const clarificationCandidateSchema = z
 
 export const assessmentClarificationBlockSchema = z
   .object({
-    ...blockBase,
+    ...assessmentBlockBase,
     type: z.literal('assessment_clarification'),
     activity_id: idSchema,
     proposal_id: idSchema,

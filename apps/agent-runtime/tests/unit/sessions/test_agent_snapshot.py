@@ -90,3 +90,25 @@ def test_openai_models_are_supported():
 def test_invalid_tool_params_name_the_failing_field():
     with pytest.raises(ValidationError, match=r"experiences\.0\.label"):
         AgentSnapshotV1.model_validate(mutate(("tools", 0, "params", "experiences", 0, "label"), " "))
+
+
+def test_demo_snapshot_binds_the_knowledge_tools():
+    snapshot = AgentSnapshotV1.model_validate(DEMO)
+    assert snapshot.tool("knowledge.search").params["knowledge_base_id"] == "kb_ihrd_demo"
+    assert [item["label"] for item in snapshot.tool("knowledge.show").params["display"]] == [
+        "Ngành", "Tỉnh/thành", "Học phí", "Ghi chú tuyển sinh"]
+
+
+def test_knowledge_show_requires_knowledge_search():
+    content = deepcopy(DEMO)
+    content["tools"] = [tool for tool in content["tools"] if tool["name"] != "knowledge.search"]
+    with pytest.raises(ValidationError, match="knowledge.show requires knowledge.search"):
+        AgentSnapshotV1.model_validate(content)
+
+
+def test_duplicate_auto_filter_fields_are_rejected():
+    content = deepcopy(DEMO)
+    search = next(tool for tool in content["tools"] if tool["name"] == "knowledge.search")
+    search["params"]["auto_filter_fields"] = ["houses", "houses"]
+    with pytest.raises(ValidationError, match=r"invalid params for knowledge.search@1"):
+        AgentSnapshotV1.model_validate(content)

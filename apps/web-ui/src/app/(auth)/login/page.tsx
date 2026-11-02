@@ -1,10 +1,13 @@
 import { Suspense } from 'react';
+import { AuthShell } from '@/features/auth';
 import { LoginForm } from './login-form';
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
-      <LoginForm />
-    </Suspense>
+    <AuthShell>
+      <Suspense fallback={null}>
+        <LoginForm />
+      </Suspense>
+    </AuthShell>
   );
 }

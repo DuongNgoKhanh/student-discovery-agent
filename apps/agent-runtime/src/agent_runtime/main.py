@@ -1,4 +1,6 @@
+import logging
 from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -10,6 +12,19 @@ from agent_runtime.api.internal.dependencies import InternalBoundary, RuntimeCon
 from agent_runtime.api.internal.envelopes import failure
 from agent_runtime.api.internal.routes import router
 from agent_runtime.sessions.errors import RuntimeSessionError
+
+logger = logging.getLogger(__name__)
+
+
+def _request_startup_index_run(runtime: RuntimeContainer | None) -> None:
+    """A woken free-tier instance drains what was queued while it slept (Studio's kick may have timed out)."""
+    runner = getattr(runtime, "knowledge_indexer", None)
+    if runner is None:
+        return
+    try:
+        runner.request()
+    except Exception as error:
+        logger.error("knowledge index startup run failed: %s", type(error).__name__)  # never the message or URL
 
 
 def create_app(
@@ -23,7 +38,12 @@ def create_app(
             runtime = build_runtime(Settings())
         except Exception:
             runtime = None
-    app = FastAPI(title="Agent Runtime", redirect_slashes=False)
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        _request_startup_index_run(runtime)
+        yield
+
+    app = FastAPI(title="Agent Runtime", redirect_slashes=False, lifespan=lifespan)
     app.state.runtime = runtime
     if readiness_probe is not None:
         app.state.readiness_probe = readiness_probe

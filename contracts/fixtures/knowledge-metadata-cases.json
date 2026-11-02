@@ -1,0 +1,41 @@
+{
+  "description": "validate_metadata parity between agent_runtime.knowledge.metadata and studio-api validateMetadata. Python is the reference.",
+  "fields": [
+    {"id": "f_province", "name": "province", "type": "string"},
+    {"id": "f_fee", "name": "fee", "type": "number"},
+    {"id": "f_updated", "name": "updated", "type": "time"},
+    {"id": "f_houses", "name": "houses", "type": "string_list"}
+  ],
+  "valid": [
+    {"name": "all-types", "values": {"province": "Hà Nội", "fee": 25.5, "updated": "2026-03-01", "houses": ["S"]}, "stored": {"f_province": "Hà Nội", "f_fee": 25.5, "f_updated": "2026-03-01", "f_houses": ["S"]}},
+    {"name": "null-is-dropped", "values": {"province": null}, "stored": {}},
+    {"name": "empty-string-and-list", "values": {"province": "", "houses": []}, "stored": {"f_province": "", "f_houses": []}},
+    {"name": "integer-number", "values": {"fee": 25}, "stored": {"f_fee": 25}},
+    {"name": "datetime-minutes", "values": {"updated": "2026-03-01T10:00"}, "stored": {"f_updated": "2026-03-01T10:00"}},
+    {"name": "datetime-space-micro-offset", "values": {"updated": "2026-03-01 10:00:59.123456+07:00"}, "stored": {"f_updated": "2026-03-01 10:00:59.123456+07:00"}},
+    {"name": "datetime-z", "values": {"updated": "2026-03-01T10:00Z"}, "stored": {"f_updated": "2026-03-01T10:00Z"}},
+    {"name": "string-2000-code-points", "values": {"province": "REPEAT:ễ:2000"}, "stored": {"f_province": "REPEAT:ễ:2000"}}
+  ],
+  "invalid": [
+    {"name": "unknown-field", "values": {"unknown": "x"}},
+    {"name": "string-gets-number", "values": {"province": 1}},
+    {"name": "number-gets-bool", "values": {"fee": true}},
+    {"name": "number-gets-string", "values": {"fee": "1"}},
+    {"name": "time-words", "values": {"updated": "yesterday"}},
+    {"name": "time-week-date", "values": {"updated": "2026-W09-1"}},
+    {"name": "time-basic-format", "values": {"updated": "20260301"}},
+    {"name": "time-impossible-day", "values": {"updated": "2026-02-30"}},
+    {"name": "time-year-zero", "values": {"updated": "0000-01-01"}},
+    {"name": "time-hour-24", "values": {"updated": "2026-03-01T24:00"}},
+    {"name": "time-second-60", "values": {"updated": "2026-03-01T10:00:60"}},
+    {"name": "time-offset-24", "values": {"updated": "2026-03-01T10:00+24:00"}},
+    {"name": "time-seven-fraction-digits", "values": {"updated": "2026-03-01T10:00:00.1234567"}},
+    {"name": "time-zone-without-time", "values": {"updated": "2026-03-01Z"}},
+    {"name": "list-gets-string", "values": {"houses": "S"}},
+    {"name": "list-gets-number-item", "values": {"houses": [1]}},
+    {"name": "list-gets-empty-item", "values": {"houses": [""]}},
+    {"name": "list-item-201", "values": {"houses": ["REPEAT:x:201"]}},
+    {"name": "list-51-items", "values": {"houses": "REPEAT_LIST:S:51"}},
+    {"name": "string-2001-code-points", "values": {"province": "REPEAT:ễ:2001"}}
+  ]
+}
