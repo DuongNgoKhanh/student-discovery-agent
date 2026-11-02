@@ -1,5 +1,3 @@
-import { Briefcase, Quote, Sparkles, TrendingUp } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { AuraCard, archetypeForHouse } from '@/modules/aura-card';
 import type { PersonalityCardBlock } from '../schemas/blocks';
 
@@ -7,7 +5,7 @@ type CardData = PersonalityCardBlock['data'];
 
 /**
  * Thẻ tính cách (D-01). Hệ có thiết kế Digital Aura thì hiện thẻ động kèm lưu/chia sẻ ảnh;
- * hệ chưa có thiết kế thì hiện thẻ chữ. Phần chi tiết bên dưới luôn lấy đủ từ kết quả.
+ * hệ chưa có thiết kế thì hiện thẻ chữ. Phần giải thích kết quả do Agent gửi trong tin nhắn ngay sau thẻ.
  * Nội dung demo luôn có nhãn Demo (FR-UI-04), cả trên thẻ và trong ảnh lưu.
  */
 export function PersonalityCard({ data }: { data: CardData }) {
@@ -18,7 +16,7 @@ export function PersonalityCard({ data }: { data: CardData }) {
       className="overflow-hidden rounded-2xl border border-border bg-card shadow-md dark:border-white/10 dark:bg-edge/40"
     >
       {archetype ? (
-        <div className="px-3 pt-4">
+        <div className="px-3 pb-4 pt-4">
           <AuraCard entry={archetype} name={data.display_name} demo={data.is_demo} />
         </div>
       ) : (
@@ -38,50 +36,6 @@ export function PersonalityCard({ data }: { data: CardData }) {
           </div>
         </header>
       )}
-      <div className="flex flex-col gap-4 p-5">
-        {archetype && (
-          // Tên trên thẻ là tên chính thức; release cũ có thể còn tên house khác.
-          <p className="text-sm font-semibold text-muted-foreground">
-            {archetype.content.archetype.title}
-          </p>
-        )}
-        <Section title="Điểm mạnh" icon={Sparkles} items={data.strengths} />
-        <Section title="Xu hướng" icon={TrendingUp} items={data.tendencies} />
-        <Section title="Nhóm nghề gợi ý" icon={Briefcase} items={data.career_groups} />
-        <blockquote className="flex gap-2.5 rounded-xl bg-muted px-4 py-3 text-sm italic text-muted-foreground">
-          <Quote className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-          <span className="break-words">{data.quote}</span>
-        </blockquote>
-      </div>
     </article>
-  );
-}
-
-function Section({
-  title,
-  icon: Icon,
-  items,
-}: {
-  title: string;
-  icon: LucideIcon;
-  items: string[];
-}) {
-  return (
-    <div>
-      <p className="flex items-center gap-1.5 text-sm font-semibold">
-        <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
-        {title}
-      </p>
-      <ul className="mt-2 flex flex-wrap gap-1.5">
-        {items.map((item) => (
-          <li
-            key={item}
-            className="break-words rounded-lg bg-primary-subtle px-2.5 py-1 text-sm text-foreground"
-          >
-            {item}
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

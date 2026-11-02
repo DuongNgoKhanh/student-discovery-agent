@@ -4,7 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { makeQueryClient } from '@/lib/query/client';
 import { ChatShell } from './chat-shell';
 import { BlockRenderer } from './block-renderer';
-import { FIXTURE_QUESTIONS, GREETING_TEXT } from '../fixtures';
+import { EXPLAIN_TEXT, FIXTURE_QUESTIONS, GREETING_TEXT } from '../fixtures';
 import { splitGreeting } from './greeting';
 import { parseBlock } from '../schemas/blocks';
 import { getChatApi } from '../api';
@@ -273,6 +273,37 @@ describe('ChatShell với mock', () => {
     expect(warning).toHaveTextContent('phải trả lời lại');
     expect(within(warning).getByRole('button', { name: 'Xác nhận sửa' })).toBeInTheDocument();
   });
+
+  it(
+    'trả lời xong câu cuối: thẻ hiện ra rồi Agent tự gửi lời giải thích, không có echo của học sinh',
+    { timeout: 20_000 },
+    async () => {
+      renderShell();
+      fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu' }, TIMEOUT));
+      fireEvent.change(await screen.findByLabelText('Mình gọi bạn là gì nhỉ?', {}, TIMEOUT), {
+        target: { value: 'Ngân' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+      for (const question of FIXTURE_QUESTIONS) {
+        await screen.findByRole('group', { name: question.title }, TIMEOUT);
+        fireEvent.click(screen.getByRole('button', { name: question.options[0]!.label }));
+      }
+
+      const list = await screen.findByRole('list', { name: 'Hội thoại' });
+      expect(
+        await within(list).findByRole('article', { name: 'Thẻ tính cách' }, TIMEOUT),
+      ).toBeInTheDocument();
+      const firstLine = EXPLAIN_TEXT.split('\n')[0]!.replace(/\*\*/g, '');
+      expect(
+        await within(list).findByText(
+          (_, el) => el?.tagName === 'P' && el.textContent === firstLine,
+          {},
+          TIMEOUT,
+        ),
+      ).toBeInTheDocument();
+      expect(within(list).queryByText('Điểm mạnh')).not.toBeInTheDocument();
+    },
+  );
 });
 
 describe('BlockRenderer', () => {

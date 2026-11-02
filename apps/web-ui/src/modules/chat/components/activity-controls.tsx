@@ -161,6 +161,7 @@ export function ActivityControls({ conversation, activity, disabled, send, onNew
 
       <FreeTextComposer
         disabled={disabled}
+        placeholder={activity.status === 'completed' ? 'Hỏi thêm về kết quả, ngành học…' : 'Nhập vào'}
         onSend={(text) => send({ type: 'message', content: { text } }, text)}
       />
     </div>
@@ -307,9 +308,11 @@ function ChoiceButton({
 
 function FreeTextComposer({
   disabled,
+  placeholder,
   onSend,
 }: {
   disabled: boolean;
+  placeholder: string;
   onSend: (text: string) => void;
 }) {
   return (
@@ -317,7 +320,7 @@ function FreeTextComposer({
       disabled={disabled}
       onSend={onSend}
       label="Nhập câu trả lời bằng chữ"
-      placeholder="Nhập vào"
+      placeholder={placeholder}
     />
   );
 }

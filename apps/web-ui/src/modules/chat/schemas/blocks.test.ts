@@ -81,8 +81,12 @@ describe('parseBlock', () => {
   });
 
   it('nhãn tiến độ không vượt quá mức tối thiểu khi số câu chưa chốt', () => {
-    expect(progressLabel({ completed: 13, total: null, min_total: 12, max_total: 15 })).toBe('Câu 14');
-    expect(progressLabel({ completed: 4, total: null, min_total: 10, max_total: 10 })).toBe('Tiến độ 4/10');
+    expect(progressLabel({ completed: 13, total: null, min_total: 12, max_total: 15 })).toBe(
+      'Câu 14',
+    );
+    expect(progressLabel({ completed: 4, total: null, min_total: 10, max_total: 10 })).toBe(
+      'Tiến độ 4/10',
+    );
   });
 
   it('block không phải câu hỏi vẫn chỉ nhận schema_version 1', () => {

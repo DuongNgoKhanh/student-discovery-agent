@@ -2,8 +2,22 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils/cn';
 
-// Chỉ những gì tin nhắn trợ lý cần; HTML thô trong nội dung vẫn hiện như chữ (FR-UI-01).
-const ALLOWED = ['p', 'strong', 'em', 'del', 'ul', 'ol', 'li', 'a', 'br', 'code', 'blockquote', 'h3', 'h4'];
+// Chỉ những gì tin nhắn trợ lý cần; HTML thô trong nội dung không bao giờ thành phần tử (FR-UI-01).
+const ALLOWED = [
+  'p',
+  'strong',
+  'em',
+  'del',
+  'ul',
+  'ol',
+  'li',
+  'a',
+  'br',
+  'code',
+  'blockquote',
+  'h3',
+  'h4',
+];
 
 const PROSE = cn(
   'space-y-3 break-words',

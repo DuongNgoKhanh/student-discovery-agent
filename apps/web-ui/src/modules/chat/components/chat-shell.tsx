@@ -23,6 +23,7 @@ import { ChatMarkdown } from './chat-markdown';
 import { BotAvatar, ChatMessageItem } from './chat-message-item';
 import { ChatSidebar, type ChatThreadItem } from './chat-sidebar';
 import { splitGreeting } from './greeting';
+import { explainDraft } from './explain-result';
 import { ErrorPanel, LoadingPanel, NotConfiguredPanel } from './status-panels';
 
 interface Entry {
@@ -53,6 +54,8 @@ export function ChatShell() {
   const activeConvIdRef = useRef<string | null>(null);
   /** Gỡ echo của lượt đang lỗi chờ retry, khi người dùng bỏ lượt đó để sang hội thoại khác. */
   const dropFailedEcho = useRef<(() => void) | null>(null);
+  /** Kết quả đã gửi lượt giải thích (`result_id:revision`), để không gửi lặp. */
+  const explainedResults = useRef(new Set<string>());
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
@@ -149,6 +152,23 @@ export function ChatShell() {
     }
   }, [entries, turns.isPending]);
 
+  const handleTurnResult = useCallback(
+    function handle(result: TurnResult, turnConvId: string) {
+      appendEntries(
+        result.blocks.map((block) => ({ role: 'bot' as const, block })),
+        turnConvId,
+      );
+      const draft = explainDraft(result);
+      if (!draft) return;
+      const key = `${draft.payload.result_id}:${draft.payload.result_revision}`;
+      if (explainedResults.current.has(key)) return;
+      explainedResults.current.add(key);
+      // Không có echo: lượt này do hệ thống gửi thay học sinh.
+      turns.submit(draft, result.revision, (next: TurnResult) => handle(next, turnConvId));
+    },
+    [appendEntries, turns],
+  );
+
   const send: SendFn = useCallback(
     (draft: TurnDraft, echo: string) => {
       if (!view) return;
@@ -166,10 +186,7 @@ export function ChatShell() {
         view.revision,
         (result: TurnResult) => {
           dropFailedEcho.current = null;
-          appendEntries(
-            result.blocks.map((block) => ({ role: 'bot' as const, block })),
-            turnConvId,
-          );
+          handleTurnResult(result, turnConvId);
         },
         () => {
           dropFailedEcho.current = null;
@@ -177,7 +194,7 @@ export function ChatShell() {
         },
       );
     },
-    [appendEntries, removeEntry, turns, view],
+    [appendEntries, handleTurnResult, removeEntry, turns, view],
   );
 
   const retryTurn = () => {
@@ -187,10 +204,7 @@ export function ChatShell() {
     turns.retry(
       (result: TurnResult) => {
         dropFailedEcho.current = null;
-        appendEntries(
-          result.blocks.map((block) => ({ role: 'bot' as const, block })),
-          turnConvId,
-        );
+        handleTurnResult(result, turnConvId);
       },
       () => {
         dropFailedEcho.current = null;
