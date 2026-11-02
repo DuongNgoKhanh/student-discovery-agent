@@ -187,4 +187,19 @@ describe('ChatMessageItem', () => {
     fireEvent.click(thumbsDownBtn);
     expect(thumbsDownBtn).toHaveAttribute('aria-pressed', 'false');
   });
+
+  it('render markdown của bot: chữ đậm thành <strong>, HTML thô không thành phần tử', () => {
+    const block = parseBlock({
+      block_id: 'b-md-1',
+      type: 'text',
+      schema_version: 1,
+      content: 'Mình là **IHRD Mentor** <img src=x onerror=alert(1)>',
+    });
+
+    const { container } = render(<ChatMessageItem role="bot" block={block} />);
+
+    expect(screen.getByText('IHRD Mentor').tagName).toBe('STRONG');
+    expect(container.textContent).not.toContain('**');
+    expect(container.querySelector('img[src="x"]')).toBeNull();
+  });
 });

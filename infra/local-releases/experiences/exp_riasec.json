@@ -999,7 +999,7 @@
  "houses": [
   {
    "house_id": "house_r",
-   "name": "Nhà Kiến Tạo",
+   "name": "Người Kể Chuyện",
    "theme_ref": "theme_r",
    "mascot_ref": "mascot_r",
    "strengths": [
@@ -1020,7 +1020,7 @@
   },
   {
    "house_id": "house_i",
-   "name": "Nhà Khám Phá",
+   "name": "Người Giải Mã",
    "theme_ref": "theme_i",
    "mascot_ref": "mascot_i",
    "strengths": [
@@ -1041,7 +1041,7 @@
   },
   {
    "house_id": "house_a",
-   "name": "Nhà Sáng Tạo",
+   "name": "Người Sáng Tạo",
    "theme_ref": "theme_a",
    "mascot_ref": "mascot_a",
    "strengths": [
@@ -1062,7 +1062,7 @@
   },
   {
    "house_id": "house_s",
-   "name": "Nhà Kết Nối",
+   "name": "Người Chữa Lành",
    "theme_ref": "theme_s",
    "mascot_ref": "mascot_s",
    "strengths": [
@@ -1083,7 +1083,7 @@
   },
   {
    "house_id": "house_e",
-   "name": "Nhà Dẫn Dắt",
+   "name": "Người Dẫn Đường",
    "theme_ref": "theme_e",
    "mascot_ref": "mascot_e",
    "strengths": [
@@ -1104,7 +1104,7 @@
   },
   {
    "house_id": "house_c",
-   "name": "Nhà Tổ Chức",
+   "name": "Người Giữ Nhịp",
    "theme_ref": "theme_c",
    "mascot_ref": "mascot_c",
    "strengths": [

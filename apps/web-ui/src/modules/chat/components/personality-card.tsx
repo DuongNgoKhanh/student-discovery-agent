@@ -40,7 +40,10 @@ export function PersonalityCard({ data }: { data: CardData }) {
       )}
       <div className="flex flex-col gap-4 p-5">
         {archetype && (
-          <p className="text-sm font-semibold text-muted-foreground">{data.house.name}</p>
+          // Tên trên thẻ là tên chính thức; release cũ có thể còn tên house khác.
+          <p className="text-sm font-semibold text-muted-foreground">
+            {archetype.content.archetype.title}
+          </p>
         )}
         <Section title="Điểm mạnh" icon={Sparkles} items={data.strengths} />
         <Section title="Xu hướng" icon={TrendingUp} items={data.tendencies} />

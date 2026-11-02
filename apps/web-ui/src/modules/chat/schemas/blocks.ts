@@ -43,12 +43,15 @@ export const assessmentProgressSchema = z
 
 export type AssessmentProgress = z.infer<typeof assessmentProgressSchema>;
 
-/** "3/6" khi đã biết tổng; "3/12–15" khi engine còn đang quyết định số câu. */
+/**
+ * "Tiến độ 3/6" khi đã biết tổng. Khi engine còn đang quyết định số câu thì chỉ hiện số thứ tự
+ * câu đang hỏi ("Câu 4"): dạng "13/12–15" dễ đọc thành vượt quá số câu.
+ */
 export function progressLabel(progress: AssessmentProgress): string {
-  if (progress.total) return `${progress.completed}/${progress.total}`;
   const { min_total: min, max_total: max } = progress;
-  if (min && max) return `${progress.completed}/${min === max ? min : `${min}–${max}`}`;
-  return String(progress.completed);
+  const total = progress.total ?? (min && min === max ? min : null);
+  if (total) return `Tiến độ ${progress.completed}/${total}`;
+  return `Câu ${progress.completed + 1}`;
 }
 
 // Câu hỏi/làm rõ có v1 (6 câu) và v2 (adaptive); cùng field, khác progress.
