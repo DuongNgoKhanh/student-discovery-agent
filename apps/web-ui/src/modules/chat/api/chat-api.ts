@@ -19,6 +19,7 @@ import type { ChatTransport } from './transport';
 export const ACCEPTED_ACTIVITY_PROFILES = ['riasec.mean.bounds.v2'];
 export const SUPPORTED_BLOCKS = [
   { type: 'text', schema_versions: [1] },
+  { type: 'markdown', schema_versions: [1] },
   { type: 'assessment_question', schema_versions: [1, 2] },
   { type: 'assessment_clarification', schema_versions: [1, 2] },
   { type: 'personality_card', schema_versions: [1] },

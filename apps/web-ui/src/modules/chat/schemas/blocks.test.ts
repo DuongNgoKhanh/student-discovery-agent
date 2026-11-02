@@ -89,6 +89,16 @@ describe('parseBlock', () => {
     );
   });
 
+  it('nhận block markdown của Agent', () => {
+    const result = parseBlock({
+      block_id: 'b1',
+      type: 'markdown',
+      schema_version: 1,
+      content: '- a\n- b',
+    });
+    expect(result.kind === 'known' && result.block.type === 'markdown').toBe(true);
+  });
+
   it('block không phải câu hỏi vẫn chỉ nhận schema_version 1', () => {
     const result = parseBlock({ block_id: 'b1', type: 'text', schema_version: 2, content: 'x' });
     expect(result.kind).toBe('unsupported');

@@ -202,4 +202,21 @@ describe('ChatMessageItem', () => {
     expect(container.textContent).not.toContain('**');
     expect(container.querySelector('img[src="x"]')).toBeNull();
   });
+
+  it('block markdown của Agent render danh sách và vẫn có nút sao chép', () => {
+    const block = parseBlock({
+      block_id: 'b-md-2',
+      type: 'markdown',
+      schema_version: 1,
+      content: 'Gợi ý:\n\n- Kỹ thuật cơ khí\n- Xây dựng',
+    });
+
+    render(<ChatMessageItem role="bot" block={block} />);
+
+    expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'Kỹ thuật cơ khí',
+      'Xây dựng',
+    ]);
+    expect(screen.getByRole('button', { name: /Sao chép/ })).toBeInTheDocument();
+  });
 });

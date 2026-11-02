@@ -23,6 +23,7 @@ export function BlockRenderer({ block }: { block: RenderableBlock }) {
   const b = block.block;
   switch (b.type) {
     case 'text':
+    case 'markdown':
       return <ChatMarkdown source={b.content} />;
 
     case 'assessment_question':

@@ -24,6 +24,15 @@ export const textBlockSchema = z
   })
   .passthrough();
 
+/** Markdown của Agent (danh sách, đậm…); runtime đã chặn HTML/ảnh, UI vẫn render qua ChatMarkdown. */
+export const markdownBlockSchema = z
+  .object({
+    ...blockBase,
+    type: z.literal('markdown'),
+    content: z.string().min(1),
+  })
+  .passthrough();
+
 export const assessmentOptionSchema = z
   .object({ id: idSchema, label: z.string().min(1) })
   .passthrough();
@@ -129,12 +138,14 @@ export const personalityCardBlockSchema = z
 /** Các block UI hiểu. Thêm loại mới = thêm schema ở đây và một nhánh trong BlockRenderer. */
 export const knownBlockSchema = z.discriminatedUnion('type', [
   textBlockSchema,
+  markdownBlockSchema,
   assessmentQuestionBlockSchema,
   assessmentClarificationBlockSchema,
   personalityCardBlockSchema,
 ]);
 
 export type TextBlock = z.infer<typeof textBlockSchema>;
+export type MarkdownBlock = z.infer<typeof markdownBlockSchema>;
 export type AssessmentQuestionBlock = z.infer<typeof assessmentQuestionBlockSchema>;
 export type AssessmentClarificationBlock = z.infer<typeof assessmentClarificationBlockSchema>;
 export type PersonalityCardBlock = z.infer<typeof personalityCardBlockSchema>;
