@@ -32,6 +32,8 @@ interface TextNode extends Animated {
   color: string;
   letterSpacing: number;
   shadow: { color: string; blur: number } | null;
+  /** Vertical fill for gradient-clipped text (`background-clip: text`), top to bottom. */
+  gradient: { color: string; at: number }[] | null;
 }
 
 interface BoxNode extends Animated {
@@ -115,7 +117,11 @@ export async function collectOverlay(root: HTMLElement): Promise<OverlayNode[]> 
       font: `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,
       color: style.color,
       letterSpacing: Number.parseFloat(style.letterSpacing) || 0,
-      shadow: parseShadow(style.textShadow),
+      shadow: parseShadow(style.textShadow) ?? parseShadow(style.filter),
+      gradient:
+        style.backgroundClip === 'text' || style.webkitBackgroundClip === 'text'
+          ? parseGradient(style.backgroundImage)
+          : null,
     });
   });
   await Promise.all(images);
@@ -140,7 +146,24 @@ async function rasterizeSvg(svg: SVGSVGElement, color: string, node: ImageNode) 
   }
 }
 
-/** First shadow of a computed `text-shadow`, e.g. "rgb(183, 124, 255) 0px 0px 18px". */
+/**
+ * Stops of a computed top-to-bottom `linear-gradient(...)`, e.g.
+ * "linear-gradient(rgb(255, 255, 255) 35%, rgb(216, 200, 255) 100%)". Other directions are not
+ * used by the card and fall back to the first colour.
+ */
+function parseGradient(value: string) {
+  const stops = [...value.matchAll(/(rgba?\([^)]*\))\s*([\d.]+%)?/g)];
+  if (stops.length < 2) return null;
+  return stops.map((m, i) => ({
+    color: m[1]!,
+    at: m[2] ? Number.parseFloat(m[2]) / 100 : i / (stops.length - 1),
+  }));
+}
+
+/**
+ * First shadow of a computed `text-shadow` ("rgb(183, 124, 255) 0px 0px 18px") or of a
+ * `drop-shadow(...)` filter, which has the same shape inside the parentheses.
+ */
 function parseShadow(value: string) {
   if (!value || value === 'none') return null;
   const color = value.match(/rgba?\([^)]*\)/)?.[0];
@@ -226,7 +249,11 @@ function paintBox(ctx: CanvasRenderingContext2D, node: BoxNode) {
 
 function paintText(ctx: CanvasRenderingContext2D, node: TextNode, k: number, centred = false) {
   ctx.font = node.font;
-  ctx.fillStyle = node.color;
+  if (node.gradient) {
+    const fill = ctx.createLinearGradient(0, node.y, 0, node.y + node.h);
+    node.gradient.forEach((s) => fill.addColorStop(Math.min(1, Math.max(0, s.at)), s.color));
+    ctx.fillStyle = fill;
+  } else ctx.fillStyle = node.color;
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = centred ? 'center' : 'left';
   const m = ctx.measureText('Hg');
