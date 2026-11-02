@@ -54,6 +54,12 @@ export type ChatTurnInput =
       activity_id: string;
       action: 'confirm_answer';
       payload: { proposal_id: string; question_id: string; candidate_id: string };
+    })
+  | (TurnBase & {
+      type: 'interaction';
+      activity_id: string;
+      action: 'explain_result';
+      payload: { result_id: string; result_revision: number };
     });
 
 /** Lỗi nghiệp vụ được ném dưới dạng ApiError; xem error-map.ts cho mã và thông điệp. */
