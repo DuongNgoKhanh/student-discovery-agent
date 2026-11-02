@@ -64,14 +64,12 @@ export const creatorTheme: ArchetypeTheme = {
   },
   // No orbit ribbons: the artwork carries the light on its own.
   ribbons: [],
-  // Full-bleed artwork: the bottom veil only starts where the identity text sits.
-  // Dark block under the identity text (name, title, chips, footer): fades in from y≈370 and is
-  // near-solid from y≈440, so the text reads clearly over the artwork.
-  // Off: the identity text sits on its own dark zones (name, chips, footer).
+  // Full-bleed artwork: no bottom veil. A soft dark pool behind the identity text keeps the light
+  // name and footer legible where the wings and orbs are brightest.
   veil: { start: 711, solid: 711 },
-  // Identity block sits low, so the name, title, chips and footer land on the artwork's lower band.
-  // `lift` raises only the chips and footer; the name, title and subtitle keep their place.
-  identity: { bottom: 5, lift: 30 },
+  panel: { y: 560, rx: 260, ry: 175, alpha: 0.8 },
+  // Identity block in the lower third, inside the frame (reference card proportions).
+  identity: { bottom: 50 },
   // Logo and label sit inside the artwork's frame, clear of its corners.
   header: { top: 40, inset: 55, labelInset: 40 },
   // 4:5 card (400×500): the artwork is stretched to the card, and the identity block and header

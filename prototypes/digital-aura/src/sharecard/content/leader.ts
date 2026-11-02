@@ -50,7 +50,9 @@ export const leaderTheme: ArchetypeTheme = {
   // Dark block under the identity text, as for creator.
   // Off: the identity text sits on its own dark zones (name, chips, footer).
   veil: { start: 711, solid: 711 },
-  identity: { bottom: 5, lift: 30 },
+  // Soft dark pool behind the identity text, so it stays legible over the bright artwork.
+  panel: { y: 560, rx: 260, ry: 175, alpha: 0.8 },
+  identity: { bottom: 50 },
   header: { top: 40, inset: 55, labelInset: 40 },
   // 4:5 card (400×500) uses the -45 master, with its own points and no baked-in frame.
   landscape: {
