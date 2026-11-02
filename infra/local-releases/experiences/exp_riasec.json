@@ -1011,10 +1011,11 @@
     "Học tốt nhất qua thực hành"
    ],
    "suggested_fields": [
-    "Kỹ thuật cơ khí",
-    "Điện - điện tử",
-    "Xây dựng",
-    "Nông nghiệp công nghệ cao"
+    "Công nghệ kỹ thuật Ôtô",
+    "Công nghệ kỹ thuật Điện – Điện tử",
+    "Kỹ thuật xây dựng",
+    "Nông nghiệp công nghệ cao",
+    "Thú y"
    ],
    "quote": "Bàn tay khéo léo biến ý tưởng thành hiện thực."
   },
@@ -1033,9 +1034,9 @@
    ],
    "suggested_fields": [
     "Công nghệ thông tin",
-    "Khoa học dữ liệu",
-    "Y dược",
-    "Khoa học tự nhiên"
+    "Công nghệ sinh học",
+    "Công nghệ thực phẩm",
+    "Khoa học môi trường"
    ],
    "quote": "Mỗi câu hỏi là một cánh cửa mới."
   },
@@ -1055,8 +1056,8 @@
    "suggested_fields": [
     "Thiết kế đồ họa",
     "Truyền thông đa phương tiện",
-    "Kiến trúc",
-    "Nghệ thuật biểu diễn"
+    "Digital Marketing",
+    "Ngôn ngữ Anh"
    ],
    "quote": "Sáng tạo là cách bạn kể câu chuyện của mình."
   },
@@ -1074,10 +1075,10 @@
     "Làm việc nhóm hiệu quả"
    ],
    "suggested_fields": [
-    "Sư phạm",
     "Tâm lý học",
-    "Điều dưỡng",
-    "Công tác xã hội"
+    "Công tác xã hội",
+    "Quản trị nhân lực",
+    "Quan hệ công chúng"
    ],
    "quote": "Bạn làm thế giới ấm áp hơn mỗi ngày."
   },
@@ -1097,8 +1098,9 @@
    "suggested_fields": [
     "Quản trị kinh doanh",
     "Marketing",
-    "Luật",
-    "Quản lý sự kiện"
+    "Luật kinh tế",
+    "Kinh doanh quốc tế",
+    "Quản trị khách sạn"
    ],
    "quote": "Bạn biến tầm nhìn thành hành động."
   },
@@ -1116,10 +1118,10 @@
     "Đáng tin cậy với chi tiết"
    ],
    "suggested_fields": [
-    "Kế toán - kiểm toán",
-    "Tài chính - ngân hàng",
-    "Logistics",
-    "Quản trị văn phòng"
+    "Kế toán",
+    "Tài chính – Ngân hàng",
+    "Logistics và quản lý chuỗi cung ứng",
+    "Quản lý thông tin"
    ],
    "quote": "Sự ngăn nắp của bạn giữ mọi thứ vận hành."
   }

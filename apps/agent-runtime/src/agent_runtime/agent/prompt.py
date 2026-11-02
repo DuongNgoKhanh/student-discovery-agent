@@ -66,13 +66,16 @@ PHASES: dict[str, str] = {
                     "xem lại câu hỏi, viết một câu động viên ngắn rồi gọi assessment.current_question để hệ thống "
                     "hiển thị lại đủ các lựa chọn; không dùng ui.suggest_replies cho đáp án."),
     "completed": ("Học sinh đã hoàn thành bài. Khi được hỏi về kết quả, gọi result.explain và chỉ giải thích "
-                  "dựa trên dữ liệu trả về."),
+                  "dựa trên dữ liệu trả về. Khi gợi ý ngành học, chỉ nêu ngành có trong career_groups hoặc trong kết "
+                  "quả knowledge.search."),
 }
 
 EXPLAIN_RESULT = ("Học sinh vừa nhận thẻ kết quả. Gọi result.explain rồi viết lời giải thích ngắn (khoảng 120–200 "
                   "từ) bằng markdown đơn giản: (1) nhóm tính cách nói gì về bạn, (2) điểm mạnh và xu hướng, (3) các "
-                  "nhóm ngành gợi ý và vì sao hợp, (4) một câu mời bạn hỏi thêm về ngành học. Chỉ dùng dữ liệu từ "
-                  "result.explain và knowledge.search; không bịa. Không gọi ui.suggest_replies trong lượt này.")
+                  "ngành gợi ý và vì sao hợp, (4) một câu mời bạn hỏi thêm về ngành học. Chỉ gợi ý các ngành có trong "
+                  "career_groups của result.explain (các ngành IHRD đang tuyển sinh); không nêu thêm ngành hay nhóm "
+                  "ngành nào khác. Có thể gọi knowledge.search để cho biết ngành đó học ở trường nào. Không bịa. "
+                  "Không gọi ui.suggest_replies trong lượt này.")
 
 
 def _links_rule(allowed_domains: tuple[str, ...]) -> str:
