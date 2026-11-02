@@ -71,6 +71,9 @@ export const GREETING_TEXT =
   'Chào bạn! Mình là trợ lý giúp bạn khám phá hướng đi phù hợp. Bạn bắt đầu nhé?';
 export const NAME_PROMPT_TEXT = 'Mình gọi bạn là gì nhỉ?';
 export const DEMO_NOTICE_TEXT = 'Đây là bản demo, nội dung không phải kết quả tư vấn chính thức.';
+export const EXPLAIN_TEXT =
+  'Thẻ **Người Sáng Tạo** cho thấy bạn giàu trí tưởng tượng.\n\n**Điểm mạnh:** Điều phối tốt, Lắng nghe.\n\n' +
+  '**Nhóm ngành gợi ý:** Nhóm nghề demo.\n\nBạn muốn tìm hiểu thêm về ngành nào thì cứ hỏi mình nhé!';
 
 export const DEMO_CARD_DATA = {
   display_name: 'Bạn',

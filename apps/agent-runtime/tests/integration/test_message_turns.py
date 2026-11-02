@@ -1,8 +1,9 @@
 """Free-text message turns: the agent loop's handoffs drive the assessment through server-checked commits."""
 import pytest
 
-from agent_runtime.agent.model import ModelReply, SystemMessage, ToolCall, UserMessage
+from agent_runtime.agent.model import ModelReply, ModelUnavailable, SystemMessage, ToolCall, UserMessage
 from agent_runtime.sessions.errors import RuntimeSessionError
+from agent_runtime.sessions.services.message_turns import EXPLAIN_REQUEST_TEXT
 from tests.helpers.chat import EXPERIENCE, build_chat
 from tests.helpers.turns import biased_option
 
@@ -87,8 +88,8 @@ def test_rejected_handoff_leaves_state_unchanged(chat):
     assert model.calls[1][0][-1].content["error"] == "not_collecting_name"
 
 
-def test_completed_result_is_explained_from_the_stored_card(chat):
-    model, send, _ = chat
+def complete(model, send):
+    """Start, name and answer until the card; returns the completing turn's data."""
     model._outcomes += [
         ModelReply(text="", tool_calls=(call("assessment.start", {"experience_id": EXPERIENCE}),)),
         ModelReply(text="", tool_calls=(call("assessment.set_name", {"display_name": "Ngân"}),)),
@@ -99,6 +100,18 @@ def test_completed_result_is_explained_from_the_stored_card(chat):
         question_id = data["activity"]["current_question"]["question_id"]
         data = send(answer(data["activity"], question_id, biased_option(question_id)),
                     revision=data["revision"], key=f"a-{data['revision']}").data
+    return data
+
+
+def explain_part(data):
+    card = blocks(data)[0]
+    return {"activity_id": data["activity"]["id"], "action": "explain_result",
+            "payload": {"result_id": card["result_id"], "result_revision": card["result_revision"]}}
+
+
+def test_completed_result_is_explained_from_the_stored_card(chat):
+    model, send, _ = chat
+    data = complete(model, send)
     card = blocks(data)[0]["data"]
     model._outcomes += [ModelReply(text="", tool_calls=(call("result.explain", {}),)),
                         ModelReply(text="Bạn thuộc **" + card["house"]["name"] + "**.")]
@@ -107,3 +120,43 @@ def test_completed_result_is_explained_from_the_stored_card(chat):
     assert model.calls[-1][0][-1].content["house_id"] == card["house"]["house_id"]
     assert blocks(explained)[0]["content"] == "Bạn thuộc **" + card["house"]["name"] + "**."
     assert explained["activity"]["status"] == "completed"
+
+
+def test_explain_result_runs_the_agent_once_per_result(chat):
+    model, send, message_count = chat
+    data = complete(model, send)
+    house = blocks(data)[0]["data"]["house"]["name"]
+    model._outcomes += [ModelReply(text="", tool_calls=(call("result.explain", {}),)),
+                        ModelReply(text=f"Bạn là **{house}**.")]
+    before = message_count()
+    explained = send(explain_part(data), revision=data["revision"], key="x1").data
+    assert blocks(explained)[0]["content"] == f"Bạn là **{house}**."
+    first = model.calls[-2][0]
+    assert first[-1] == UserMessage(EXPLAIN_REQUEST_TEXT)
+    assert any(isinstance(m, SystemMessage) and "Học sinh vừa nhận thẻ kết quả" in m.text for m in first)
+    assert message_count() == before + 2
+    calls = len(model.calls)
+    with pytest.raises(RuntimeSessionError) as again:
+        send(explain_part(data), revision=explained["revision"], key="x2")
+    assert (again.value.status, again.value.code) == (422, "INVALID_ACTIVITY_TRANSITION")
+    assert len(model.calls) == calls
+
+
+def test_explain_result_falls_back_to_the_card_when_the_model_fails(chat):
+    model, send, _ = chat
+    data = complete(model, send)
+    model._outcomes += [ModelUnavailable("timeout")] * 4
+    explained = send(explain_part(data), revision=data["revision"], key="x1").data
+    (block,) = blocks(explained)
+    assert f"**{blocks(data)[0]['data']['house']['name']}**" in block["content"]
+
+
+def test_explain_result_is_rejected_before_the_card(chat):
+    model, send, _ = chat
+    model._outcomes.append(ModelReply(text="", tool_calls=(call("assessment.start", {"experience_id": EXPERIENCE}),)))
+    started = send("làm bài", revision=0, key="m1").data
+    part = {"activity_id": started["activity"]["id"], "action": "explain_result",
+            "payload": {"result_id": "nope", "result_revision": 1}}
+    with pytest.raises(RuntimeSessionError) as error:
+        send(part, revision=started["revision"], key="x1")
+    assert (error.value.status, error.value.code) == (422, "INVALID_ACTIVITY_TRANSITION")

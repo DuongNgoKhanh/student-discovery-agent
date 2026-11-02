@@ -24,6 +24,15 @@ export const textBlockSchema = z
   })
   .passthrough();
 
+/** Markdown của Agent (danh sách, đậm…); runtime đã chặn HTML/ảnh, UI vẫn render qua ChatMarkdown. */
+export const markdownBlockSchema = z
+  .object({
+    ...blockBase,
+    type: z.literal('markdown'),
+    content: z.string().min(1),
+  })
+  .passthrough();
+
 export const assessmentOptionSchema = z
   .object({ id: idSchema, label: z.string().min(1) })
   .passthrough();
@@ -43,12 +52,15 @@ export const assessmentProgressSchema = z
 
 export type AssessmentProgress = z.infer<typeof assessmentProgressSchema>;
 
-/** "3/6" khi đã biết tổng; "3/12–15" khi engine còn đang quyết định số câu. */
+/**
+ * "Tiến độ 3/6" khi đã biết tổng. Khi engine còn đang quyết định số câu thì chỉ hiện số thứ tự
+ * câu đang hỏi ("Câu 4"): dạng "13/12–15" dễ đọc thành vượt quá số câu.
+ */
 export function progressLabel(progress: AssessmentProgress): string {
-  if (progress.total) return `${progress.completed}/${progress.total}`;
   const { min_total: min, max_total: max } = progress;
-  if (min && max) return `${progress.completed}/${min === max ? min : `${min}–${max}`}`;
-  return String(progress.completed);
+  const total = progress.total ?? (min && min === max ? min : null);
+  if (total) return `Tiến độ ${progress.completed}/${total}`;
+  return `Câu ${progress.completed + 1}`;
 }
 
 // Câu hỏi/làm rõ có v1 (6 câu) và v2 (adaptive); cùng field, khác progress.
@@ -126,12 +138,14 @@ export const personalityCardBlockSchema = z
 /** Các block UI hiểu. Thêm loại mới = thêm schema ở đây và một nhánh trong BlockRenderer. */
 export const knownBlockSchema = z.discriminatedUnion('type', [
   textBlockSchema,
+  markdownBlockSchema,
   assessmentQuestionBlockSchema,
   assessmentClarificationBlockSchema,
   personalityCardBlockSchema,
 ]);
 
 export type TextBlock = z.infer<typeof textBlockSchema>;
+export type MarkdownBlock = z.infer<typeof markdownBlockSchema>;
 export type AssessmentQuestionBlock = z.infer<typeof assessmentQuestionBlockSchema>;
 export type AssessmentClarificationBlock = z.infer<typeof assessmentClarificationBlockSchema>;
 export type PersonalityCardBlock = z.infer<typeof personalityCardBlockSchema>;

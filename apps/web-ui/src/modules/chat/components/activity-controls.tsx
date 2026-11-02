@@ -87,8 +87,8 @@ export function ActivityControls({ conversation, activity, disabled, send, onNew
   return (
     <div className="flex flex-col gap-4">
       {clarification && (
-        <fieldset className="flex flex-col gap-2" disabled={disabled}>
-          <legend className="mb-2.5 break-words text-[15px] font-semibold">{clarification.title}</legend>
+        <fieldset key={clarification.proposal_id} className="flex flex-col gap-2" disabled={disabled}>
+          <legend className="sr-only">{clarification.title}</legend>
           {clarification.candidates.map((c, index) => (
             <ChoiceButton
               key={c.id}
@@ -115,8 +115,11 @@ export function ActivityControls({ conversation, activity, disabled, send, onNew
       )}
 
       {question && !clarification && (
-        <fieldset className="flex flex-col gap-2" disabled={disabled}>
-          <legend className="mb-2.5 break-words text-[15px] font-semibold">{question.title}</legend>
+        // Key theo câu hỏi: id đáp án (a–e) trùng giữa các câu, nếu không React giữ lại nút cũ
+        // cùng focus/hover của nó và câu mới trông như đã có đáp án được chọn.
+        <fieldset key={question.question_id} className="flex flex-col gap-2" disabled={disabled}>
+          {/* Câu hỏi đã hiện trong bong bóng chat ngay trên; legend chỉ dành cho trình đọc màn hình. */}
+          <legend className="sr-only">{question.title}</legend>
           {question.options.map((o, index) => (
             <ChoiceButton
               key={o.id}
@@ -158,6 +161,7 @@ export function ActivityControls({ conversation, activity, disabled, send, onNew
 
       <FreeTextComposer
         disabled={disabled}
+        placeholder={activity.status === 'completed' ? 'Hỏi thêm về kết quả, ngành học…' : 'Nhập vào'}
         onSend={(text) => send({ type: 'message', content: { text } }, text)}
       />
     </div>
@@ -285,7 +289,7 @@ function ChoiceButton({
       onClick={onClick}
       className={cn(
         'group/choice flex w-full cursor-pointer items-center gap-3 rounded-xl border border-input bg-card px-3.5 py-3 text-left text-sm leading-snug text-foreground shadow-sm',
-        'transition-[border-color,background-color,box-shadow] duration-150 hover:border-primary/50 hover:bg-primary-subtle',
+        'transition-[border-color,background-color,box-shadow] duration-150 hover:border-primary/50 hover:bg-primary-subtle active:bg-primary-subtle',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-input disabled:hover:bg-card',
         'dark:border-white/10 dark:bg-ink',
@@ -304,9 +308,11 @@ function ChoiceButton({
 
 function FreeTextComposer({
   disabled,
+  placeholder,
   onSend,
 }: {
   disabled: boolean;
+  placeholder: string;
   onSend: (text: string) => void;
 }) {
   return (
@@ -314,7 +320,7 @@ function FreeTextComposer({
       disabled={disabled}
       onSend={onSend}
       label="Nhập câu trả lời bằng chữ"
-      placeholder="Nhập vào"
+      placeholder={placeholder}
     />
   );
 }

@@ -127,3 +127,14 @@ def test_in_progress_phase_returns_to_the_question_after_a_knowledge_answer():
     context = AgentContext(today=TODAY, phase="in_progress", current_question=QUESTION)
     assert "rồi gọi assessment.current_question để quay lại bài" in joined(AgentSnapshotV1.model_validate(DEMO), context)
     assert "quay lại bài" not in joined(without_knowledge(), context)
+
+
+def test_explain_instruction_only_on_explain_turns():
+    snapshot = AgentSnapshotV1.model_validate(DEMO)
+    completed = joined(snapshot, AgentContext(today=TODAY, phase="completed"))
+    assert "Học sinh vừa nhận thẻ kết quả" not in completed
+    assert "chỉ nêu ngành có trong career_groups hoặc trong kết quả knowledge.search" in completed
+    text = joined(snapshot, AgentContext(today=TODAY, phase="completed", explain_result=True))
+    assert "Học sinh vừa nhận thẻ kết quả" in text and "result.explain" in text
+    assert "Không gọi ui.suggest_replies" in text
+    assert "Chỉ gợi ý các ngành có trong career_groups" in text

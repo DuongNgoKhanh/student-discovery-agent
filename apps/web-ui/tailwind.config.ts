@@ -7,6 +7,8 @@ const hsl = (name: string) => `hsl(var(--${name}) / <alpha-value>)`;
 export default {
   darkMode: ['class'],
   content: ['./src/**/*.{ts,tsx}'],
+  // Hover chỉ áp dụng trên thiết bị có chuột: trên màn cảm ứng, chạm xong hover bị dính lại.
+  future: { hoverOnlyWhenSupported: true },
   theme: {
     container: {
       center: true,

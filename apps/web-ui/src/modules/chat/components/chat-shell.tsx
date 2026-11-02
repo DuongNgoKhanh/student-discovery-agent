@@ -19,8 +19,11 @@ import type { RenderableBlock } from '../schemas/blocks';
 import type { CreatedConversation, TurnResult } from '../schemas/conversation';
 import { ActivityControls, type SendFn } from './activity-controls';
 import { ChatHeader } from './chat-header';
+import { ChatMarkdown } from './chat-markdown';
 import { BotAvatar, ChatMessageItem } from './chat-message-item';
 import { ChatSidebar, type ChatThreadItem } from './chat-sidebar';
+import { splitGreeting } from './greeting';
+import { explainDraft } from './explain-result';
 import { ErrorPanel, LoadingPanel, NotConfiguredPanel } from './status-panels';
 
 interface Entry {
@@ -51,6 +54,8 @@ export function ChatShell() {
   const activeConvIdRef = useRef<string | null>(null);
   /** Gỡ echo của lượt đang lỗi chờ retry, khi người dùng bỏ lượt đó để sang hội thoại khác. */
   const dropFailedEcho = useRef<(() => void) | null>(null);
+  /** Kết quả đã gửi lượt giải thích (`result_id:revision`), để không gửi lặp. */
+  const explainedResults = useRef(new Set<string>());
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
@@ -147,6 +152,23 @@ export function ChatShell() {
     }
   }, [entries, turns.isPending]);
 
+  const handleTurnResult = useCallback(
+    function handle(result: TurnResult, turnConvId: string) {
+      appendEntries(
+        result.blocks.map((block) => ({ role: 'bot' as const, block })),
+        turnConvId,
+      );
+      const draft = explainDraft(result);
+      if (!draft) return;
+      const key = `${draft.payload.result_id}:${draft.payload.result_revision}`;
+      if (explainedResults.current.has(key)) return;
+      explainedResults.current.add(key);
+      // Không có echo: lượt này do hệ thống gửi thay học sinh.
+      turns.submit(draft, result.revision, (next: TurnResult) => handle(next, turnConvId));
+    },
+    [appendEntries, turns],
+  );
+
   const send: SendFn = useCallback(
     (draft: TurnDraft, echo: string) => {
       if (!view) return;
@@ -164,10 +186,7 @@ export function ChatShell() {
         view.revision,
         (result: TurnResult) => {
           dropFailedEcho.current = null;
-          appendEntries(
-            result.blocks.map((block) => ({ role: 'bot' as const, block })),
-            turnConvId,
-          );
+          handleTurnResult(result, turnConvId);
         },
         () => {
           dropFailedEcho.current = null;
@@ -175,7 +194,7 @@ export function ChatShell() {
         },
       );
     },
-    [appendEntries, removeEntry, turns, view],
+    [appendEntries, handleTurnResult, removeEntry, turns, view],
   );
 
   const retryTurn = () => {
@@ -185,10 +204,7 @@ export function ChatShell() {
     turns.retry(
       (result: TurnResult) => {
         dropFailedEcho.current = null;
-        appendEntries(
-          result.blocks.map((block) => ({ role: 'bot' as const, block })),
-          turnConvId,
-        );
+        handleTurnResult(result, turnConvId);
       },
       () => {
         dropFailedEcho.current = null;
@@ -273,6 +289,7 @@ export function ChatShell() {
       )
       .filter(Boolean)
       .join('\n\n') || GREETING_TEXT;
+  const greeting = splitGreeting(initialBotText);
 
   return (
     <div className="chat-theme relative flex h-dvh w-full gap-3 overflow-hidden bg-gray-bg p-0 font-sans text-foreground antialiased transition-colors duration-300 selection:bg-primary/20 dark:bg-ink md:p-3">
@@ -354,12 +371,17 @@ export function ChatShell() {
                   />
                 </div>
               </div>
-              <h2 className="mb-3 max-w-xl whitespace-pre-wrap text-balance text-2xl font-semibold tracking-tight text-foreground duration-500 animate-in fade-in slide-in-from-bottom-2 sm:text-3xl">
-                {initialBotText}
+              <h2 className="mb-3 max-w-xl text-balance text-2xl font-semibold tracking-tight text-foreground duration-500 animate-in fade-in slide-in-from-bottom-2 sm:text-3xl">
+                {greeting.heading}
               </h2>
-              <p className="mb-8 max-w-md text-balance text-[15px] text-muted-foreground duration-700 animate-in fade-in">
-                Trả lời vài câu hỏi ngắn để khám phá nhóm ngành phù hợp với bạn.
-              </p>
+              <div className="mb-8 max-w-md text-balance text-[15px] leading-relaxed text-muted-foreground duration-700 animate-in fade-in [&_strong]:text-foreground">
+                <ChatMarkdown
+                  source={
+                    greeting.body ||
+                    'Trả lời vài câu hỏi ngắn để khám phá nhóm ngành phù hợp với bạn.'
+                  }
+                />
+              </div>
 
               {turns.isPending && (
                 <p role="status" className="mb-3 animate-pulse text-xs text-muted-foreground">
@@ -387,12 +409,9 @@ export function ChatShell() {
                 )}
               </div>
 
-              <ul className="mt-10 grid w-full max-w-lg grid-cols-1 gap-2 text-left sm:grid-cols-3">
+              <ul className="mt-10 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[13px] text-muted-foreground">
                 {INTRO_HIGHLIGHTS.map(({ icon: Icon, text }) => (
-                  <li
-                    key={text}
-                    className="flex items-center gap-2.5 rounded-xl border border-border/70 bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground dark:border-white/5 dark:bg-white/[0.03]"
-                  >
+                  <li key={text} className="flex items-center gap-1.5">
                     <Icon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                     {text}
                   </li>

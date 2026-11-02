@@ -19,6 +19,7 @@ import type { ChatTransport } from './transport';
 export const ACCEPTED_ACTIVITY_PROFILES = ['riasec.mean.bounds.v2'];
 export const SUPPORTED_BLOCKS = [
   { type: 'text', schema_versions: [1] },
+  { type: 'markdown', schema_versions: [1] },
   { type: 'assessment_question', schema_versions: [1, 2] },
   { type: 'assessment_clarification', schema_versions: [1, 2] },
   { type: 'personality_card', schema_versions: [1] },
@@ -54,6 +55,12 @@ export type ChatTurnInput =
       activity_id: string;
       action: 'confirm_answer';
       payload: { proposal_id: string; question_id: string; candidate_id: string };
+    })
+  | (TurnBase & {
+      type: 'interaction';
+      activity_id: string;
+      action: 'explain_result';
+      payload: { result_id: string; result_revision: number };
     });
 
 /** Lỗi nghiệp vụ được ném dưới dạng ApiError; xem error-map.ts cho mã và thông điệp. */

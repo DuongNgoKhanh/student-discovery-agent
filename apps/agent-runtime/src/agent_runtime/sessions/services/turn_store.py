@@ -11,7 +11,7 @@ from agent_runtime.sessions.repositories.messages import MessageRepository
 from agent_runtime.sessions.repositories.responses import ResponseRepository
 from agent_runtime.sessions.repositories.results import ResultRepository
 from agent_runtime.sessions.repositories.snapshots import SnapshotRepository
-from agent_runtime.sessions.schemas.activity import CommitPatch, NewMessage
+from agent_runtime.sessions.schemas.activity import CommitPatch, NewMessage, StoredInteraction
 from agent_runtime.sessions.schemas.common import ServiceResponse
 from agent_runtime.sessions.schemas.conversation import ConversationRecord
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
@@ -27,7 +27,7 @@ from agent_runtime.sessions.services.access import AccessPolicy
 from agent_runtime.sessions.services.activity import ActivityPersistence
 from agent_runtime.sessions.services.blocks import project_blocks
 from agent_runtime.sessions.services.conversations import ConversationService
-from agent_runtime.sessions.services.message_turns import MessagePlan, MessageSnapshot
+from agent_runtime.sessions.services.message_turns import MessagePlan, MessageSnapshot, check_explain
 from agent_runtime.sessions.services.results import is_current_result
 from agent_runtime.sessions.services.turn_input import is_supported, turn_fingerprint
 from agent_runtime.sessions.services.turn_response import finalize_turn
@@ -112,9 +112,11 @@ class TurnStore:
             running = self.responses.active(session, parent.id)
             if running is not None:
                 raise RuntimeSessionError(409, "TURN_IN_PROGRESS", {"response_id": running.id})
-            if (isinstance(request, MessageTurnInput)
-                    and len(request.content.text) > snapshot.agent.limits.max_input_chars):
-                raise RuntimeSessionError(422, "INVALID_INPUT")
+            if isinstance(request, MessageTurnInput):
+                if request.explain is not None:
+                    check_explain(snapshot, request.explain)
+                elif len(request.content.text) > snapshot.agent.limits.max_input_chars:
+                    raise RuntimeSessionError(422, "INVALID_INPUT")
             view = self.conversations.view_in_session(session, parent)
             response = TurnResponse(id=f"resp_{uuid4().hex}", conversation_id=parent.id, status="in_progress",
                 revision=parent.revision, input_message_id=uuid4().hex, created_at=now,
@@ -182,7 +184,7 @@ class TurnStore:
 
     def _message_snapshot(self, session, parent: ConversationRecord) -> MessageSnapshot:
         agent = AgentSnapshotV1.model_validate(self.snapshots.get(session, parent.agent_snapshot).content)
-        activity = release = card = None
+        activity = release = card = current = None
         next_result_revision = 1
         if parent.active_activity_id is not None:
             activity = self.activities.get(session, parent.id, parent.active_activity_id)
@@ -195,11 +197,12 @@ class TurnStore:
                 if not is_current_result(parent, activity, result):
                     raise RuntimeSessionError(500, "INTERNAL_ERROR")
                 card = result.card_projection.model_dump(mode="json")
+                current = (result.result_id, result.result_revision)
         limit = agent.limits.history_messages
         history = tuple(self.messages.recent(session, parent.id, limit)) if limit else ()
         return MessageSnapshot(parent=parent, agent=agent, activity=activity, release=release, result_card=card,
                                history=history, next_result_revision=next_result_revision,
-                               today=self.access.clock.now(session).date())
+                               today=self.access.clock.now(session).date(), current_result=current)
 
     def commit_message(self, caller: VerifiedCaller, begun: Begun, plan: MessagePlan) -> TurnResponse:
         """One atomic write: user + assistant messages, the planned activity change and the completed Response."""
@@ -211,8 +214,13 @@ class TurnStore:
             if parent.revision != snapshot.parent.revision:
                 raise self._conflict(session, parent, "conversation", snapshot.parent.revision, parent.revision)
             turn_id = uuid4().hex
+            explain = request.explain
             user = NewMessage(message_id=begun.response.input_message_id, turn_id=turn_id, role="user", blocks=(),
-                              text=request.content.text)
+                              text=request.content.text if explain is None else None,
+                              interaction=None if explain is None else StoredInteraction(
+                                  activity_id=explain.activity_id, action="explain_result", question_id=None,
+                                  option_id=None, result_id=explain.result_id,
+                                  result_revision=explain.result_revision))
             assistant = NewMessage(message_id=uuid4().hex, turn_id=turn_id, role="assistant", blocks=plan.blocks)
             if plan.draft is not None:
                 current = self.activities.get(session, parent.id, snapshot.activity.id)

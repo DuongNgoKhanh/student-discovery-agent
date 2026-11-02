@@ -35,7 +35,7 @@ class InteractionPart(ContractModel):
     type: Literal["interaction"]
     activity_id: OpaqueId
     expected_activity_revision: JsonSafeInt | None = None
-    action: Literal["set_name", "submit_answer", "confirm_answer", "edit_answer"]
+    action: Literal["set_name", "submit_answer", "confirm_answer", "edit_answer", "explain_result"]
     payload: JsonObject
 
     @field_validator("expected_activity_revision", mode="before")

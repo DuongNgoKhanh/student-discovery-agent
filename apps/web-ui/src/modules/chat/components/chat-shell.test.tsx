@@ -4,10 +4,13 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { makeQueryClient } from '@/lib/query/client';
 import { ChatShell } from './chat-shell';
 import { BlockRenderer } from './block-renderer';
-import { FIXTURE_QUESTIONS, GREETING_TEXT } from '../fixtures';
+import { EXPLAIN_TEXT, FIXTURE_QUESTIONS, GREETING_TEXT } from '../fixtures';
+import { splitGreeting } from './greeting';
 import { parseBlock } from '../schemas/blocks';
 import { getChatApi } from '../api';
 import { ApiError } from '@/lib/api/errors';
+
+const GREETING_HEADING = splitGreeting(GREETING_TEXT).heading;
 
 function renderShell() {
   return render(
@@ -27,7 +30,7 @@ describe('ChatShell với mock', () => {
   it('hiển thị lời chào và nút bắt đầu ở màn chào, không render composer nhập liệu', async () => {
     renderShell();
     expect(
-      await screen.findByRole('heading', { level: 2, name: GREETING_TEXT }, TIMEOUT),
+      await screen.findByRole('heading', { level: 2, name: GREETING_HEADING }, TIMEOUT),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Bắt đầu' })).toBeEnabled();
     // Ở màn chào chưa vào activity nên không render composer nhập text tự do
@@ -77,7 +80,7 @@ describe('ChatShell với mock', () => {
 
     const greetingHeading = await screen.findByRole(
       'heading',
-      { level: 2, name: GREETING_TEXT },
+      { level: 2, name: GREETING_HEADING },
       TIMEOUT,
     );
     expect(greetingHeading).toBeInTheDocument();
@@ -163,7 +166,7 @@ describe('ChatShell với mock', () => {
 
     // Màn hình reset về màn chào ban đầu với heading h2 và nút Bắt đầu
     expect(
-      await screen.findByRole('heading', { level: 2, name: GREETING_TEXT }, TIMEOUT),
+      await screen.findByRole('heading', { level: 2, name: GREETING_HEADING }, TIMEOUT),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Bắt đầu' })).toBeInTheDocument();
   });
@@ -179,7 +182,7 @@ describe('ChatShell với mock', () => {
 
     expect(await screen.findByText('Lượt không hợp lệ.', {}, TIMEOUT)).toBeInTheDocument();
     // Không còn echo "Bắt đầu" giả như đã gửi: màn chào vẫn giữ nguyên.
-    expect(screen.getByRole('heading', { level: 2, name: GREETING_TEXT })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: GREETING_HEADING })).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Hội thoại' })).not.toBeInTheDocument();
   });
 
@@ -201,7 +204,7 @@ describe('ChatShell với mock', () => {
     fireEvent.click(screen.getByRole('button', { name: /Cuộc trò chuyện mới/i }));
 
     expect(
-      await screen.findByRole('heading', { level: 2, name: GREETING_TEXT }, TIMEOUT),
+      await screen.findByRole('heading', { level: 2, name: GREETING_HEADING }, TIMEOUT),
     ).toBeInTheDocument();
     expect(screen.queryByText('Mất kết nối.')).not.toBeInTheDocument();
   });
@@ -212,7 +215,7 @@ describe('ChatShell với mock', () => {
     await screen.findByLabelText('Mình gọi bạn là gì nhỉ?', {}, TIMEOUT);
 
     fireEvent.click(screen.getByRole('button', { name: /Cuộc trò chuyện mới/i }));
-    await screen.findByRole('heading', { level: 2, name: GREETING_TEXT }, TIMEOUT);
+    await screen.findByRole('heading', { level: 2, name: GREETING_HEADING }, TIMEOUT);
 
     // Thread mới nhất đứng đầu; thread cũ là phần tử thứ hai.
     const threadButtons = await screen.findAllByRole('button', { name: /Vừa xong/ }, TIMEOUT);
@@ -270,6 +273,37 @@ describe('ChatShell với mock', () => {
     expect(warning).toHaveTextContent('phải trả lời lại');
     expect(within(warning).getByRole('button', { name: 'Xác nhận sửa' })).toBeInTheDocument();
   });
+
+  it(
+    'trả lời xong câu cuối: thẻ hiện ra rồi Agent tự gửi lời giải thích, không có echo của học sinh',
+    { timeout: 20_000 },
+    async () => {
+      renderShell();
+      fireEvent.click(await screen.findByRole('button', { name: 'Bắt đầu' }, TIMEOUT));
+      fireEvent.change(await screen.findByLabelText('Mình gọi bạn là gì nhỉ?', {}, TIMEOUT), {
+        target: { value: 'Ngân' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Gửi' }));
+      for (const question of FIXTURE_QUESTIONS) {
+        await screen.findByRole('group', { name: question.title }, TIMEOUT);
+        fireEvent.click(screen.getByRole('button', { name: question.options[0]!.label }));
+      }
+
+      const list = await screen.findByRole('list', { name: 'Hội thoại' });
+      expect(
+        await within(list).findByRole('article', { name: 'Thẻ tính cách' }, TIMEOUT),
+      ).toBeInTheDocument();
+      const firstLine = EXPLAIN_TEXT.split('\n')[0]!.replace(/\*\*/g, '');
+      expect(
+        await within(list).findByText(
+          (_, el) => el?.tagName === 'P' && el.textContent === firstLine,
+          {},
+          TIMEOUT,
+        ),
+      ).toBeInTheDocument();
+      expect(within(list).queryByText('Điểm mạnh')).not.toBeInTheDocument();
+    },
+  );
 });
 
 describe('BlockRenderer', () => {

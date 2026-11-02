@@ -550,6 +550,7 @@ components:
             - submit_answer
             - confirm_answer
             - edit_answer
+            - explain_result
         question_id:
           type: string
           minLength: 1
@@ -560,6 +561,16 @@ components:
           minLength: 1
           pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
           nullable: true
+        result_id:
+          type: string
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+          description: Chỉ có ở action explain_result.
+        result_revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+          description: Chỉ có ở action explain_result.
       required:
         - activity_id
         - action

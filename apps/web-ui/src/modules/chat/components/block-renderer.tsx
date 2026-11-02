@@ -1,11 +1,12 @@
 import { HelpCircle } from 'lucide-react';
 import { progressLabel, type AssessmentProgress, type RenderableBlock } from '../schemas/blocks';
+import { ChatMarkdown } from './chat-markdown';
 import { PersonalityCard } from './personality-card';
 
 /**
  * Hiển thị một block trong transcript (chỉ đọc). Thao tác học sinh nằm ở ActivityControls,
  * để chỉ có một nơi duy nhất gửi action với revision hiện hành.
- * Nội dung từ server là text thuần (FR-UI-01): không dùng dangerouslySetInnerHTML.
+ * Text block là markdown, render qua ChatMarkdown (FR-UI-01): không dùng dangerouslySetInnerHTML.
  */
 export function BlockRenderer({ block }: { block: RenderableBlock }) {
   if (block.kind === 'unsupported') {
@@ -22,7 +23,8 @@ export function BlockRenderer({ block }: { block: RenderableBlock }) {
   const b = block.block;
   switch (b.type) {
     case 'text':
-      return <p className="whitespace-pre-wrap break-words">{b.content}</p>;
+    case 'markdown':
+      return <ChatMarkdown source={b.content} />;
 
     case 'assessment_question':
       return (
@@ -61,7 +63,7 @@ function ProgressBar({ progress }: { progress: AssessmentProgress }) {
         </div>
       )}
       <p className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
-        Tiến độ {progressLabel(progress)}
+        {progressLabel(progress)}
       </p>
     </div>
   );

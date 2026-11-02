@@ -19,6 +19,7 @@ class AgentContext:
     phase: AssessmentPhase = "not_started"
     display_name: str | None = None
     current_question: Mapping[str, Any] | None = None  # {"title", "options": [{"id", "label"}]}
+    explain_result: bool = False  # this turn asks the agent to explain the card it just showed
 
 
 _HEAD = "Quy tắc bắt buộc:"
@@ -65,8 +66,16 @@ PHASES: dict[str, str] = {
                     "xem lại câu hỏi, viết một câu động viên ngắn rồi gọi assessment.current_question để hệ thống "
                     "hiển thị lại đủ các lựa chọn; không dùng ui.suggest_replies cho đáp án."),
     "completed": ("Học sinh đã hoàn thành bài. Khi được hỏi về kết quả, gọi result.explain và chỉ giải thích "
-                  "dựa trên dữ liệu trả về."),
+                  "dựa trên dữ liệu trả về. Khi gợi ý ngành học, chỉ nêu ngành có trong career_groups hoặc trong kết "
+                  "quả knowledge.search."),
 }
+
+EXPLAIN_RESULT = ("Học sinh vừa nhận thẻ kết quả. Gọi result.explain rồi viết lời giải thích ngắn (khoảng 120–200 "
+                  "từ) bằng markdown đơn giản: (1) nhóm tính cách nói gì về bạn, (2) điểm mạnh và xu hướng, (3) các "
+                  "ngành gợi ý và vì sao hợp, (4) một câu mời bạn hỏi thêm về ngành học. Chỉ gợi ý các ngành có trong "
+                  "career_groups của result.explain (các ngành IHRD đang tuyển sinh); không nêu thêm ngành hay nhóm "
+                  "ngành nào khác. Có thể gọi knowledge.search để cho biết ngành đó học ở trường nào. Không bịa. "
+                  "Không gọi ui.suggest_replies trong lượt này.")
 
 
 def _links_rule(allowed_domains: tuple[str, ...]) -> str:
@@ -91,6 +100,8 @@ def system_messages(snapshot: AgentSnapshotV1, context: AgentContext) -> list[Sy
     messages = [SystemMessage(render_placeholders(snapshot.persona.system_prompt, values)),
                 SystemMessage(rules(snapshot) + "\n" + _links_rule(snapshot.links.allowed_domains)),
                 SystemMessage(_phase(snapshot, context))]
+    if context.explain_result:
+        messages.append(SystemMessage(EXPLAIN_RESULT))
     if context.display_name:
         # Student-supplied: quoted as data, never spliced in as an instruction.
         messages.append(SystemMessage("Tên học sinh (dữ liệu): " + json.dumps(context.display_name, ensure_ascii=False)))

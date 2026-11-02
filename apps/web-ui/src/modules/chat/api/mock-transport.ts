@@ -3,6 +3,7 @@ import {
   DEMO_CARD_DATA,
   DEMO_NOTICE_TEXT,
   FIXTURE_QUESTIONS,
+  EXPLAIN_TEXT,
   GREETING_TEXT,
   NAME_PROMPT_TEXT,
   errorEnvelope,
@@ -40,6 +41,8 @@ interface MockActivity {
   answers: Answer[];
   proposal: Proposal | null;
   resultRevision: number | null;
+  /** Kết quả (resultRevision) đã được giải thích; mỗi kết quả chỉ một lần, như runtime. */
+  explainedRevision: number | null;
 }
 
 interface MockConversation {
@@ -370,6 +373,7 @@ export function createMockTransport(options: MockTransportOptions = {}): MockTra
         answers: [],
         proposal: null,
         resultRevision: null,
+        explainedRevision: null,
       };
       conv.revision += 1;
       return turnResponse(conv, [textBlock(NAME_PROMPT_TEXT)]);
@@ -419,9 +423,29 @@ export function createMockTransport(options: MockTransportOptions = {}): MockTra
         return applyConfirm(conv, activity, payload);
       case 'edit_answer':
         return applyEdit(conv, activity, payload.question_id, payload.option_id);
+      case 'explain_result':
+        return applyExplain(conv, activity, body.payload as Record<string, unknown>);
       default:
         return invalid(400, 'INVALID_REQUEST', 'Hành động không hợp lệ.');
     }
+  }
+
+  /** Giải thích kết quả hiện hành, mỗi kết quả một lần (như runtime). */
+  function applyExplain(
+    conv: MockConversation,
+    activity: MockActivity,
+    payload: Record<string, unknown>,
+  ): RawResponse {
+    if (
+      activity.status !== 'completed' ||
+      payload.result_id !== `res_${activity.id}` ||
+      payload.result_revision !== activity.resultRevision ||
+      activity.explainedRevision === activity.resultRevision
+    ) {
+      return invalid(422, 'INVALID_ACTIVITY_TRANSITION', 'Không có kết quả cần giải thích.');
+    }
+    activity.explainedRevision = activity.resultRevision;
+    return turnResponse(conv, [textBlock(EXPLAIN_TEXT)]);
   }
 
   function applySetName(

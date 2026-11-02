@@ -63,7 +63,7 @@ def test_option_history_uses_refs_without_raw_text(handler, prepared_name_turn):
     output = finalize_turn(named, request, handler.prepare(named, request), COMMITTED_AT, input_message_id=INPUT_ID)
     user, assistant = output.patch.append_messages
     assert user.text is None
-    assert user.interaction.model_dump() == {"activity_id": named.activity.id, "action": "submit_answer",
+    assert user.interaction.model_dump(exclude_none=True) == {"activity_id": named.activity.id, "action": "submit_answer",
         "question_id": request.payload.question_id, "option_id": request.payload.option_id}
     assert output.result.blocks == assistant.blocks
     assert output.result.activity.progress.completed == 1

@@ -76,8 +76,27 @@ describe('parseBlock', () => {
     const progress = { completed: 2, min_total: 12, max_total: 15, total: null, phase: 'baseline' };
     const result = parseBlock({ ...questionBlock, schema_version: 2, progress });
     expect(result.kind).toBe('known');
-    expect(progressLabel(progress)).toBe('2/12–15');
-    expect(progressLabel({ completed: 3, total: 6 })).toBe('3/6');
+    expect(progressLabel(progress)).toBe('Câu 3');
+    expect(progressLabel({ completed: 3, total: 6 })).toBe('Tiến độ 3/6');
+  });
+
+  it('nhãn tiến độ không vượt quá mức tối thiểu khi số câu chưa chốt', () => {
+    expect(progressLabel({ completed: 13, total: null, min_total: 12, max_total: 15 })).toBe(
+      'Câu 14',
+    );
+    expect(progressLabel({ completed: 4, total: null, min_total: 10, max_total: 10 })).toBe(
+      'Tiến độ 4/10',
+    );
+  });
+
+  it('nhận block markdown của Agent', () => {
+    const result = parseBlock({
+      block_id: 'b1',
+      type: 'markdown',
+      schema_version: 1,
+      content: '- a\n- b',
+    });
+    expect(result.kind === 'known' && result.block.type === 'markdown').toBe(true);
   });
 
   it('block không phải câu hỏi vẫn chỉ nhận schema_version 1', () => {

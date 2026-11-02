@@ -40,7 +40,7 @@ export function ChatMessageItem({
 
   const textToCopy =
     text ||
-    (block && block.kind === 'known' && block.block.type === 'text'
+    (block && block.kind === 'known' && (block.block.type === 'text' || block.block.type === 'markdown')
       ? block.block.content
       : '');
 

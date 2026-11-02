@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/lib/api/errors';
 import { createChatApi, type ChatApi } from './chat-api';
 import { createMockTransport, type MockTransport } from './mock-transport';
-import { FIXTURE_QUESTIONS } from '../fixtures';
+import { EXPLAIN_TEXT, FIXTURE_QUESTIONS } from '../fixtures';
 import type { TurnResult } from '../schemas/conversation';
 
 function setup(options: Parameters<typeof createMockTransport>[0] = {}) {
@@ -120,6 +120,27 @@ describe('chat API với mock transport', () => {
       (b) => b.kind === 'known' && b.block.type === 'personality_card',
     );
     expect(card).toBeDefined();
+  });
+
+  it('explain_result giải thích thẻ hiện hành đúng một lần', async () => {
+    const s = await startToQuestion(setup().api);
+    let last = s.last;
+    for (let i = 0; i < 6; i++) last = await answer(s.api, s.conv, s.activityId, last.revision, i);
+    const found = last.blocks.find((b) => b.kind === 'known' && b.block.type === 'personality_card');
+    const card = found?.kind === 'known' && found.block.type === 'personality_card' ? found.block : null;
+    const explain = (rev: number) =>
+      s.api.sendTurn(s.conv, {
+        type: 'interaction',
+        activity_id: s.activityId,
+        action: 'explain_result',
+        expected_revision: rev,
+        idempotency_key: key('explain'),
+        payload: { result_id: card!.result_id, result_revision: card!.result_revision },
+      });
+
+    const explained = await explain(last.revision);
+    expect(explained.blocks[0]).toMatchObject({ kind: 'known', block: { type: 'text', content: EXPLAIN_TEXT } });
+    await expect(explain(explained.revision)).rejects.toMatchObject({ code: 'INVALID_ACTIVITY_TRANSITION' });
   });
 
   it('revision cũ bị từ chối với REVISION_CONFLICT kèm state mới', async () => {

@@ -22,13 +22,18 @@ from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.conversation import ConversationRecord
 from agent_runtime.sessions.schemas.history import MessageView
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1, ValidatedRelease
-from agent_runtime.sessions.schemas.turn import MessageTurnInput, SetNameInteraction
+from agent_runtime.sessions.schemas.turn import ExplainResult, MessageTurnInput, SetNameInteraction
 from agent_runtime.sessions.schemas.turn_execution import TurnDraft, TurnSnapshot
 from agent_runtime.sessions.services.turn_input import validate_display_name
 from agent_runtime.sessions.services.turn_response import activity_block
 
 OPEN_STATES = {"collecting_name", "in_progress"}
 PROPOSAL_TEXT = "Có phải ý bạn là “{label}”? Bạn bấm chọn đáp án bên dưới để xác nhận nhé."
+EXPLAIN_REQUEST_TEXT = "[Hệ thống yêu cầu giải thích kết quả]"
+EXPLAIN_FALLBACK = ("Thẻ **{house}** là nhóm tính cách nổi bật nhất của {name}.\n\n"
+                    "**Điểm mạnh:** {strengths}.\n\n**Xu hướng:** {tendencies}.\n\n"
+                    "**Nhóm ngành gợi ý:** {career_groups}.\n\n> {quote}\n\n"
+                    "Bạn muốn tìm hiểu thêm về ngành nào thì cứ hỏi mình nhé!")
 
 
 @dataclass(frozen=True)
@@ -42,6 +47,7 @@ class MessageSnapshot:
     history: tuple[MessageView, ...]
     next_result_revision: int
     today: date
+    current_result: tuple[str, int] | None = None  # (result_id, result_revision) of result_card
 
 
 @dataclass(frozen=True)
@@ -66,12 +72,13 @@ def phase(snapshot: MessageSnapshot) -> AssessmentPhase:
     return "not_started"
 
 
-def agent_context(snapshot: MessageSnapshot) -> AgentContext:
+def agent_context(snapshot: MessageSnapshot, *, explain: bool = False) -> AgentContext:
     state = snapshot.activity.state if snapshot.activity else None
     question = state.current_question if state and state.status == "in_progress" else None
     return AgentContext(today=snapshot.today, phase=phase(snapshot),
                         display_name=(state.display_name if state else None) or snapshot.parent.display_name,
-                        current_question=question.model_dump(mode="json") if question else None)
+                        current_question=question.model_dump(mode="json") if question else None,
+                        explain_result=explain)
 
 
 def _block_text(block) -> str | None:
@@ -95,6 +102,8 @@ def chat_history(views: Sequence[MessageView]) -> list[ChatMessage]:
         if view.role == "user":
             if view.text and view.interaction is None:
                 history.append(UserMessage(view.text))
+            elif view.interaction and view.interaction.action == "explain_result":
+                history.append(UserMessage(EXPLAIN_REQUEST_TEXT))
             elif view.interaction and view.interaction.action == "set_name":
                 history.append(UserMessage(f"[Học sinh nhập tên: {view.text}]"))
             elif view.interaction:
@@ -165,6 +174,26 @@ def _text(content: str) -> TextBlock:
     return TextBlock(block_id=uuid4().hex, type="text", schema_version=1, content=content)
 
 
+def check_explain(snapshot: MessageSnapshot, explain: ExplainResult) -> None:
+    """Only the current result of a completed activity is explained, and only once."""
+    activity, current = snapshot.activity, snapshot.current_result
+    if (activity is None or activity.id != explain.activity_id or activity.state.status != "completed"
+            or current is None or current != (explain.result_id, explain.result_revision)):
+        raise RuntimeSessionError(422, "INVALID_ACTIVITY_TRANSITION")
+    for view in snapshot.history:
+        done = view.interaction
+        if done is not None and done.action == "explain_result" and (done.result_id, done.result_revision) == current:
+            raise RuntimeSessionError(422, "INVALID_ACTIVITY_TRANSITION")
+
+
+def explain_fallback(card: Mapping[str, Any], display_name: str | None) -> TextBlock:
+    """Card-only explanation when the model is unavailable: the student always gets one."""
+    return _text(EXPLAIN_FALLBACK.format(house=card["house"]["name"], name=display_name or "bạn",
+                                         strengths=", ".join(card["strengths"]),
+                                         tendencies=", ".join(card["tendencies"]),
+                                         career_groups=", ".join(card["career_groups"]), quote=card["quote"]))
+
+
 def _with_cards(blocks: tuple[TypedBlock, ...], cards: tuple[KnowledgeCardBlock, ...]) -> tuple[TypedBlock, ...]:
     """Cards follow the agent's lead-in and precede its suggestions; a handoff block is appended after both."""
     split = next((index for index, block in enumerate(blocks) if block.type == "suggestions"), len(blocks))
@@ -175,6 +204,8 @@ def plan_message_turn(snapshot: MessageSnapshot, turn: AgentTurn, request: Messa
                       handler, persistence, cards: tuple[KnowledgeCardBlock, ...] = ()) -> MessagePlan:
     """Turn an agent turn into server blocks and one activity change. Engine/Product calls run here,
     outside any transaction; ``handler`` is the TurnHandler, ``persistence`` the ActivityPersistence."""
+    if getattr(request, "explain", None) is not None and turn.fallback is not None:
+        return MessagePlan((explain_fallback(snapshot.result_card, snapshot.activity.state.display_name),))
     # A template fallback has no lead-in from the model, so cards would stand alone out of context.
     blocks = _with_cards(turn.blocks, cards if turn.fallback is None else ())
     handoff = turn.handoff
