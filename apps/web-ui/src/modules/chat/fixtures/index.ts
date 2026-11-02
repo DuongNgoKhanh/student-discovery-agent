@@ -74,11 +74,12 @@ export const DEMO_NOTICE_TEXT = 'Đây là bản demo, nội dung không phải 
 
 export const DEMO_CARD_DATA = {
   display_name: 'Bạn',
+  // Một hệ thật của backend, để chế độ mock hiện thẻ Digital Aura (Hệ Sáng Tạo → Người Sáng Tạo).
   house: {
-    house_id: 'house_demo_a',
-    name: 'Hệ Demo A',
-    theme_ref: 'theme_demo_a',
-    mascot_ref: 'mascot_demo_a',
+    house_id: 'house_a',
+    name: 'Hệ Sáng Tạo (Artistic)',
+    theme_ref: 'theme_artistic_amber',
+    mascot_ref: 'mascot_chameleon_artist',
   },
   strengths: ['Điều phối tốt', 'Lắng nghe'],
   tendencies: ['Thích làm việc theo nhóm'],
