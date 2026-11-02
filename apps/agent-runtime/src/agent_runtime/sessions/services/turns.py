@@ -17,6 +17,7 @@ from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.schemas.responses import TurnResponse
 from agent_runtime.sessions.schemas.turn import ConversationTurnInput, MessageTurnInput
 from agent_runtime.sessions.services.message_turns import (
+    EXPLAIN_REQUEST_TEXT,
     SnapshotToolExecutor,
     agent_context,
     chat_history,
@@ -165,8 +166,10 @@ class TurnService:
         deadline = self._clock() + agent.limits.turn_timeout_ms / 1000  # field reads count against the turn budget
         tool_context, knowledge = self._knowledge(agent)
         executor = SnapshotToolExecutor(snapshot, knowledge)
-        turn = run_agent_turn(agent, model, executor, agent_context(snapshot), chat_history(snapshot.history),
-                              request.content.text, on_event=emit,
+        explain = request.explain is not None
+        turn = run_agent_turn(agent, model, executor, agent_context(snapshot, explain=explain),
+                              chat_history(snapshot.history),
+                              EXPLAIN_REQUEST_TEXT if explain else request.content.text, on_event=emit,
                               should_stop=self._should_stop(caller, begun.response.id),
                               deadline=deadline, clock=self._clock, tool_context=tool_context)
         observed.update(agent_steps=turn.steps, input_tokens=turn.usage.input_tokens,
