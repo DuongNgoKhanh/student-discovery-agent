@@ -3,7 +3,12 @@ import pytest
 
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.responses import TurnResponse
-from agent_runtime.sessions.schemas.turn import MessageTurnInput, SetNameInteraction, SubmitAnswerInteraction
+from agent_runtime.sessions.schemas.turn import (
+    ExplainResult,
+    MessageTurnInput,
+    SetNameInteraction,
+    SubmitAnswerInteraction,
+)
 from agent_runtime.sessions.services.turn_input import parse_message_input, to_message_body
 
 BASE = {"expected_revision": 3, "idempotency_key": "k1"}
@@ -39,3 +44,30 @@ def test_message_body_round_trips():
 
 def test_turn_response_has_no_answer_history():
     assert "answers" not in TurnResponse.model_json_schema()["$defs"]["ActivitySummary"]["properties"]
+
+
+EXPLAIN_PART = {"type": "interaction", "activity_id": "a1", "action": "explain_result",
+                "payload": {"result_id": "r1", "result_revision": 2}}
+
+
+def test_explain_part_maps_to_a_message_turn_without_text():
+    request = parse_message_input({**BASE, "content": [EXPLAIN_PART]})
+    assert isinstance(request, MessageTurnInput) and request.content is None
+    assert request.explain == ExplainResult(activity_id="a1", result_id="r1", result_revision=2)
+    assert parse_message_input(to_message_body(request)) == request
+
+
+@pytest.mark.parametrize("payload", [{}, {"result_id": "r1"}, {"result_id": "r1", "result_revision": 0},
+                                     {"result_id": "r1", "result_revision": 1, "extra": True}])
+def test_explain_payload_is_strict(payload):
+    with pytest.raises(RuntimeSessionError) as error:
+        parse_message_input({**BASE, "content": [{**EXPLAIN_PART, "payload": payload}]})
+    assert (error.value.status, error.value.code) == (422, "INVALID_INPUT")
+
+
+def test_message_turn_needs_exactly_one_of_text_or_explain():
+    with pytest.raises(ValueError):
+        MessageTurnInput(**BASE, type="message")
+    with pytest.raises(ValueError):
+        MessageTurnInput(**BASE, type="message", content={"text": "x"},
+                         explain={"activity_id": "a1", "result_id": "r1", "result_revision": 1})

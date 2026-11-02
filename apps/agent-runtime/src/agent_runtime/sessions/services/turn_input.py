@@ -41,7 +41,11 @@ def parse_message_input(value: JsonObject) -> ConversationTurnInput:
     (part,) = message.content
     base = {"schema_version": message.schema_version, "expected_revision": message.expected_revision,
             "idempotency_key": message.idempotency_key}
-    if isinstance(part, InteractionPart):
+    if isinstance(part, InteractionPart) and part.action == "explain_result":
+        if part.expected_activity_revision is not None:
+            raise RuntimeSessionError(422, "INVALID_INPUT")
+        turn = {**base, "type": "message", "explain": {"activity_id": part.activity_id, **part.payload}}
+    elif isinstance(part, InteractionPart):
         turn = {**base, "type": "interaction", **part.model_dump(mode="json", exclude={"type"}, exclude_unset=True)}
     else:
         turn = {**base, "type": "message", "content": {"text": part.text}}
@@ -54,7 +58,14 @@ def to_message_body(request: ConversationTurnInput) -> dict:
     base = {key: data.pop(key) for key in ("expected_revision", "idempotency_key") if key in data}
     data.pop("schema_version", None)
     kind = data.pop("type")
-    part = {"type": "text", "text": data["content"]["text"]} if kind == "message" else {"type": "interaction", **data}
+    if kind == "message" and "explain" in data:
+        explain = data["explain"]
+        part = {"type": "interaction", "activity_id": explain["activity_id"], "action": "explain_result",
+                "payload": {"result_id": explain["result_id"], "result_revision": explain["result_revision"]}}
+    elif kind == "message":
+        part = {"type": "text", "text": data["content"]["text"]}
+    else:
+        part = {"type": "interaction", **data}
     return {**base, "content": [part]}
 
 

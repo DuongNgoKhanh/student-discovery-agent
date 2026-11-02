@@ -5,10 +5,10 @@ unsupported branches can be rejected after guards instead of as malformed input.
 """
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from .activity import ActivityView, TypedBlock
-from .common import ContractModel, IdempotencyKey, JsonSafeInt, OpaqueId, UtcDatetime
+from .common import ContractModel, IdempotencyKey, JsonSafeInt, OpaqueId, PositiveRevision, UtcDatetime
 from .conversation import InputVersion
 
 
@@ -22,9 +22,23 @@ class MessageContent(ContractModel):
     text: Annotated[str, Field(strict=True, min_length=1, pattern=r"\S")]
 
 
+class ExplainResult(ContractModel):
+    """Yêu cầu Agent giải thích kết quả hiện hành; chạy qua agent loop như một lượt message."""
+    activity_id: OpaqueId
+    result_id: OpaqueId
+    result_revision: PositiveRevision
+
+
 class MessageTurnInput(_TurnBase):
     type: Literal["message"]
-    content: MessageContent
+    content: MessageContent | None = None
+    explain: ExplainResult | None = None
+
+    @model_validator(mode="after")
+    def exactly_one_input(self):
+        if (self.content is None) == (self.explain is None):
+            raise ValueError("a message turn carries exactly one of content or explain")
+        return self
 
 
 class _InteractionBase(_TurnBase):

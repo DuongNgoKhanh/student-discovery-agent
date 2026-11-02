@@ -421,9 +421,12 @@ TypedBlock = Annotated[
 
 class StoredInteraction(ContractModel):
     activity_id: OpaqueId
-    action: Literal["set_name", "submit_answer", "confirm_answer", "edit_answer"]
+    action: Literal["set_name", "submit_answer", "confirm_answer", "edit_answer", "explain_result"]
     question_id: OpaqueId | None
     option_id: OpaqueId | None
+    # explain_result only: the result the explanation was written for.
+    result_id: OpaqueId | None = None
+    result_revision: PositiveRevision | None = None
 
 
 class NewMessage(ContractModel):
