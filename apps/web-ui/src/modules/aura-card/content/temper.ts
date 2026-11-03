@@ -12,7 +12,7 @@ export const temperContent: ArchetypeCopy = {
   },
   strengths: [{ label: 'Cảm nhận nhịp' }, { label: 'Hòa hợp' }, { label: 'Nhất quán' }],
   tagline: 'Giữ nhịp giúp ta kết nối với chính mình và những người xung quanh',
-  fields: ['Công nghệ', 'Khoa học', 'Nghiên cứu'],
+  fields: ['Kế toán', 'Tài chính', 'Logistics'],
 };
 
 export const temperTheme: ArchetypeTheme = {

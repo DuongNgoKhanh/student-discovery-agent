@@ -12,7 +12,7 @@ export const leaderContent: ArchetypeCopy = {
   },
   strengths: [{ label: 'Đồng cảm' }, { label: 'Góc nhìn' }, { label: 'Lãnh đạo' }],
   tagline: 'Đồng hành để mỗi người tìm thấy con đường của mình',
-  fields: ['Công nghệ', 'Khoa học', 'Nghiên cứu'],
+  fields: ['Kinh doanh', 'Marketing', 'Luật'],
 };
 
 export const leaderTheme: ArchetypeTheme = {
