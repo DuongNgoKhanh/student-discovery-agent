@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import { computeContentHash } from '@/modules/experiences/canonical';
 import * as repo from '@/modules/experiences/experiences.repository';
-import { setPublishReportVerifier } from '@/modules/experiences/experiences.reports';
+import { RuntimeReportVerifier, setPublishReportVerifier } from '@/modules/experiences/experiences.reports';
+import { setExperienceRuntimeClient } from '@/modules/experiences/runtime-client';
 import {
   createExperience,
+  evaluateExperienceDraft,
   getExperience,
   getExperienceRelease,
   listExperienceReleases,
@@ -13,6 +15,7 @@ import {
   publishExperienceRelease,
   readExperienceDraft,
   saveExperienceDraft,
+  validateExperienceDraft,
 } from '@/modules/experiences/experiences.service';
 
 vi.mock('@/modules/experiences/experiences.repository');
@@ -690,6 +693,424 @@ describe('experiences.service', () => {
 
       const res = await listExperienceReleases(mockDb, 'exp_1', { limit: 20 });
       expect(res.items).toHaveLength(1);
+    });
+  });
+
+  describe('validateExperienceDraft', () => {
+    const mockCtx = { requestId: 'req_v1', traceId: 'trace_v1' };
+    const mockReport = {
+      id: 'val_100',
+      experience_id: 'exp_1',
+      draft_revision: 2,
+      content_hash: 'sha256:def_hash',
+      definition_schema_version: '1.0',
+      engine_version: '1.0.0',
+      status: 'passed' as const,
+      mandatory_passed: true,
+      issues: [],
+      created_at: '2026-11-03T10:00:00Z',
+    };
+
+    beforeEach(() => {
+      setExperienceRuntimeClient({
+        validate: vi.fn().mockResolvedValue(mockReport),
+        evaluate: vi.fn(),
+        verify: vi.fn(),
+      });
+    });
+
+    afterEach(() => {
+      setExperienceRuntimeClient(null);
+    });
+
+    it('returns 404 when experience draft is not found', async () => {
+      vi.mocked(repo.findIdempotencyRecord).mockResolvedValue(undefined);
+      vi.mocked(repo.findDraftByExperienceId).mockResolvedValue(undefined);
+
+      await expect(
+        validateExperienceDraft(
+          mockDb,
+          'exp_missing',
+          { expected_revision: 1, content_hash: 'sha256:def_hash', idempotency_key: 'key_v1' },
+          mockCtx,
+        ),
+      ).rejects.toMatchObject({ status: 404, code: 'RESOURCE_NOT_FOUND' });
+    });
+
+    it('returns 409 REVISION_CONFLICT when draft revision does not match', async () => {
+      vi.mocked(repo.findIdempotencyRecord).mockResolvedValue(undefined);
+      vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
+        draft_id: 'draft_1',
+        experience_id: 'exp_1',
+        revision: 5,
+        content_hash: 'sha256:def_hash',
+        content: {},
+        updated_by: 'admin',
+        updated_at: new Date(),
+      });
+
+      await expect(
+        validateExperienceDraft(
+          mockDb,
+          'exp_1',
+          { expected_revision: 2, content_hash: 'sha256:def_hash', idempotency_key: 'key_v1' },
+          mockCtx,
+        ),
+      ).rejects.toMatchObject({ status: 409, code: 'REVISION_CONFLICT' });
+    });
+
+    it('returns 409 STALE_REPORT when content hash does not match current draft', async () => {
+      vi.mocked(repo.findIdempotencyRecord).mockResolvedValue(undefined);
+      vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
+        draft_id: 'draft_1',
+        experience_id: 'exp_1',
+        revision: 2,
+        content_hash: 'sha256:different_hash',
+        content: {},
+        updated_by: 'admin',
+        updated_at: new Date(),
+      });
+
+      await expect(
+        validateExperienceDraft(
+          mockDb,
+          'exp_1',
+          { expected_revision: 2, content_hash: 'sha256:def_hash', idempotency_key: 'key_v1' },
+          mockCtx,
+        ),
+      ).rejects.toMatchObject({ status: 409, code: 'STALE_REPORT' });
+    });
+
+    it('validates snapshot, stores report, and returns 201 report', async () => {
+      vi.mocked(repo.findIdempotencyRecord).mockResolvedValue(undefined);
+      vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
+        draft_id: 'draft_1',
+        experience_id: 'exp_1',
+        revision: 2,
+        content_hash: 'sha256:def_hash',
+        content: { def: true },
+        updated_by: 'admin',
+        updated_at: new Date(),
+      });
+      vi.mocked(repo.insertExperienceReport).mockResolvedValue({
+        id: 'val_100',
+        experience_id: 'exp_1',
+        kind: 'validation',
+        draft_revision: 2,
+        content_hash: 'sha256:def_hash',
+        definition_schema_version: '1.0',
+        engine_version: '1.0.0',
+        status: 'passed',
+        mandatory_passed: true,
+        report: mockReport,
+        created_at: new Date(),
+      });
+
+      const res = await validateExperienceDraft(
+        mockDb,
+        'exp_1',
+        { expected_revision: 2, content_hash: 'sha256:def_hash', idempotency_key: 'key_v1' },
+        mockCtx,
+      );
+
+      expect(res.status).toBe(201);
+      expect(res.data).toEqual(mockReport);
+      expect(repo.insertExperienceReport).toHaveBeenCalledWith(
+        mockDb,
+        expect.objectContaining({
+          id: 'val_100',
+          experience_id: 'exp_1',
+          kind: 'validation',
+          content_hash: 'sha256:def_hash',
+        }),
+      );
+      expect(repo.saveIdempotencyRecord).toHaveBeenCalledWith(
+        mockDb,
+        expect.objectContaining({
+          scope: 'validate:exp_1',
+          key: 'key_v1',
+          response_status: 201,
+        }),
+      );
+    });
+
+    it('replays identical validation request when idempotency key matches', async () => {
+      const payloadHash = computeContentHash({
+        expected_revision: 2,
+        content_hash: 'sha256:def_hash',
+      });
+      vi.mocked(repo.findIdempotencyRecord).mockResolvedValue({
+        scope: 'validate:exp_1',
+        key: 'key_v1',
+        request_hash: payloadHash,
+        response_status: 201,
+        response_body: mockReport,
+        created_at: new Date(),
+      });
+
+      const res = await validateExperienceDraft(
+        mockDb,
+        'exp_1',
+        { expected_revision: 2, content_hash: 'sha256:def_hash', idempotency_key: 'key_v1' },
+        mockCtx,
+      );
+
+      expect(res.replayed).toBe(true);
+      expect(res.status).toBe(201);
+      expect(res.data).toEqual(mockReport);
+      expect(repo.insertExperienceReport).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('evaluateExperienceDraft', () => {
+    const mockCtx = { requestId: 'req_e1', traceId: 'trace_e1' };
+    const mockEvalReport = {
+      id: 'eval_200',
+      experience_id: 'exp_1',
+      draft_revision: 2,
+      content_hash: 'sha256:def_hash',
+      definition_schema_version: '1.0',
+      engine_version: '1.0.0',
+      status: 'passed' as const,
+      mandatory_passed: true,
+      cases: [
+        {
+          case_id: 'case_1',
+          mandatory: true,
+          passed: true,
+          expected: {},
+          actual: {},
+          issues: [],
+        },
+      ],
+      created_at: '2026-11-03T10:00:00Z',
+    };
+
+    beforeEach(() => {
+      setExperienceRuntimeClient({
+        validate: vi.fn(),
+        evaluate: vi.fn().mockResolvedValue(mockEvalReport),
+        verify: vi.fn(),
+      });
+    });
+
+    afterEach(() => {
+      setExperienceRuntimeClient(null);
+    });
+
+    it('evaluates snapshot, stores report, and returns 201 report', async () => {
+      vi.mocked(repo.findIdempotencyRecord).mockResolvedValue(undefined);
+      vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
+        draft_id: 'draft_1',
+        experience_id: 'exp_1',
+        revision: 2,
+        content_hash: 'sha256:def_hash',
+        content: { def: true },
+        updated_by: 'admin',
+        updated_at: new Date(),
+      });
+      vi.mocked(repo.insertExperienceReport).mockResolvedValue({
+        id: 'eval_200',
+        experience_id: 'exp_1',
+        kind: 'evaluation',
+        draft_revision: 2,
+        content_hash: 'sha256:def_hash',
+        definition_schema_version: '1.0',
+        engine_version: '1.0.0',
+        status: 'passed',
+        mandatory_passed: true,
+        report: mockEvalReport,
+        created_at: new Date(),
+      });
+
+      const res = await evaluateExperienceDraft(
+        mockDb,
+        'exp_1',
+        { expected_revision: 2, content_hash: 'sha256:def_hash', idempotency_key: 'key_e1' },
+        mockCtx,
+      );
+
+      expect(res.status).toBe(201);
+      expect(res.data).toEqual(mockEvalReport);
+      expect(repo.insertExperienceReport).toHaveBeenCalledWith(
+        mockDb,
+        expect.objectContaining({
+          id: 'eval_200',
+          kind: 'evaluation',
+        }),
+      );
+    });
+  });
+
+  describe('RuntimeReportVerifier', () => {
+    const input = {
+      experience_id: 'exp_1',
+      definition_hash: 'sha256:def_hash',
+      definition_schema_version: '1.0',
+      engine_version: '1.0.0',
+      validation_id: 'val_100',
+      evaluation_id: 'eval_200',
+    };
+
+    it('returns verified: true when local reports pass and remote verify passes', async () => {
+      vi.mocked(repo.findReportById).mockImplementation(async (_db, id) => {
+        if (id === 'val_100') {
+          return {
+            id: 'val_100',
+            experience_id: 'exp_1',
+            kind: 'validation',
+            draft_revision: 1,
+            content_hash: 'sha256:def_hash',
+            definition_schema_version: '1.0',
+            engine_version: '1.0.0',
+            status: 'passed',
+            mandatory_passed: true,
+            report: {},
+            created_at: new Date(),
+          };
+        }
+        if (id === 'eval_200') {
+          return {
+            id: 'eval_200',
+            experience_id: 'exp_1',
+            kind: 'evaluation',
+            draft_revision: 1,
+            content_hash: 'sha256:def_hash',
+            definition_schema_version: '1.0',
+            engine_version: '1.0.0',
+            status: 'passed',
+            mandatory_passed: true,
+            report: {},
+            created_at: new Date(),
+          };
+        }
+        return undefined;
+      });
+
+      const mockClient = {
+        validate: vi.fn(),
+        evaluate: vi.fn(),
+        verify: vi.fn().mockResolvedValue({ verified: true, reason: null }),
+      };
+
+      const verifier = new RuntimeReportVerifier(() => mockDb, () => mockClient);
+      const res = await verifier.verify(input);
+      expect(res).toEqual({ verified: true, reason: null });
+      expect(mockClient.verify).toHaveBeenCalledWith(input, expect.anything());
+    });
+
+    it('denies verification when validation report does not pass', async () => {
+      vi.mocked(repo.findReportById).mockImplementation(async (_db, id) => {
+        if (id === 'val_100') {
+          return {
+            id: 'val_100',
+            experience_id: 'exp_1',
+            kind: 'validation',
+            draft_revision: 1,
+            content_hash: 'sha256:def_hash',
+            definition_schema_version: '1.0',
+            engine_version: '1.0.0',
+            status: 'failed',
+            mandatory_passed: false,
+            report: {},
+            created_at: new Date(),
+          };
+        }
+        return undefined;
+      });
+
+      const verifier = new RuntimeReportVerifier(() => mockDb);
+      const res = await verifier.verify(input);
+      expect(res.verified).toBe(false);
+      expect(res.reason).toContain('did not pass');
+    });
+
+    it('denies verification when evaluation mandatory cases fail', async () => {
+      vi.mocked(repo.findReportById).mockImplementation(async (_db, id) => {
+        if (id === 'val_100') {
+          return {
+            id: 'val_100',
+            experience_id: 'exp_1',
+            kind: 'validation',
+            draft_revision: 1,
+            content_hash: 'sha256:def_hash',
+            definition_schema_version: '1.0',
+            engine_version: '1.0.0',
+            status: 'passed',
+            mandatory_passed: true,
+            report: {},
+            created_at: new Date(),
+          };
+        }
+        if (id === 'eval_200') {
+          return {
+            id: 'eval_200',
+            experience_id: 'exp_1',
+            kind: 'evaluation',
+            draft_revision: 1,
+            content_hash: 'sha256:def_hash',
+            definition_schema_version: '1.0',
+            engine_version: '1.0.0',
+            status: 'failed',
+            mandatory_passed: false,
+            report: {},
+            created_at: new Date(),
+          };
+        }
+        return undefined;
+      });
+
+      const verifier = new RuntimeReportVerifier(() => mockDb);
+      const res = await verifier.verify(input);
+      expect(res.verified).toBe(false);
+      expect(res.reason).toContain('did not pass mandatory cases');
+    });
+
+    it('fails closed when remote runtime verify rejects reports', async () => {
+      vi.mocked(repo.findReportById).mockImplementation(async (_db, id) => {
+        if (id === 'val_100') {
+          return {
+            id: 'val_100',
+            experience_id: 'exp_1',
+            kind: 'validation',
+            draft_revision: 1,
+            content_hash: 'sha256:def_hash',
+            definition_schema_version: '1.0',
+            engine_version: '1.0.0',
+            status: 'passed',
+            mandatory_passed: true,
+            report: {},
+            created_at: new Date(),
+          };
+        }
+        if (id === 'eval_200') {
+          return {
+            id: 'eval_200',
+            experience_id: 'exp_1',
+            kind: 'evaluation',
+            draft_revision: 1,
+            content_hash: 'sha256:def_hash',
+            definition_schema_version: '1.0',
+            engine_version: '1.0.0',
+            status: 'passed',
+            mandatory_passed: true,
+            report: {},
+            created_at: new Date(),
+          };
+        }
+        return undefined;
+      });
+
+      const mockClient = {
+        validate: vi.fn(),
+        evaluate: vi.fn(),
+        verify: vi.fn().mockResolvedValue({ verified: false, reason: 'Report expired in memory' }),
+      };
+
+      const verifier = new RuntimeReportVerifier(() => mockDb, () => mockClient);
+      const res = await verifier.verify(input);
+      expect(res.verified).toBe(false);
+      expect(res.reason).toBe('Report expired in memory');
     });
   });
 });

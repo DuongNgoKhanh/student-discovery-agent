@@ -59,6 +59,13 @@ export const publishReleaseSchema = z.object({
 }).strict();
 export type PublishReleaseInput = z.infer<typeof publishReleaseSchema>;
 
+export const snapshotCommandSchema = z.object({
+  expected_revision: revisionSchema,
+  content_hash: contentHashSchema,
+  idempotency_key: idempotencyKeySchema,
+}).strict();
+export type SnapshotCommandInput = z.infer<typeof snapshotCommandSchema>;
+
 export const paginationQuerySchema = z.object({
   cursor: z.string().min(1).max(4096).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
