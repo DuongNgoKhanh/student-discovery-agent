@@ -12,7 +12,7 @@ export const storytellerContent: ArchetypeCopy = {
   },
   strengths: [{ label: 'Biểu đạt' }, { label: 'Thấu hiểu' }, { label: 'Kết nối' }],
   tagline: 'Những câu chuyện kết nối trái tim, giúp ta thấy mình không đơn độc',
-  fields: ['Công nghệ', 'Khoa học', 'Nghiên cứu'],
+  fields: ['Kỹ thuật', 'Xây dựng', 'Nông nghiệp'],
 };
 
 export const storytellerTheme: ArchetypeTheme = {
