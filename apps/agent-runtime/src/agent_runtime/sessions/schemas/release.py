@@ -1,4 +1,4 @@
-﻿"""Immutable Product delivery descriptors, separate from definition versions."""
+"""Immutable Product delivery descriptors, separate from definition versions."""
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, Field, StringConstraints, ValidationError, model_validator
@@ -55,8 +55,8 @@ class AgentPersona(ContractModel):
 
 
 class AgentModelConfig(ContractModel):
-    # provider/model_id; the model id may itself contain slashes (e.g. vllm/hosted_vllm/Qwen/Qwen3.5-35B-A3B-FP8)
-    ref: Annotated[str, StringConstraints(pattern=r"^[a-z0-9-]+(/[A-Za-z0-9._-]+)+$")]
+    # provider/model_id; the model id may itself contain slashes and colons (e.g. openrouter/google/gemini-2.0-flash-exp:free)
+    ref: Annotated[str, StringConstraints(pattern=r"^[a-z0-9-]+(/[A-Za-z0-9._:-]+)+$")]
     temperature: Annotated[float, Field(strict=True, ge=0, le=2)] = 0.4
     max_output_tokens: Annotated[int, Field(strict=True, ge=1, le=4096)] = 800
     timeout_ms: Annotated[int, Field(strict=True, ge=10000, le=30000)] = 10000  # Gemini rejects deadlines < 10s
