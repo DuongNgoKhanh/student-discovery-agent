@@ -5,6 +5,7 @@ from agent_runtime.infrastructure.http.logging import logger
 from agent_runtime.infrastructure.llm.agno_model import AgnoChatModel
 from agent_runtime.infrastructure.llm.gemini_model import GeminiChatModel
 from agent_runtime.infrastructure.llm.openai_model import OpenAIChatModel
+from agent_runtime.infrastructure.llm.openrouter_model import OpenRouterChatModel
 from agent_runtime.infrastructure.llm.vllm_model import VllmChatModel
 
 # provider -> (adapter, settings field holding its API key, settings field holding its base URL or None);
@@ -13,6 +14,7 @@ MODEL_PROVIDERS: dict[str, tuple[type[AgnoChatModel], str, str | None]] = {
     "gemini": (GeminiChatModel, "GOOGLE_API_KEY", None),
     "openai": (OpenAIChatModel, "OPENAI_API_KEY", None),
     "vllm": (VllmChatModel, "VLLM_API_KEY", "VLLM_BASE_URL"),
+    "openrouter": (OpenRouterChatModel, "OPENROUTER_API_KEY", "OPENROUTER_BASE_URL"),
 }
 
 
