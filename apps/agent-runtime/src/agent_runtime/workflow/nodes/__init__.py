@@ -7,5 +7,7 @@ from agent_runtime.workflow.nodes import (  # noqa: F401
     intent_classifier,
     knowledge_retrieval,
     llm,
+    profile_propose,
     start,
+    tool,
 )
