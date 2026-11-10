@@ -6,7 +6,7 @@ import pytest
 from agent_runtime.agent.model import FakeModel, ModelReply
 from agent_runtime.infrastructure.db.session import RuntimeUnitOfWork
 from agent_runtime.sessions.errors import RuntimeSessionError
-from agent_runtime.workflow.debug import DebugRunService
+from agent_runtime.sessions.services.debug_runs import DebugRunService
 from tests.helpers.chatflow import FLOW, chatflow_content
 
 FIXTURE = json.loads((Path(__file__).resolve().parents[5] / "contracts/fixtures/workflow-debug-run.json").read_text("utf-8"))
@@ -79,7 +79,7 @@ def test_the_admins_run_shows_node_inputs_in_full_and_stops_when_asked():
 
 
 def test_a_stub_that_is_not_text_is_a_json_reply():
-    from agent_runtime.workflow.debug import StubModel
+    from agent_runtime.sessions.services.debug_runs import StubModel
 
     reply = StubModel({"a": "ă"}).invoke([], (), None)
     assert reply.text == '{"a": "ă"}'

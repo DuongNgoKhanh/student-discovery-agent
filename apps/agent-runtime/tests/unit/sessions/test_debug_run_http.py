@@ -10,7 +10,7 @@ from agent_runtime.infrastructure.auth.caller import RawRequestContext
 from agent_runtime.infrastructure.auth.verifier import CallerVerifier, ServiceVerifier
 from agent_runtime.main import create_app
 from agent_runtime.sessions.schemas.common import RuntimePolicy
-from agent_runtime.workflow.debug import DebugRunService
+from agent_runtime.sessions.services.debug_runs import DebugRunService
 from tests.helpers.chatflow import FLOW, chatflow_content
 from tests.helpers.clock import FakeClock
 from tests.helpers.signing import sign_request, sign_service_request

@@ -244,7 +244,7 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         models = functools.cache(build_model_port)
         turns = TurnService(store, handler, models=models, responses=responses,
                             knowledge=knowledge, trace_sink=trace_sink)
-        from agent_runtime.workflow.debug import DebugRunService
+        from agent_runtime.sessions.services.debug_runs import DebugRunService
         debug_runs = DebugRunService(models=models, knowledge=knowledge)
         return RuntimeContainer(policy=policy, verifier=verifier, service_verifier=service_verifier,
             conversations=conversations,
