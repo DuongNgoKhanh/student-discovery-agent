@@ -314,3 +314,10 @@ def test_llm_refs_that_are_not_a_list_become_empty_even_when_a_ref_would_be_know
     model = FakeModel(ModelReply(text=json.dumps({"refs": refs})))
     _, result, _, _ = run_node(node, model=model, state=RunState(knowledge={"kb": _Views()}))
     assert result.output["refs"] == []
+
+
+@pytest.mark.parametrize("reserved", ["other", "error"])
+def test_a_label_cannot_reuse_a_handle_the_classifier_already_has(reserved):
+    from agent_runtime.workflow.nodes.intent_classifier import ClassifierConfig
+    with pytest.raises(ValidationError):
+        ClassifierConfig.model_validate({"labels": [LABELS[0], {"id": reserved, "description": "x"}]})

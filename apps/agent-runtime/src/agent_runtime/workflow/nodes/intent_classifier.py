@@ -29,8 +29,8 @@ class ClassifierConfig(ContractModel):
     @model_validator(mode="after")
     def distinct_labels(self) -> "ClassifierConfig":
         ids = [label.id for label in self.labels]
-        if "other" in ids or len(set(ids)) != len(ids):
-            raise ValueError("label ids must be unique and cannot be 'other'")
+        if {"other", "error"} & set(ids) or len(set(ids)) != len(ids):  # both are already handles of the node
+            raise ValueError("label ids must be unique and cannot be 'other' or 'error'")
         return self
 
 
