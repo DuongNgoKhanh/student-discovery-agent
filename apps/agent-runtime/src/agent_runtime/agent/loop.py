@@ -94,7 +94,7 @@ def offered_tools(snapshot: AgentSnapshotV1, context: ToolContext = NO_CONTEXT) 
     return offered
 
 
-def _text_block(block_id: str, text: str, allowed_domains: tuple[str, ...]) -> TypedBlock | None:
+def text_block(block_id: str, text: str, allowed_domains: tuple[str, ...]) -> TypedBlock | None:
     clean = sanitize_markdown(text, allowed_domains)
     if not clean:
         return None
@@ -205,7 +205,7 @@ def _finish(snapshot: AgentSnapshotV1, text: str, suggestions: SuggestRepliesArg
             handoff: Handoff | None, new_id: Callable[[], str], steps: int, usage: ModelUsage,
             domains: tuple[str, ...]) -> AgentTurn:
     blocks: list[TypedBlock] = []
-    if (block := _text_block(new_id(), text, domains)) is not None:
+    if (block := text_block(new_id(), text, domains)) is not None:
         blocks.append(block)
     if not blocks and handoff is None:
         return _fallback(snapshot, "empty_reply", new_id, steps, usage)
