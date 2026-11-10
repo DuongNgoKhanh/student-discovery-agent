@@ -335,10 +335,13 @@ class InternalBoundary:
                     raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID") from None
                 raise
             # Both directions: a service token reaches only its own route, a student token never a service route.
-            route_purpose = SERVICE_ROUTES.get((scope["method"], target))
+            # Keyed by the decoded path the router dispatches on: a percent-encoded target (``%3A``) must not
+            # slip past the service-route checks while still reaching the service route.
+            route = (scope["method"], scope["path"])
+            route_purpose = SERVICE_ROUTES.get(route)
             if (route_purpose != caller.purpose) if service else route_purpose is not None:
                 raise RuntimeSessionError(403, "FORBIDDEN")
-            if not service and (scope["method"], target) in SERVICE_ROUTES:
+            if not service and route in SERVICE_ROUTES:
                 # Defence in depth: Studio-only routes never serve a student caller, whatever the route checks.
                 raise RuntimeSessionError(403, "FORBIDDEN")
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)

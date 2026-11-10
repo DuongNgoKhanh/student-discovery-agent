@@ -8,6 +8,7 @@ from starlette.responses import StreamingResponse
 from agent_runtime.evaluations.schemas.validation import ExperienceSnapshotCommand, PublishReportInput
 from agent_runtime.evaluations.services.publish_gate import IdempotencyConflict
 from agent_runtime.evaluations.services.runner import SnapshotHashMismatch
+from agent_runtime.infrastructure.auth.caller import VerifiedService
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
 from agent_runtime.knowledge.filters import FilterError
 from agent_runtime.knowledge.schemas import KnowledgeUnavailable, RetrievalRequest
@@ -38,6 +39,13 @@ def _input(request, model):
         return model.model_validate(data)
     except ValidationError:
         raise RuntimeSessionError(422, "INVALID_INPUT") from None
+
+
+def _require_service(request, purpose):
+    """Defence in depth behind the boundary's route table: a Studio-only route serves only that Studio purpose."""
+    caller = request.state.caller
+    if not isinstance(caller, VerifiedService) or caller.purpose != purpose:
+        raise RuntimeSessionError(403, "FORBIDDEN")
 
 
 def _wants_stream(request):
@@ -160,6 +168,7 @@ def retrieve_knowledge(request: Request):
 
 @router.post("/agent-snapshots:validate", operation_id="internalValidateAgentSnapshot")
 def validate_agent_snapshot(request: Request):
+    _require_service(request, "agent.validate")
     _query(request, ())
     data = read_strict_json(request.state.raw_body)
     if not isinstance(data, dict) or set(data) != {"content"}:
@@ -171,6 +180,7 @@ def validate_agent_snapshot(request: Request):
 @router.post("/agent-debug-runs:run", operation_id="internalRunAgentDebugRun")
 def run_agent_debug_run(request: Request):
     """The Admin's own run of a draft: nothing is written and nothing is kept here (Studio stores the result)."""
+    _require_service(request, "agent.validate")
     _query(request, ())
     data = read_strict_json(request.state.raw_body)
     if not isinstance(data, dict) or set(data) != {"content", "request"}:

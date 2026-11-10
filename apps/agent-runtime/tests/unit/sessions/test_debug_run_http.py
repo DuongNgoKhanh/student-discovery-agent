@@ -1,6 +1,7 @@
 import json
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 
 from agent_runtime.agent.model import FakeModel
@@ -21,13 +22,14 @@ TARGET = "/api/v1/internal/agent-debug-runs:run"
 BODY = {"content": chatflow_content(FLOW), "request": {"message": "học phí", "llm_stubs": {"ask": "hoi_hoc_phi"}}}
 
 
-def call(payload=BODY, *, purpose="agent.validate", student=False, stream=False, service=True):
+def call(payload=BODY, *, purpose="agent.validate", student=False, stream=False, service=True, target=TARGET):
     runtime = RuntimeContainer(policy=RuntimePolicy(environment="demo"),
                                verifier=CallerVerifier({"s": STUDENT_KEY}, FakeClock(NOW)),
                                service_verifier=ServiceVerifier({"studio": STUDIO_KEY}, FakeClock(NOW)),
-                               debug_runs=DebugRunService(models=lambda provider: FakeModel()) if service else None)
+                               debug_runs=DebugRunService(models=lambda provider: FakeModel()) if service else None,
+                               agent_validation=object())
     body = json.dumps(payload).encode()
-    context = RawRequestContext("POST", TARGET, body)
+    context = RawRequestContext("POST", target, body)
     if student:
         token = sign_request(context, owner_id="owner_" + "a" * 24, now=NOW, key=STUDENT_KEY, kid="s")
         caller = "sda-product-bff"
@@ -38,7 +40,7 @@ def call(payload=BODY, *, purpose="agent.validate", student=False, stream=False,
     if stream:
         headers["Accept"] = "text/event-stream"
     with TestClient(create_app(runtime)) as client:
-        return client.post(TARGET, content=body, headers=headers)
+        return client.post(target, content=body, headers=headers)
 
 
 def frames(text):
@@ -79,6 +81,24 @@ def test_a_body_without_request_or_with_a_bad_request_is_a_422():
 def test_only_the_studio_validate_token_may_run_a_draft():
     assert call(student=True).status_code == 403
     assert call(purpose="knowledge.retrieval").status_code == 403
+
+
+@pytest.mark.parametrize("target", ["/api/v1/internal/agent-debug-runs%3Arun", "/api/v1/internal/agent-debug-runs%3arun",
+                                    "/api/v1/internal/agent-snapshots%3Avalidate"])
+def test_a_percent_encoded_studio_route_is_still_a_studio_route(target):
+    assert call(student=True, target=target).status_code == 403
+    assert call(purpose="knowledge.retrieval", target=target).status_code == 403
+    if "debug" in target:  # the Studio token still reaches it, under either spelling
+        assert call(target=target).status_code == 200
+
+
+def test_the_route_itself_refuses_a_caller_that_is_not_the_studio_validate_service(monkeypatch):
+    from agent_runtime.api.internal import dependencies
+
+    monkeypatch.setattr(dependencies, "SERVICE_ROUTES", {})  # the boundary table no longer guards the route
+    assert call(student=True).status_code == 403
+    assert call(student=True, target="/api/v1/internal/agent-snapshots:validate").status_code == 403
+    assert call().status_code == 403  # the service token now fails the boundary: no purpose matches
 
 
 def test_a_runtime_without_the_service_is_a_503():
