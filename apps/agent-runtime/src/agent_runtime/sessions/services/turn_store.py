@@ -219,7 +219,8 @@ class TurnStore:
         return MessageSnapshot(parent=parent, agent=agent, activity=activity, release=release, result_card=card,
                                history=history, next_result_revision=next_result_revision,
                                today=self.access.clock.now(session).date(), current_result=current,
-                               agent_content_hash=agent_release.content_hash)
+                               agent_content_hash=agent_release.content_hash,
+                               user_turns=self.messages.count_user(session, parent.id))
 
     def commit_message(self, caller: VerifiedCaller, begun: Begun, plan: MessagePlan) -> TurnResponse:
         """One atomic write: user + assistant messages, the planned activity change and the completed Response."""

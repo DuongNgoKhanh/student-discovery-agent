@@ -22,11 +22,12 @@ CARD = {"house": {"house_id": "h1", "name": "Nhà Sáng Tạo"}, "strengths": ["
         "career_groups": ["Thiết kế"], "quote": "Cứ thử đi."}
 
 
-def snapshot(agent, history=(), *, activity=None, result_card=None, current_result=None):
+def snapshot(agent, history=(), *, activity=None, result_card=None, current_result=None, user_turns=0):
     parent = SimpleNamespace(conv_vars={"stage": "assessment"}, capability_snapshot=SimpleNamespace(
         supported_blocks=(SimpleNamespace(type="text"), SimpleNamespace(type="markdown"))), display_name=None)
     return SimpleNamespace(agent=agent, parent=parent, activity=activity, result_card=result_card,
-                           current_result=current_result, history=history, today=date(2026, 11, 10))
+                           current_result=current_result, history=history, today=date(2026, 11, 10),
+                           user_turns=user_turns)
 
 
 def message(text):
@@ -48,11 +49,12 @@ def test_scope_exposes_the_system_namespace_for_a_message(monkeypatch):
     seen = captured_scope(monkeypatch)
     history = (SimpleNamespace(role="user", text="chào", interaction=None),
                SimpleNamespace(role="assistant", blocks=()))
-    run_message_turn(snapshot(demo_agent(), history), message("học phí"), model=None, executor=None,
+    # turn_index is the stored count of student messages, not the (possibly shorter) history window's.
+    run_message_turn(snapshot(demo_agent(), history, user_turns=31), message("học phí"), model=None, executor=None,
                      tool_context=NO_CONTEXT, knowledge_port=None, clock=lambda: 0.0)
     scope, ports = seen[0]
     assert scope.get("sys.query") == "học phí" and scope.get("sys.interaction_outcome") == "none"
-    assert scope.get("sys.client_blocks") == ["text", "markdown"] and scope.get("sys.turn_index") == 1
+    assert scope.get("sys.client_blocks") == ["text", "markdown"] and scope.get("sys.turn_index") == 31
     assert scope.get("sys.interaction") is None and scope.get("sys.activity_status") is None
     assert ports.user_text == "học phí"
 

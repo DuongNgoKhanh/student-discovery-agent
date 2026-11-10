@@ -82,3 +82,20 @@ def test_a_turn_cancelled_after_an_assign_ran_leaves_conv_vars_untouched(flow):
     rig.send("xin chào", revision=0, key="m1")
     assert len(polls) > 2 and rig.model.calls == []
     assert rig.conv_vars() == {} and rig.revision() == 0
+
+
+def test_turn_index_counts_every_committed_student_message_even_without_a_history_window(
+        test_database, valid_v2_doc, validator):
+    workflow = {"entry": "start", "variables": [],
+                "nodes": [{"id": "start", "type": "start"},
+                          {"id": "reply", "type": "answer", "config": {"text": "Lượt {{sys.turn_index}}"}}],
+                "edges": [{"id": "e1", "source": "start", "source_handle": "next", "target": "reply"}]}
+    content = chatflow_content(workflow)
+    content["limits"] = {**content["limits"], "history_messages": 0}
+    rig = build_chat(test_database, valid_v2_doc, validator, agent_content=content)
+    try:
+        replies = [rig.send(f"tin {turn}", revision=turn, key=f"m{turn}").data["output"]["blocks"][0]["content"]
+                   for turn in range(23)]
+    finally:
+        rig.dispose()
+    assert replies == [f"Lượt {turn}" for turn in range(23)]  # more turns than the default 20-message window

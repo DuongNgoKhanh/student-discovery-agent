@@ -49,6 +49,7 @@ class MessageSnapshot:
     today: date
     current_result: tuple[str, int] | None = None  # (result_id, result_revision) of result_card
     agent_content_hash: str | None = None  # content hash of the agent release this turn runs
+    user_turns: int = 0  # committed student messages, counted in storage (the history window may be shorter)
 
 
 @dataclass(frozen=True)

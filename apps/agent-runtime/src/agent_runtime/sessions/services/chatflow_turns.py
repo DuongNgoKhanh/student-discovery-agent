@@ -57,7 +57,7 @@ def _execute(snapshot: MessageSnapshot, *, query: str, interaction: str | None, 
     activity = snapshot.activity
     sys_values: dict[str, Any] = {
         "query": query, "interaction": interaction, "interaction_outcome": outcome,
-        "turn_index": sum(1 for view in snapshot.history if view.role == "user"),
+        "turn_index": snapshot.user_turns,
         "client_blocks": [block.type for block in snapshot.parent.capability_snapshot.supported_blocks],
         "activity_status": activity.state.status if activity else None}
     scope = Scope(sys=sys_values, conv=snapshot.parent.conv_vars, profile=profile.snapshot(), result=result,
