@@ -23,6 +23,7 @@ from agent_runtime.sessions.services.turn_handlers import TurnHandler
 from agent_runtime.sessions.services.turn_store import Begun, TurnCancelled, TurnStore
 from agent_runtime.sessions.trace import describe_metadata, emit_trace
 from agent_runtime.workflow.ports import ProfilePort
+from agent_runtime.workflow.trace import Redaction, build_trace
 
 __all__ = ["CANCEL_POLL_SECONDS", "Begun", "StreamEvent", "TurnCancelled", "TurnService", "describe_response",
            "describe_turn"]
@@ -177,15 +178,23 @@ class TurnService:
         deadline = self._clock() + agent.limits.turn_timeout_ms / 1000  # field reads count against the turn budget
         tool_context, knowledge = self._knowledge(agent)
         executor = SnapshotToolExecutor(snapshot, knowledge)
-        run = run_message_turn(snapshot, request, model=model, executor=executor, tool_context=tool_context,
-                               knowledge_port=self.knowledge,
-                               knowledge_fields=self._workflow_fields(agent, tool_context.knowledge_fields),
-                               profile=self.profile, emit=emit,
-                               should_stop=self._should_stop(caller, begun.response.id), deadline=deadline,
-                               clock=self._clock)
+        run, used, workflow = run_message_turn(
+            snapshot, request, model=model, executor=executor, tool_context=tool_context,
+            knowledge_port=self.knowledge, knowledge_fields=self._workflow_fields(agent, tool_context.knowledge_fields),
+            profile=self.profile, emit=emit, should_stop=self._should_stop(caller, begun.response.id),
+            deadline=deadline, clock=self._clock)
         observed.update(agent_steps=run.agent_steps, input_tokens=run.usage.input_tokens,
                         output_tokens=run.usage.output_tokens, fallback=run.fallback is not None,
                         fallback_reason=run.fallback)
+        observed["response_id"] = begun.response.id
+        try:  # a trace that cannot be built is dropped; it never fails the turn
+            # Redacted for production: no student text, rendered prompt or profile value reaches the stored trace.
+            observed["workflow"] = build_trace(
+                run, redaction=Redaction("production", {variable.name: variable for variable in workflow.variables}),
+                agent_release_id=snapshot.parent.agent_snapshot.release_id,
+                content_hash=snapshot.agent_content_hash, mode=agent.mode, budget=used)
+        except Exception as error:
+            logger.warning("workflow trace dropped: %s", type(error).__name__)
         searches = (*(knowledge.trace() if knowledge is not None else ()), *run.knowledge)[:8]
         if searches:
             observed["knowledge"] = searches

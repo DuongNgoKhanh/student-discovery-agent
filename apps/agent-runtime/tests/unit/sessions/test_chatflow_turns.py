@@ -50,8 +50,9 @@ def test_scope_of_an_explain_request_has_no_query_and_exposes_the_result():
 
 
 def run_agent_mode(model):
-    return run_message_turn(snapshot(demo_agent()), message("chào"), model=model, executor=None,
-                            tool_context=NO_CONTEXT, knowledge_port=None, clock=lambda: 0.0)
+    run, _, _ = run_message_turn(snapshot(demo_agent()), message("chào"), model=model, executor=None,
+                                 tool_context=NO_CONTEXT, knowledge_port=None, clock=lambda: 0.0)
+    return run
 
 
 def test_agent_mode_runs_the_implicit_graph_with_the_agents_own_fallbacks():
@@ -138,13 +139,22 @@ def test_run_message_turn_merges_the_workflow_fields_so_a_filter_variable_resolv
     port = FieldsPort()
     ctx = ToolContext(knowledge_fields={"kb1": KB_FIELDS["kb1"]})  # known KBs come from the agent tool context
     merged = turn_service(port)._workflow_fields(agent, ctx.knowledge_fields)
-    run = run_message_turn(snapshot(agent), message("học phí"), model=None, executor=None, tool_context=ctx,
-                           knowledge_port=port, knowledge_fields=merged, clock=lambda: 0.0)
+    run, _, _ = run_message_turn(snapshot(agent), message("học phí"), model=None, executor=None, tool_context=ctx,
+                                 knowledge_port=port, knowledge_fields=merged, clock=lambda: 0.0)
     assert run.path == ("start", "kb", "reply") and run.records[1].handle == "found"
     assert [(c.name, c.comparison_operator, c.value) for c in port.requests[0].metadata_condition.conditions] == [
         ("tuition", "=", 9000000)]
     assert [block.type for block in run.blocks] == ["markdown", "knowledge_card"]
     # without the merged fields kb2 is unreadable, so the filter cannot be checked
-    bare = run_message_turn(snapshot(agent), message("học phí"), model=None, executor=None, tool_context=ctx,
-                            knowledge_port=port, clock=lambda: 0.0)
+    bare, _, _ = run_message_turn(snapshot(agent), message("học phí"), model=None, executor=None, tool_context=ctx,
+                                  knowledge_port=port, clock=lambda: 0.0)
     assert bare.records[1].handle == "error"
+
+
+def test_run_message_turn_returns_the_budget_it_used_and_the_workflow_that_ran():
+    agent = demo_agent()
+    run, used, workflow = run_message_turn(snapshot(agent), message("chào"), model=FakeModel(ModelReply(text="Chào!")),
+                                           executor=None, tool_context=NO_CONTEXT, knowledge_port=None,
+                                           clock=lambda: 0.0)
+    assert (used.nodes, used.llm_calls) == (len(run.path), 1)
+    assert [node.id for node in workflow.nodes] == ["start", "agent", "answer"]

@@ -183,7 +183,8 @@ class TurnStore:
         return done
 
     def _message_snapshot(self, session, parent: ConversationRecord) -> MessageSnapshot:
-        agent = AgentSnapshotV1.model_validate(self.snapshots.get(session, parent.agent_snapshot).content)
+        agent_release = self.snapshots.get(session, parent.agent_snapshot)
+        agent = AgentSnapshotV1.model_validate(agent_release.content)
         activity = release = card = current = None
         next_result_revision = 1
         if parent.active_activity_id is not None:
@@ -202,7 +203,8 @@ class TurnStore:
         history = tuple(self.messages.recent(session, parent.id, limit)) if limit else ()
         return MessageSnapshot(parent=parent, agent=agent, activity=activity, release=release, result_card=card,
                                history=history, next_result_revision=next_result_revision,
-                               today=self.access.clock.now(session).date(), current_result=current)
+                               today=self.access.clock.now(session).date(), current_result=current,
+                               agent_content_hash=agent_release.content_hash)
 
     def commit_message(self, caller: VerifiedCaller, begun: Begun, plan: MessagePlan) -> TurnResponse:
         """One atomic write: user + assistant messages, the planned activity change and the completed Response."""

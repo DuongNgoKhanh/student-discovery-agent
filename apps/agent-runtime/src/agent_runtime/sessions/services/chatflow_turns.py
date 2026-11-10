@@ -44,8 +44,11 @@ def build_scope(snapshot: MessageSnapshot, request: MessageTurnInput, workflow: 
 def run_message_turn(snapshot: MessageSnapshot, request: MessageTurnInput, *, model, executor, tool_context,
                      knowledge_port, knowledge_fields: dict | None = None, profile: ProfilePort | None = None,
                      emit=None, should_stop=None, deadline=None,
-                     clock) -> WorkflowRun:
-    """``mode = agent`` runs the implicit start -> agent -> answer graph, keeping the agent's own fallbacks."""
+                     clock) -> tuple[WorkflowRun, Budget, Workflow]:
+    """``mode = agent`` runs the implicit start -> agent -> answer graph, keeping the agent's own fallbacks.
+
+    Returns the run, the Budget it used (its counters feed the trace) and the workflow that ran.
+    """
     agent = snapshot.agent
     implicit = agent.mode == "agent"
     workflow = implicit_workflow(agent) if implicit else agent.workflow
@@ -57,9 +60,10 @@ def run_message_turn(snapshot: MessageSnapshot, request: MessageTurnInput, *, mo
                   show_params=KnowledgeShowParams.model_validate(show.params) if show else None, profile=profile,
                   agent_context=agent_context(snapshot, explain=explain), history=chat_history(snapshot.history),
                   user_text=EXPLAIN_REQUEST_TEXT if explain else request.content.text)
-    return run_workflow(workflow, build_scope(snapshot, request, workflow, profile), ports,
-                        budget=Budget(workflow.budget, clock=clock, deadline=deadline), on_event=emit,
-                        should_stop=should_stop, implicit=implicit)
+    budget = Budget(workflow.budget, clock=clock, deadline=deadline)
+    run = run_workflow(workflow, build_scope(snapshot, request, workflow, profile), ports, budget=budget,
+                       on_event=emit, should_stop=should_stop, implicit=implicit)
+    return run, budget, workflow
 
 
 def plan_from_run(snapshot: MessageSnapshot, run: WorkflowRun, request: MessageTurnInput, *, handler,

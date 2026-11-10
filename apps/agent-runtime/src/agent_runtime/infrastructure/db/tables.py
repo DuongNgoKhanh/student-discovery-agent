@@ -91,5 +91,6 @@ runtime_traces = Table(
     Column("algorithm_profile", Text), Column("engine_version", Text), Column("latency_ms", BigInteger),
     Column("provider", Text), Column("fallback", Boolean), Column("fallback_reason", Text),
     Column("agent_steps", Integer), Column("input_tokens", Integer), Column("output_tokens", Integer),
-    Column("knowledge", JSONB), timestamp("timestamp", default=True),
+    Column("knowledge", JSONB), Column("workflow", JSONB), Column("response_id", Text),
+    timestamp("timestamp", default=True),
 )

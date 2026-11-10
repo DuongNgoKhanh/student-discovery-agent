@@ -227,7 +227,7 @@ def upgrade() -> None:
             algorithm_profile text, engine_version text, latency_ms bigint CHECK (latency_ms >= 0),
             provider text, fallback boolean, fallback_reason text,
             agent_steps integer CHECK (agent_steps >= 0), input_tokens integer CHECK (input_tokens >= 0),
-            output_tokens integer CHECK (output_tokens >= 0), knowledge jsonb,
+            output_tokens integer CHECK (output_tokens >= 0), knowledge jsonb, workflow jsonb, response_id text,
             timestamp timestamptz NOT NULL DEFAULT clock_timestamp()
         );
         CREATE INDEX conversations_owner_lookup ON execution.conversations (owner_id, id);

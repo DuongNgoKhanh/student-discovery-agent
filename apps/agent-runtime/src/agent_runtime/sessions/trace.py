@@ -12,6 +12,7 @@ from pydantic import ConfigDict, Field, StringConstraints
 
 from agent_runtime.agent.loop import Fallback
 from agent_runtime.sessions.schemas.common import ContractModel, JsonSafeInt, UtcDatetime
+from agent_runtime.workflow.trace import WorkflowTrace
 
 Reference = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=128,
                                             pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")]
@@ -59,6 +60,8 @@ class TraceEvent(ContractModel):
     input_tokens: JsonSafeInt | None = None
     output_tokens: JsonSafeInt | None = None
     knowledge: Annotated[tuple[KnowledgeSearchTrace, ...], Field(max_length=8)] | None = None
+    response_id: Reference | None = None
+    workflow: WorkflowTrace | None = None  # per-node trace, already redacted by workflow.trace
     timestamp: UtcDatetime
 
 
@@ -134,7 +137,8 @@ def describe_metadata(describe, subject) -> dict:
 
 _DESCRIBED = frozenset({"conversation_id", "activity_id", "result_id", "before_revision", "after_revision",
                         "experience_release_id", "algorithm_profile", "provider", "fallback", "fallback_reason",
-                        "agent_steps", "input_tokens", "output_tokens", "knowledge"})
+                        "agent_steps", "input_tokens", "output_tokens", "knowledge", "response_id",
+                        "workflow"})
 
 
 def _describe(describe, response) -> dict:
