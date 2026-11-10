@@ -2,18 +2,20 @@
 
 Production traces never keep what the student typed, a rendered prompt or a ``profile.*`` value: node inputs are
 dropped, text-bearing outputs keep only their size and condition operands keep only whether a value was present
-(enum conversation variables, numbers/booleans and a few system values excepted). ``full`` keeps everything and is
+(enum and boolean conversation variables and a few system values excepted). ``full`` keeps everything and is
 only for the Admin's own debug run.
 """
 from collections.abc import Mapping
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, get_args
 
 from pydantic import Field
 
+from agent_runtime.agent.catalog import TOOL_DECLARATIONS
 from agent_runtime.sessions.schemas.common import ContractModel, JsonSafeInt
 from agent_runtime.sessions.schemas.workflow import ConvVariable
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.executor import NodeRecord, WorkflowRun
+from agent_runtime.workflow.nodes.base import ErrorType
 
 
 class NodeRunTrace(ContractModel):
@@ -44,7 +46,9 @@ class WorkflowTrace(ContractModel):
 # Output keys whose values are workflow config or ids, never student text.
 _KEEP = {("if_else", "matched"), ("intent_classifier", "label"), ("knowledge_retrieval", "refs"),
          ("profile_propose", "fields"), ("profile_propose", "proposal_id")}
-_ALWAYS = {"error_type", "handoff"}
+# Values a model or a tool result could also put under these keys: kept only when they are what the engine wrote.
+_ERROR_TYPES = frozenset({"", *get_args(ErrorType)})
+_HANDOFFS = frozenset(declaration.name for declaration in TOOL_DECLARATIONS.values() if declaration.handoff)
 _REASON_KEYS = {"label", "steps", "handoff", "assigned", "tool", "fields", "degraded"}
 _SAFE_SYS = {"sys.interaction_outcome", "sys.turn_index", "sys.activity_status"}
 
@@ -64,8 +68,8 @@ class Redaction:
             return {"path": None, "value": _plain(value)}  # a literal from the workflow's own config
         if self.full:
             return {"path": path, "value": _plain(value)}
-        if path.startswith("conv.") and isinstance(value, bool | int | float):
-            return {"path": path, "value": value}
+        if path.startswith("conv.") and isinstance(value, bool):
+            return {"path": path, "value": value}  # numbers are not kept: a profile or model number may be copied in
         variable = self._variables.get(path.removeprefix("conv.")) if path.startswith("conv.") else None
         if (variable is not None and variable.type == "enum") or path in _SAFE_SYS:
             return {"path": path, "value": _plain(value)}
@@ -90,9 +94,19 @@ class Redaction:
         if value is None or self.full:
             return _plain(value)
         if isinstance(value, Mapping):
-            return {str(key): (_plain(item) if (node_type, key) in _KEEP or key in _ALWAYS else _shrink(item))
+            return {str(key): (_plain(item) if _kept(node_type, key, item) else _shrink(item))
                     for key, item in value.items()}
         return _shrink(value)
+
+
+def _kept(node_type: str, key: Any, value: Any) -> bool:
+    if (node_type, key) in _KEEP:
+        return True
+    if key == "error_type":
+        return isinstance(value, str) and value in _ERROR_TYPES
+    if key == "handoff" and node_type == "agent":
+        return value is None or (isinstance(value, str) and value in _HANDOFFS)
+    return False
 
 
 def _plain(value: Any) -> Any:
