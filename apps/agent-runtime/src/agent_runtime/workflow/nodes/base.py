@@ -39,6 +39,7 @@ class RunState:
     handoff: Handoff | None = None
     live: set[str] = field(default_factory=set)  # nodes whose tokens may stream straight to the student
     streamed: set[str] = field(default_factory=set)
+    agent_steps: int = 0
 
 
 @dataclass(frozen=True)
