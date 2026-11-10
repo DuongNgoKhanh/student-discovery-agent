@@ -1,0 +1,31 @@
+{
+  "valid": [
+    {"name": "eq_true", "expression": {"==": [{"var": "conv.stage"}, "assessment"]}, "vars": {"conv.stage": "assessment"}, "expect": true},
+    {"name": "eq_false", "expression": {"==": [{"var": "conv.stage"}, "assessment"]}, "vars": {"conv.stage": "welcome"}, "expect": false},
+    {"name": "eq_is_case_sensitive", "expression": {"==": [{"var": "profile.entry_level"}, "Cao_dang"]}, "vars": {"profile.entry_level": "cao_dang"}, "expect": false},
+    {"name": "null_makes_eq_false", "expression": {"==": [{"var": "profile.entry_level"}, "cao_dang"]}, "vars": {}, "expect": false},
+    {"name": "null_makes_ne_false", "expression": {"!=": [{"var": "profile.entry_level"}, "cao_dang"]}, "vars": {}, "expect": false},
+    {"name": "ne_true", "expression": {"!=": [{"var": "conv.stage"}, "welcome"]}, "vars": {"conv.stage": "explore"}, "expect": true},
+    {"name": "in_list_literal_true", "expression": {"in": [{"var": "profile.entry_level"}, ["thpt_grade_10", "thpt_grade_11"]]}, "vars": {"profile.entry_level": "thpt_grade_10"}, "expect": true},
+    {"name": "in_list_literal_null", "expression": {"in": [{"var": "profile.entry_level"}, ["thpt_grade_10"]]}, "vars": {}, "expect": false},
+    {"name": "in_string_list_variable", "expression": {"in": ["kinh_te", {"var": "profile.interested_career_groups"}]}, "vars": {"profile.interested_career_groups": ["kinh_te", "it"]}, "expect": true},
+    {"name": "and_not", "expression": {"and": [{"==": [{"var": "conv.stage"}, "explore"]}, {"!": [{"var": "conv.done"}]}]}, "vars": {"conv.stage": "explore", "conv.done": false}, "expect": true},
+    {"name": "or_short_circuit", "expression": {"or": [{"==": [{"var": "conv.stage"}, "a"]}, {"==": [{"var": "conv.stage"}, "b"]}]}, "vars": {"conv.stage": "b"}, "expect": true},
+    {"name": "ordering_numbers", "expression": {">=": [{"var": "sys.turn_index"}, 2]}, "vars": {"sys.turn_index": 2}, "expect": true},
+    {"name": "ordering_mismatch_is_false", "expression": {"<": [{"var": "conv.stage"}, 3]}, "vars": {"conv.stage": "a"}, "expect": false},
+    {"name": "bool_is_not_number", "expression": {"==": [{"var": "conv.done"}, 1]}, "vars": {"conv.done": true}, "expect": false},
+    {"name": "missing_true_when_null", "expression": {"missing": ["profile.entry_level"]}, "vars": {}, "expect": true},
+    {"name": "missing_false_when_present", "expression": {"missing": ["profile.entry_level"]}, "vars": {"profile.entry_level": "cao_dang"}, "expect": false},
+    {"name": "bare_boolean_var", "expression": {"var": "conv.done"}, "vars": {"conv.done": true}, "expect": true}
+  ],
+  "invalid": [
+    {"name": "operator_outside_subset_map", "expression": {"map": [[1], {"var": "x.y"}]}, "code": "workflow_invalid_expression"},
+    {"name": "operator_outside_subset_merge", "expression": {"merge": [[1], [2]]}, "code": "workflow_invalid_expression"},
+    {"name": "eq_needs_two_operands", "expression": {"==": [1]}, "code": "workflow_invalid_expression"},
+    {"name": "two_keys", "expression": {"==": [1, 1], "!=": [1, 2]}, "code": "workflow_invalid_expression"},
+    {"name": "var_without_namespace", "expression": {"==": [{"var": "stage"}, "a"]}, "code": "workflow_invalid_expression"},
+    {"name": "in_with_string_right_side", "expression": {"in": [{"var": "conv.stage"}, "abc"]}, "code": "workflow_type_mismatch"},
+    {"name": "list_literal_outside_in", "expression": {"==": [{"var": "conv.stage"}, ["a"]]}, "code": "workflow_invalid_expression"},
+    {"name": "not_an_object", "expression": "conv.stage", "code": "workflow_invalid_expression"}
+  ]
+}
