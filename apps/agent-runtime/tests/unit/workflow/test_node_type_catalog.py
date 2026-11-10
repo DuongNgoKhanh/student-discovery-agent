@@ -3,7 +3,7 @@ from pathlib import Path
 
 from agent_runtime.sessions.schemas.workflow import NODE_TYPES
 from agent_runtime.workflow import registry
-from agent_runtime.workflow.catalog import HANDLE_SPECS, node_type_catalog
+from agent_runtime.workflow.catalog import HANDLE_SPECS, ORDER, TITLES, node_type_catalog
 
 GOLDEN = Path(__file__).resolve().parents[5] / "contracts/fixtures/workflow-node-types.json"
 
@@ -28,13 +28,24 @@ SAMPLES = {
     "assign": {"assignments": [{"variable": "conv.x", "operation": "clear"}]}, "answer": {"text": ""}}
 
 
+def test_every_registered_node_type_is_in_the_hand_kept_catalog_tables():
+    # A new node type must be added to ORDER, TITLES and HANDLE_SPECS (and SAMPLES below), then the golden
+    # regenerated: python -m agent_runtime.workflow.catalog > contracts/fixtures/workflow-node-types.json
+    registered = set(registry.REGISTRY)
+    assert len(ORDER) == len(set(ORDER))
+    assert set(ORDER) == registered and set(TITLES) == registered and set(HANDLE_SPECS) == registered
+    assert set(SAMPLES) == registered
+
+
 def test_handle_specs_agree_with_what_each_node_reports_for_a_real_config():
     for node_type, spec in registry.REGISTRY.items():
         config = spec.config_model.model_validate(SAMPLES[node_type])
-        expected = list(HANDLE_SPECS[node_type].get("static", ()))
-        if node_type == "intent_classifier":
-            expected += [label.id for label in config.labels]
-        assert sorted(spec.handles(config)) == sorted(expected)
+        handles = HANDLE_SPECS[node_type]
+        expected = list(handles.get("static", ()))
+        if "from_config" in handles:  # handles named by the config, e.g. the classifier's label ids
+            source = handles["from_config"]
+            expected += [getattr(item, source["id_field"]) for item in getattr(config, source["array"])]
+        assert sorted(spec.handles(config)) == sorted(expected), node_type
 
 
 def test_x_widgets_mark_the_fields_that_need_a_custom_widget():
