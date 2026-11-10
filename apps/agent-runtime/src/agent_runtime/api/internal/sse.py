@@ -80,11 +80,12 @@ async def _replay(created: str, terminal: str) -> AsyncIterator[str]:
     yield terminal
 
 
-async def _read(created: str, events: queue.Queue, closed: threading.Event,
+async def _read(created: str | None, events: queue.Queue, closed: threading.Event,
                 ping_seconds: float, poll_seconds: float) -> AsyncIterator[str]:
     # Non-blocking polls: an open stream holds no threadpool token while it waits.
     try:
-        yield created
+        if created is not None:
+            yield created
         idle = 0.0
         while True:
             try:
@@ -102,3 +103,42 @@ async def _read(created: str, events: queue.Queue, closed: threading.Event,
             yield item
     finally:
         closed.set()
+
+
+def stream_events(work: Callable[[Callable[[str, dict], None], Callable[[], bool]], dict], *,
+                  ping_seconds: float = PING_SECONDS, poll_seconds: float = POLL_SECONDS,
+                  abandon_seconds: float = ABANDON_SECONDS) -> AsyncIterator[str]:
+    """Debug-run stream: ``work(emit, should_stop)`` runs on a worker thread; each emit is one SSE frame.
+
+    The run is disposable: nothing is committed, so a reader that goes away stops it at the next node boundary
+    (``should_stop``) and undelivered frames are dropped. ``completed`` (or ``error``) is the last frame.
+    """
+    events: queue.Queue = queue.Queue(maxsize=512)
+    closed = threading.Event()
+
+    def put(item, deadline) -> None:
+        while not closed.is_set() and time.monotonic() < deadline:
+            try:
+                events.put(item, timeout=0.1)
+                return
+            except queue.Full:
+                continue
+
+    def emit(name: str, data: dict) -> None:
+        try:
+            events.put_nowait(frame(name, data))
+        except queue.Full:  # nobody is reading fast enough (or at all): the run is disposable
+            pass
+
+    def run() -> None:
+        try:
+            result = work(emit, closed.is_set)
+            terminal = frame("completed", {"event": "completed", "result": result})
+        except Exception:
+            terminal = frame("error", {"event": "error", "code": "INTERNAL_ERROR"})
+        deadline = time.monotonic() + abandon_seconds
+        put(terminal, deadline)
+        put(_DONE, deadline)
+
+    threading.Thread(target=contextvars.copy_context().run, args=(run,), name="debug-run", daemon=True).start()
+    return _read(None, events, closed, ping_seconds, poll_seconds)

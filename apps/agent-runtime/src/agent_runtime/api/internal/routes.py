@@ -19,7 +19,7 @@ from agent_runtime.workflow.catalog import node_type_catalog
 
 from .dependencies import PREFIX
 from .envelopes import success
-from .sse import stream_turn
+from .sse import stream_events, stream_turn
 
 router = APIRouter(prefix=PREFIX)
 SSE_HEADERS = {"X-Accel-Buffering": "no"}
@@ -166,6 +166,23 @@ def validate_agent_snapshot(request: Request):
         raise RuntimeSessionError(422, "INVALID_INPUT")
     result = _service(request, "agent_validation").validate(data["content"])
     return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)
+
+
+@router.post("/agent-debug-runs:run", operation_id="internalRunAgentDebugRun")
+def run_agent_debug_run(request: Request):
+    """The Admin's own run of a draft: nothing is written and nothing is kept here (Studio stores the result)."""
+    _query(request, ())
+    data = read_strict_json(request.state.raw_body)
+    if not isinstance(data, dict) or set(data) != {"content", "request"}:
+        raise RuntimeSessionError(422, "INVALID_INPUT")
+    if not isinstance(data["content"], dict) or not isinstance(data["request"], dict):
+        raise RuntimeSessionError(422, "INVALID_INPUT")
+    work = _service(request, "debug_runs").prepare(data["content"], data["request"])  # a bad request is a plain 422
+    if not _wants_stream(request):
+        return success(ServiceResponse(status=200, data=work(None, None)), *request.state.meta)
+    request_id, trace_id, _ = request.state.meta
+    return StreamingResponse(stream_events(work), media_type="text/event-stream",
+                             headers={**SSE_HEADERS, "X-Request-ID": request_id, "X-Trace-ID": trace_id})
 
 
 @router.get("/workflow/node-types", operation_id="internalGetWorkflowNodeTypes")

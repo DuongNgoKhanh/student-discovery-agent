@@ -76,6 +76,7 @@ class RuntimeContainer:
     engine: object | None = None
     knowledge: object | None = None
     agent_validation: object | None = None
+    debug_runs: object | None = None
     knowledge_indexer: object | None = None
     knowledge_indexer_engine: object | None = None
     evaluations: PublishGateService | None = None
@@ -240,14 +241,17 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         from agent_runtime.evaluations.services.publish_gate import PublishGateService
         evaluations = PublishGateService()
         responses = ResponseService(uow, trace_sink=trace_sink)
-        turns = TurnService(store, handler, models=functools.cache(build_model_port), responses=responses,
+        models = functools.cache(build_model_port)
+        turns = TurnService(store, handler, models=models, responses=responses,
                             knowledge=knowledge, trace_sink=trace_sink)
+        from agent_runtime.workflow.debug import DebugRunService
+        debug_runs = DebugRunService(models=models, knowledge=knowledge)
         return RuntimeContainer(policy=policy, verifier=verifier, service_verifier=service_verifier,
             conversations=conversations,
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
-            knowledge=knowledge, agent_validation=agent_validation, evaluations=evaluations,
+            knowledge=knowledge, agent_validation=agent_validation, debug_runs=debug_runs, evaluations=evaluations,
             knowledge_indexer=indexer, knowledge_indexer_engine=indexer_engine,
             product_ready=agent_source is not None)
     except Exception:

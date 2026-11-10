@@ -186,6 +186,7 @@ def test_no_public_product_routes_or_seed_routes(http, rig):
         PREFIX + "/knowledge/index-runs",
         PREFIX + "/agent-snapshots:validate",
         PREFIX + "/workflow/node-types",
+        PREFIX + "/agent-debug-runs:run",
         PREFIX + "/experience-validations:run",
         PREFIX + "/experience-evaluations:run",
         PREFIX + "/experience-reports:verify",
