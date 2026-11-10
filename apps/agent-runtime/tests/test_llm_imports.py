@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 
-def test_adapters_import_without_outbound_http(monkeypatch):
+def test_adapters_import_without_outbound_http(monkeypatch, fresh_agent_runtime_imports):
     def blocked(*args, **kwargs):
         pytest.fail("outbound HTTP attempted during import/startup")
 
