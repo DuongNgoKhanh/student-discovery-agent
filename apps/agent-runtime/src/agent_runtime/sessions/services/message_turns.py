@@ -97,6 +97,15 @@ def _block_text(block) -> str | None:
     return None  # suggestions are UI affordances, not conversation
 
 
+def interaction_summary(action: str, *, display_name: str | None = None, option_id: str | None = None) -> str:
+    """The user turn a model sees for a button press: one source for history and an interaction's graph."""
+    if action == "explain_result":
+        return EXPLAIN_REQUEST_TEXT
+    if action == "set_name":
+        return f"[Học sinh nhập tên: {display_name}]"
+    return f"[Học sinh chọn đáp án {option_id}]"
+
+
 def chat_history(views: Sequence[MessageView]) -> list[ChatMessage]:
     """Committed messages as model context; interactions are summarised, never replayed as tool calls."""
     history: list[ChatMessage] = []
@@ -104,12 +113,9 @@ def chat_history(views: Sequence[MessageView]) -> list[ChatMessage]:
         if view.role == "user":
             if view.text and view.interaction is None:
                 history.append(UserMessage(view.text))
-            elif view.interaction and view.interaction.action == "explain_result":
-                history.append(UserMessage(EXPLAIN_REQUEST_TEXT))
-            elif view.interaction and view.interaction.action == "set_name":
-                history.append(UserMessage(f"[Học sinh nhập tên: {view.text}]"))
             elif view.interaction:
-                history.append(UserMessage(f"[Học sinh chọn đáp án {view.interaction.option_id}]"))
+                history.append(UserMessage(interaction_summary(view.interaction.action, display_name=view.text,
+                                                               option_id=view.interaction.option_id)))
         elif view.role == "assistant":
             parts = [text for text in map(_block_text, view.blocks) if text]
             if parts:

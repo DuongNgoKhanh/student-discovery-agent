@@ -116,7 +116,7 @@ def test_the_graph_of_an_interaction_sees_the_post_handler_state_and_no_student_
     scope, ports = seen[0]
     assert (scope.get("sys.interaction"), scope.get("sys.interaction_outcome")) == ("set_name", "name_set")
     assert scope.get("sys.activity_status") == "in_progress" and scope.get("sys.query") == ""
-    assert ports.user_text == "" and ports.tools.snapshot.activity.state is after
+    assert ports.user_text == "[Học sinh nhập tên: Ngân]" and ports.tools.snapshot.activity.state is after
     assert scope.get("conv.stage") == "assessment"  # read from the conversation's stored variables
 
 

@@ -14,6 +14,7 @@ from agent_runtime.sessions.services.message_turns import (
     agent_context,
     chat_history,
     explain_fallback,
+    interaction_summary,
     plan_handoff,
 )
 from agent_runtime.workflow.budget import Budget
@@ -97,8 +98,11 @@ def run_interaction_turn(chat: MessageSnapshot, request, draft: TurnDraft, *, mo
         result = {"house_id": draft.completion.card.house.house_id,
                   "career_groups": list(draft.completion.card.career_groups),
                   "revision": draft.completion.result_revision}
+    # sys.query stays empty (the student typed nothing); the model's user turn is the code-owned summary.
+    summary = interaction_summary(request.action, display_name=draft.next_state.display_name,
+                                  option_id=getattr(getattr(request, "payload", None), "option_id", None))
     return _execute(post, query="", interaction=request.action, outcome=interaction_outcome(request, draft),
-                    explain=False, result=result, user_text="", model=model,
+                    explain=False, result=result, user_text=summary, model=model,
                     executor=SnapshotToolExecutor(post, knowledge), tool_context=tool_context,
                     knowledge_port=knowledge_port, profile=profile, emit=emit, should_stop=should_stop,
                     deadline=deadline, clock=clock, knowledge_fields=knowledge_fields)

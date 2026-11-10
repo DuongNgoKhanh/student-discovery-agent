@@ -3,7 +3,9 @@ import json
 import pytest
 from sqlalchemy import select
 
-from agent_runtime.agent.model import ModelReply, ModelUnavailable, ToolCall
+from agent_runtime.agent.model import ModelReply, ModelUnavailable, ToolCall, UserMessage
+from agent_runtime.infrastructure.db.tables import activities as activities_table
+from agent_runtime.infrastructure.db.tables import conversations as conversations_table
 from agent_runtime.infrastructure.db.tables import runtime_traces
 from agent_runtime.infrastructure.db.trace import DatabaseTraceSink
 from agent_runtime.sessions.schemas.release import AgentTemplates
@@ -149,3 +151,58 @@ def test_a_rejected_interaction_runs_no_graph_and_writes_nothing(rig):
     data = chat.send(body, revision=1, key="bad").data
     assert data["status"] == "failed" and len(chat.model.calls) == calls
     assert chat.message_count() == before and chat.revision() == 1 and chat.conv_vars() == {"stage": "welcome"}
+
+
+# The name branch asks the agent for a lead-in: the model sees a code-owned summary of the button press.
+GREET = {**FLOW, "edges": [edge if edge["id"] != "e3" else {**edge, "target": "assist"} for edge in FLOW["edges"]]}
+
+
+def last_user_text(call):
+    messages, _, _ = call
+    return [message.text for message in messages if isinstance(message, UserMessage)][-1]
+
+
+def test_an_agent_node_on_a_button_press_gets_the_interaction_summary_as_its_user_turn(rig):
+    chat = rig(GREET, traced=True)
+    activity = start_assessment(chat)
+    chat.model._outcomes.append(ModelReply(text="Rất vui được gặp bạn."))
+    data = set_name(chat, activity).data
+    assert last_user_text(chat.model.calls[-1]) == "[Học sinh nhập tên: Ngân]"
+    assert data["output"]["blocks"][0]["content"] == "Rất vui được gặp bạn."
+    assert data["output"]["blocks"][-1]["type"] == "assessment_question"
+    with chat.uow.begin() as session:
+        rows = session.execute(select(runtime_traces).where(
+            runtime_traces.c.action == "conversation.turn")).mappings().all()
+    assert len(rows) == 2
+    stored = json.dumps([{key: str(value) for key, value in row.items()} for row in rows], ensure_ascii=False)
+    assert "Ngân" not in stored and "Học sinh nhập tên" not in stored
+
+
+def test_a_replayed_button_press_returns_the_stored_response_without_running_the_graph(rig):
+    chat = rig(GREET)
+    activity = start_assessment(chat)
+    chat.model._outcomes.append(ModelReply(text="Rất vui được gặp bạn."))
+    first = set_name(chat, activity)
+    calls, messages = len(chat.model.calls), chat.message_count()
+    again = set_name(chat, activity)
+    assert again.replayed and again.data == first.data and len(chat.model.calls) == calls
+    assert chat.revision() == 2 and chat.message_count() == messages
+
+
+def test_a_revision_bumped_while_the_graph_runs_commits_nothing(rig):
+    chat = rig(GREET)
+    activity = start_assessment(chat)
+    before = chat.message_count()
+
+    def bump_then_reply(messages):
+        with chat.uow.begin() as session:  # another writer moves the conversation between Tx#1 and Tx#2
+            session.execute(conversations_table.update().where(conversations_table.c.id == chat.conversation_id)
+                            .values(revision=conversations_table.c.revision + 1))
+        return ModelReply(text="Rất vui được gặp bạn.")
+    chat.model._outcomes.append(bump_then_reply)
+    data = set_name(chat, activity).data
+    assert data["status"] == "failed" and data["error"]["code"] == "CONFLICT_REVISION"
+    assert chat.conv_vars() == {"stage": "welcome"} and chat.message_count() == before and chat.revision() == 2
+    with chat.uow.begin() as session:
+        state = session.scalar(select(activities_table.c.state).where(activities_table.c.id == activity["id"]))
+    assert state["status"] == "collecting_name"
