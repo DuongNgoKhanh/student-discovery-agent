@@ -50,6 +50,10 @@ _CUSTOM = {
     "profile_not_allowed": "Bài khám phá phải dùng hồ sơ hoạt động nằm trong danh sách cho phép.",
     "duplicate_items": "Các mục không được trùng nhau.",
     "unsupported_schema": "Phiên bản schema không được hỗ trợ.",
+    "workflow_required": "Chế độ chatflow cần có workflow.",
+    "workflow_not_allowed": "Chế độ agent không dùng workflow; đổi mode sang chatflow hoặc xóa workflow.",
+    "workflow_node_type_unsupported": "Loại node này chưa được hỗ trợ trong chatflow.",
+    "workflow_variable_invalid": "Biến hội thoại không hợp lệ: kiểu, danh sách giá trị hoặc giá trị mặc định không khớp.",
 }
 
 

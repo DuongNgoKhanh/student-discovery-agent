@@ -57,6 +57,57 @@ paths:
         "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
         "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
         "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/agent/draft/debug-runs:
+    post:
+      operationId: createAgentDebugRun
+      tags: [Studio Agent]
+      summary: Chạy thử đồ thị của draft trong runtime, cách ly với dữ liệu thật
+      description: >-
+        Accept application/json trả kết quả cuối; Accept text/event-stream phát workflow.node_started,
+        workflow.node_finished, delta rồi completed. Studio lấy draft hiện tại, gọi runtime, lưu kết quả 24 giờ.
+        Draft không hợp lệ trả 422 VAL_INVALID_INPUT, details.issues là báo cáo kiểm tra của runtime. Không đọc hay ghi conversation, hồ sơ, activity, proposal.
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: ../schemas/chatflow-authoring.yaml#/components/schemas/WorkflowDebugRunRequest}}}
+      responses:
+        "200":
+          description: Kết quả chạy thử.
+          headers:
+            Cache-Control: {schema: {type: string, enum: [no-store]}}
+          content:
+            application/json: {schema: {$ref: "#/components/schemas/WorkflowDebugRunEnvelope"}}
+            text/event-stream: {schema: {$ref: ../schemas/chatflow-authoring.yaml#/components/schemas/WorkflowDebugStreamEvent}}
+        "400": {$ref: ../schemas/common.yaml#/components/responses/ChatError400}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "422": {$ref: "#/components/responses/AgentUnprocessable"}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/agent/debug-runs/{run_id}:
+    get:
+      operationId: getAgentDebugRun
+      tags: [Studio Agent]
+      summary: Đọc lại kết quả chạy thử
+      description: Lưu 24 giờ kể từ created_at; sau đó trả 404 RES_NOT_FOUND.
+      parameters:
+        - {$ref: "#/components/parameters/DebugRunId"}
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/WorkflowDebugRunEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
+  /admin/agent/workflow/node-types:
+    get:
+      operationId: getWorkflowNodeTypes
+      tags: [Studio Agent]
+      summary: Danh mục loại node chatflow
+      description: Studio chuyển tiếp danh mục do runtime công bố; Studio sinh form và handle từ đây, không giữ schema riêng.
+      responses:
+        "200": {description: OK, content: {application/json: {schema: {$ref: "#/components/schemas/WorkflowNodeTypeCatalogEnvelope"}}}}
+        "401": {$ref: ../schemas/common.yaml#/components/responses/ChatError401}
+        "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
+        "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
   /admin/agent/releases:
     post:
       operationId: publishAgentRelease
@@ -165,6 +216,7 @@ components:
         Cache-Control: {schema: {type: string, enum: [no-store]}}
       content: {application/json: {schema: {$ref: "#/components/schemas/AgentUnprocessableEnvelope"}}}
   parameters:
+    DebugRunId: {name: run_id, in: path, required: true, schema: {type: string, pattern: "^dbg_[0-9a-f]{24}$"}}
     ReleaseId: {name: release_id, in: path, required: true, schema: {type: string, pattern: "^agr_[0-9a-f]{24}$"}}
   schemas:
     AgentConflictEnvelope:
@@ -225,7 +277,7 @@ components:
     AgentContent:
       type: object
       additionalProperties: true
-      description: Nội dung agent.snapshot.v1 (greeting_text, greeting_suggestions, allowed_activity_profiles, persona, model, limits, tools, guardrails, links, templates); runtime là nguồn xác thực.
+      description: Nội dung agent.snapshot.v1 (greeting_text, greeting_suggestions, allowed_activity_profiles, persona, model, limits, tools, guardrails, links, templates, mode, workflow, persona_cases); runtime là nguồn xác thực. Thiếu mode nghĩa là agent.
     AgentDraft:
       type: object
       additionalProperties: false
@@ -330,6 +382,18 @@ components:
         - allOf:
             - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
             - {type: object, required: [data], properties: {data: {$ref: "#/components/schemas/AgentValidation"}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    WorkflowNodeTypeCatalogEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: ../schemas/chatflow-authoring.yaml#/components/schemas/WorkflowNodeTypeCatalog}}}
+        - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
+    WorkflowDebugRunEnvelope:
+      oneOf:
+        - allOf:
+            - $ref: ../schemas/common.yaml#/components/schemas/SuccessEnvelope
+            - {type: object, required: [data], properties: {data: {$ref: ../schemas/chatflow-authoring.yaml#/components/schemas/WorkflowDebugRunResult}}}
         - $ref: ../schemas/common.yaml#/components/schemas/ErrorEnvelope
     AgentReleaseEnvelope:
       oneOf:

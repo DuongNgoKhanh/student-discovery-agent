@@ -1,0 +1,28 @@
+{
+  "greeting_text": "Chào bạn! Mình là IHRD Mentor.",
+  "allowed_activity_profiles": [],
+  "mode": "chatflow",
+  "workflow": {
+    "entry": "start",
+    "variables": [
+      {"name": "stage", "type": "enum", "values": ["welcome", "assessment"], "default": "welcome"}
+    ],
+    "nodes": [
+      {"id": "start", "type": "start", "title": "Bat dau", "ui": {"position": {"x": 0, "y": 0}}},
+      {"id": "in_test", "type": "if_else", "title": "Dang lam bai?",
+       "config": {"condition": {"==": [{"var": "conv.stage"}, "assessment"]}},
+       "ui": {"position": {"x": 0, "y": 120}}},
+      {"id": "reply", "type": "answer", "title": "Tra loi", "config": {"text": "Xin chào!"}}
+    ],
+    "edges": [
+      {"id": "e1", "source": "start", "source_handle": "next", "target": "in_test"},
+      {"id": "e2", "source": "in_test", "source_handle": "true", "target": "reply"},
+      {"id": "e3", "source": "in_test", "source_handle": "false", "target": "reply"}
+    ],
+    "budget": {"max_nodes": 20, "max_llm_calls": 6, "turn_timeout_ms": 25000}
+  },
+  "persona_cases": [
+    {"id": "new_student", "title": "Hoc sinh moi vao", "mandatory": true,
+     "turns": [{"input": {"text": "xin chào"}, "expect": {"path": ["start", "in_test", "reply"]}}]}
+  ]
+}
