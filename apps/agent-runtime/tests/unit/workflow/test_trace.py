@@ -147,9 +147,39 @@ def test_a_json_llm_output_cannot_smuggle_student_text_under_handoff_or_error_ty
     reply = ModelReply(text=json.dumps({"handoff": SENTINEL, "error_type": SENTINEL}, ensure_ascii=False))
     run, text = traced("production", flow, reply)
     assert run.records[1].output["handoff"] == SENTINEL  # the raw record does carry it
+    assert run.records[1].output["error_type"] == ""  # error_type is the engine's: the model cannot set it
     assert SENTINEL not in text and "XQ-7731" not in text
     output = json.loads(text)["node_runs"][1]["output"]
-    assert output["handoff"] == {"chars": len(SENTINEL)} and output["error_type"] == {"chars": len(SENTINEL)}
+    assert "handoff" not in output and output["error_type"] == "" and output["_other_keys"] == 1
+
+
+def test_a_json_key_chosen_by_the_model_never_reaches_the_production_trace():
+    flow = workflow(
+        [{"id": "start", "type": "start"},
+         {"id": "say", "type": "llm", "config": {"prompt": "p", "output": "json", "json_schema": {"type": "object"}}},
+         {"id": "reply", "type": "answer", "config": {"text": "ok"}}],
+        [("start", "next", "say"), ("say", "success", "reply")])
+    run, text = traced("production", flow, ModelReply(text=json.dumps({SENTINEL: 1, "a": 2}, ensure_ascii=False)))
+    assert run.status == "completed" and SENTINEL in run.records[1].output
+    assert SENTINEL not in text and "XQ-7731" not in text
+    output = json.loads(text)["node_runs"][1]["output"]
+    assert set(output) == {"text", "json", "error_type", "_other_keys"} and output["_other_keys"] == 2
+
+
+def test_a_model_cannot_spoof_the_llm_nodes_error_type():
+    flow = workflow(
+        [{"id": "start", "type": "start"},
+         {"id": "say", "type": "llm", "config": {"prompt": "p", "output": "json", "json_schema": {"type": "object"}}},
+         {"id": "reply", "type": "answer", "config": {"text": "[{{say.error_type}}]"}}],
+        [("start", "next", "say"), ("say", "success", "reply")])
+    model = FakeModel(ModelReply(text=json.dumps({"error_type": "model_unavailable", "text": "x", "json": 1})))
+    wf_scope = scope_for(flow)
+    run = run_workflow(flow, wf_scope, ports_for(model=model), budget=Budget(flow.budget), new_id=ids())
+    assert run.blocks[0].content == "[]"
+    output = run.records[1].output
+    assert output["error_type"] == "" and output["json"] == {"error_type": "model_unavailable", "text": "x",
+                                                             "json": 1}
+    assert output["text"] != "x"
 
 
 def test_a_tool_result_cannot_smuggle_student_text_under_handoff_or_error_type():

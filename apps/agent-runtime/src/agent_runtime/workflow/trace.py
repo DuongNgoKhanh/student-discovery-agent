@@ -1,8 +1,9 @@
 """NodeRun / WorkflowTrace and the redaction policy that decides what a trace may keep (FR-WFL-12, AT-97).
 
 Production traces never keep what the student typed, a rendered prompt or a ``profile.*`` value: node inputs are
-dropped, text-bearing outputs keep only their size and condition operands keep only whether a value was present
-(enum and boolean conversation variables and a few system values excepted). ``full`` keeps everything and is
+dropped, output keys the node's code does not declare are only counted, text-bearing outputs keep only their
+size and condition operands keep only whether a value was present (enum and boolean conversation variables and a
+few system values excepted). ``full`` keeps everything and is
 only for the Admin's own debug run.
 """
 from collections.abc import Mapping
@@ -13,6 +14,7 @@ from pydantic import Field
 from agent_runtime.agent.catalog import TOOL_DECLARATIONS
 from agent_runtime.sessions.schemas.common import ContractModel, JsonSafeInt
 from agent_runtime.sessions.schemas.workflow import ConvVariable
+from agent_runtime.workflow import registry
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.executor import NodeRecord, WorkflowRun
 from agent_runtime.workflow.nodes.base import ErrorType
@@ -95,9 +97,25 @@ class Redaction:
         if value is None or self.full:
             return _plain(value)
         if isinstance(value, Mapping):
-            return {str(key): (_plain(item) if _kept(node_type, key, item) else _shrink(item))
-                    for key, item in value.items()}
+            owned = _owned_keys(node_type)
+            out = {str(key): (_plain(item) if _kept(node_type, key, item) else _shrink(item))
+                   for key, item in value.items() if owned is None or key in owned}
+            other = sum(1 for key in value if owned is not None and key not in owned)
+            if other:
+                out["_other_keys"] = other  # e.g. keys a model chose in its JSON: they may be student text
+            return out
         return _shrink(value)
+
+
+def _owned_keys(node_type: str) -> frozenset[str] | None:
+    """Output keys the node's code declares; ``None`` when its keys are a code-owned tool result's."""
+    spec = registry.REGISTRY.get(node_type)
+    if spec is None:
+        return frozenset()
+    properties = spec.output_schema.get("properties")
+    if properties is None and spec.output_schema.get("additionalProperties") is True:
+        return None  # the tool node: its keys are the tool implementation's, never the model's
+    return frozenset(properties or ()) | {"error_type"}
 
 
 def _kept(node_type: str, key: Any, value: Any) -> bool:
