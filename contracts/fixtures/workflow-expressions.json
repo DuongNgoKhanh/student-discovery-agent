@@ -23,6 +23,7 @@
     {"name": "operator_outside_subset_merge", "expression": {"merge": [[1], [2]]}, "code": "workflow_invalid_expression"},
     {"name": "eq_needs_two_operands", "expression": {"==": [1]}, "code": "workflow_invalid_expression"},
     {"name": "two_keys", "expression": {"==": [1, 1], "!=": [1, 2]}, "code": "workflow_invalid_expression"},
+    {"name": "var_path_with_trailing_newline", "expression": {"==": [{"var": "conv.stage\n"}, "a"]}, "code": "workflow_invalid_expression"},
     {"name": "var_without_namespace", "expression": {"==": [{"var": "stage"}, "a"]}, "code": "workflow_invalid_expression"},
     {"name": "in_with_string_right_side", "expression": {"in": [{"var": "conv.stage"}, "abc"]}, "code": "workflow_type_mismatch"},
     {"name": "list_literal_outside_in", "expression": {"==": [{"var": "conv.stage"}, ["a"]]}, "code": "workflow_invalid_expression"},

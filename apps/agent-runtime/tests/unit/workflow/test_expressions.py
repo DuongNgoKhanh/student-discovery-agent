@@ -82,3 +82,16 @@ def test_variables_lists_each_path_once_in_order():
     expression = parse({"and": [{"==": [{"var": "conv.stage"}, "a"]}, {"!=": [{"var": "conv.stage"}, "b"]},
                                 {"missing": ["profile.x", "result.house_id"]}]})
     assert variables(expression) == ("conv.stage", "profile.x", "result.house_id")
+
+
+def test_path_pattern_is_equally_strict_when_reused_as_a_pydantic_constraint():
+    from typing import Annotated
+
+    from pydantic import StringConstraints, TypeAdapter, ValidationError
+
+    from agent_runtime.workflow.expressions import PATH
+
+    adapter = TypeAdapter(Annotated[str, StringConstraints(pattern=PATH.pattern)])
+    assert adapter.validate_python("conv.stage") == "conv.stage"
+    with pytest.raises(ValidationError):
+        adapter.validate_python("conv.stage\n")

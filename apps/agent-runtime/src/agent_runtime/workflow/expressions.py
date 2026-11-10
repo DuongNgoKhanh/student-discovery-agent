@@ -78,7 +78,7 @@ def _count(counter: list[int], amount: int = 1) -> None:
 
 
 def _path(value: Any) -> str:
-    if not isinstance(value, str) or not PATH.match(value):
+    if not isinstance(value, str) or not PATH.fullmatch(value):
         raise ExpressionError(INVALID, "a variable needs a namespace.name path")
     return value
 
