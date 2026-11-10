@@ -244,6 +244,9 @@ class TurnStore:
                     parent = parent.model_copy(update={"revision": parent.revision + 1})
                     self.conversations.conversations.save(session, parent)
                 self.messages.append(session, parent.id, parent.revision, (user, assistant), now)
+            if plan.conv_vars is not None and dict(plan.conv_vars) != parent.conv_vars:
+                self.conversations.conversations.save_conv_vars(session, parent.id, parent.owner_id,
+                                                                dict(plan.conv_vars))
             view = self.conversations.view_in_session(session, parent)
             result = ConversationTurnResult(conversation_id=parent.id, revision=parent.revision, turn_id=turn_id,
                 message_id=assistant.message_id, committed_at=now, activity=view.active_activity,

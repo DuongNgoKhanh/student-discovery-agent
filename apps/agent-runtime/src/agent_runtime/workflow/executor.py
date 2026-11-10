@@ -116,15 +116,16 @@ def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budg
             started, before = budget.clock(), budget.counters()
             config = result = error = None
             try:
-                config = spec.config_model.model_validate(node.config)
+                try:
+                    config = spec.config_model.model_validate(node.config)
+                except ValidationError:  # only the node's own config: a ValidationError from its run is unexpected
+                    raise NodeError("invalid_output", cause="invalid_config") from None
                 ctx = NodeContext(node=node, scope=scope, ports=ports,
                                   model=BudgetedModel(ports.model_of(node.id), budget), budget=budget, state=state,
                                   new_id=new_id, emit=emit, should_stop=stop, streaming=on_event is not None)
                 result = spec.run(ctx, config)
             except NodeError as caught:
                 error = caught
-            except ValidationError:
-                error = NodeError("invalid_output", cause="invalid_config")
             except (BudgetExceeded, NodeCancelled, Exception) as interrupted:
                 # Keep the node that was running in the trace, then let the outer handlers decide the outcome.
                 code = ("budget" if isinstance(interrupted, BudgetExceeded)
@@ -173,6 +174,8 @@ def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budg
     except _Fallback as caught:
         reason = caught.cause if implicit and caught.cause else "workflow_node_error"
     except Exception as unexpected:
+        if implicit:
+            raise  # mode = agent has always failed the turn (INTERNAL_ERROR) here rather than answer from a template
         # The traceback may name the node and exception type; never log scope values or student text here.
         logger.exception("workflow turn failed at node %s (%s)", current, type(unexpected).__name__)
         reason = "workflow_node_error"

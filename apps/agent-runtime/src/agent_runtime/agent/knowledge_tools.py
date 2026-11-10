@@ -178,3 +178,9 @@ class KnowledgeTools:
                                   source_url=url if isinstance(url, str) and link_allowed(url, self._domains) else None,
                                   document_id=metadata["document_id"], revision=metadata["revision"],
                                   updated_at=metadata["updated_at"])
+
+
+def with_cards(blocks: tuple, cards: tuple[KnowledgeCardBlock, ...]) -> tuple:
+    """Cards follow the agent's lead-in and precede its suggestions; a handoff block is appended after both."""
+    split = next((index for index, block in enumerate(blocks) if block.type == "suggestions"), len(blocks))
+    return (*blocks[:split], *cards, *blocks[split:])
