@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '@/app';
 import { issueAccessToken } from '@/modules/auth/tokens';
+import type { EvaluationReport, ValidationReport } from '@/modules/experiences/runtime-client';
 import * as service from '@/modules/experiences/experiences.service';
 
 vi.mock('@/modules/experiences/experiences.service');
@@ -38,6 +39,24 @@ describe('experiences.routes', () => {
           validation_id: 'v1',
           evaluation_id: 'e1',
           approval_refs: [],
+          idempotency_key: 'k',
+        },
+      },
+      {
+        method: 'POST',
+        path: '/api/v1/admin/experiences/exp_1/validations',
+        body: {
+          expected_revision: 0,
+          content_hash: 'sha256:' + 'a'.repeat(64),
+          idempotency_key: 'k',
+        },
+      },
+      {
+        method: 'POST',
+        path: '/api/v1/admin/experiences/exp_1/evaluations',
+        body: {
+          expected_revision: 0,
+          content_hash: 'sha256:' + 'a'.repeat(64),
           idempotency_key: 'k',
         },
       },
@@ -326,6 +345,96 @@ describe('experiences.routes', () => {
 
       expect(res.status).toBe(200);
       expect(service.getExperienceRelease).toHaveBeenCalledWith(expect.anything(), 'exp_rel_1');
+    });
+  });
+
+  describe('POST /api/v1/admin/experiences/:id/validations', () => {
+    it('calls service.validateExperienceDraft and returns 201', async () => {
+      const mockReport = {
+        id: 'val_1',
+        experience_id: 'exp_1',
+        draft_revision: 1,
+        content_hash: 'sha256:' + 'a'.repeat(64),
+        definition_schema_version: '1.0',
+        engine_version: '1.0.0',
+        status: 'passed',
+        mandatory_passed: true,
+        issues: [],
+        created_at: '2026-11-03T10:00:00Z',
+      };
+      vi.mocked(service.validateExperienceDraft).mockResolvedValue({
+        status: 201,
+        data: mockReport as ValidationReport,
+      });
+
+      const res = await app.request('/api/v1/admin/experiences/exp_1/validations', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          expected_revision: 1,
+          content_hash: 'sha256:' + 'a'.repeat(64),
+          idempotency_key: 'idem_val_1',
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data).toEqual(mockReport);
+      expect(service.validateExperienceDraft).toHaveBeenCalledWith(
+        expect.anything(),
+        'exp_1',
+        expect.objectContaining({ expected_revision: 1 }),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe('POST /api/v1/admin/experiences/:id/evaluations', () => {
+    it('calls service.evaluateExperienceDraft and returns 201', async () => {
+      const mockEvalReport = {
+        id: 'eval_1',
+        experience_id: 'exp_1',
+        draft_revision: 1,
+        content_hash: 'sha256:' + 'a'.repeat(64),
+        definition_schema_version: '1.0',
+        engine_version: '1.0.0',
+        status: 'passed',
+        mandatory_passed: true,
+        cases: [],
+        created_at: '2026-11-03T10:00:00Z',
+      };
+      vi.mocked(service.evaluateExperienceDraft).mockResolvedValue({
+        status: 201,
+        data: mockEvalReport as EvaluationReport,
+      });
+
+      const res = await app.request('/api/v1/admin/experiences/exp_1/evaluations', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          expected_revision: 1,
+          content_hash: 'sha256:' + 'a'.repeat(64),
+          idempotency_key: 'idem_eval_1',
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.data).toEqual(mockEvalReport);
+      expect(service.evaluateExperienceDraft).toHaveBeenCalledWith(
+        expect.anything(),
+        'exp_1',
+        expect.objectContaining({ expected_revision: 1 }),
+        expect.anything(),
+      );
     });
   });
 

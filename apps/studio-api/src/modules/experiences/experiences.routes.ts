@@ -11,9 +11,11 @@ import {
   publishReleaseSchema,
   resourceIdSchema,
   saveDraftSchema,
+  snapshotCommandSchema,
 } from '@/modules/experiences/experiences.schemas';
 import {
   createExperience,
+  evaluateExperienceDraft,
   getExperience,
   getExperienceRelease,
   listExperienceReleases,
@@ -22,6 +24,7 @@ import {
   publishExperienceRelease,
   readExperienceDraft,
   saveExperienceDraft,
+  validateExperienceDraft,
 } from '@/modules/experiences/experiences.service';
 
 const queryOf = (req: Request) => Object.fromEntries(new URL(req.url).searchParams);
@@ -73,6 +76,22 @@ export const handleSaveExperienceDraft = withHandler<IdParams>(async (req, ctx, 
   return success(res.data, ctx, res.status);
 });
 
+export const handleValidateExperienceDraft = withHandler<IdParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  const id = resourceIdSchema.parse(route.params.id);
+  const body = snapshotCommandSchema.parse(await readExperienceJsonBody(req));
+  const res = await validateExperienceDraft(getProductDatabase(), id, body, ctx);
+  return success(res.data, ctx, res.status);
+});
+
+export const handleEvaluateExperienceDraft = withHandler<IdParams>(async (req, ctx, route) => {
+  await requireAdmin(req);
+  const id = resourceIdSchema.parse(route.params.id);
+  const body = snapshotCommandSchema.parse(await readExperienceJsonBody(req));
+  const res = await evaluateExperienceDraft(getProductDatabase(), id, body, ctx);
+  return success(res.data, ctx, res.status);
+});
+
 export const handlePublishExperienceRelease = withHandler<IdParams>(async (req, ctx, route) => {
   const admin = await requireAdmin(req);
   const id = resourceIdSchema.parse(route.params.id);
@@ -103,6 +122,8 @@ export function registerExperiencesRoutes(app: Hono): void {
   app.patch('/api/v1/admin/experiences/:id', honoHandler(handlePatchExperience));
   app.get('/api/v1/admin/experiences/:id/draft', honoHandler(handleReadExperienceDraft));
   app.put('/api/v1/admin/experiences/:id/draft', honoHandler(handleSaveExperienceDraft));
+  app.post('/api/v1/admin/experiences/:id/validations', honoHandler(handleValidateExperienceDraft));
+  app.post('/api/v1/admin/experiences/:id/evaluations', honoHandler(handleEvaluateExperienceDraft));
   app.post('/api/v1/admin/experiences/:id/releases', honoHandler(handlePublishExperienceRelease));
   app.get('/api/v1/admin/experiences/:id/releases', honoHandler(handleListExperienceReleases));
   app.get('/api/v1/admin/experience-releases/:release_id', honoHandler(handleReadExperienceRelease));

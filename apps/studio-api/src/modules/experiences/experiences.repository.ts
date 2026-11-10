@@ -4,6 +4,7 @@ import { ProductError } from '@/http/errors';
 import {
   experienceDrafts,
   experienceReleases,
+  experienceReports,
   experiences,
   idempotencyRecords,
 } from '@/infrastructure/db/schema';
@@ -18,6 +19,7 @@ export type ProductExecutor = ProductDatabase | ProductTransaction;
 export type ExperienceRow = typeof experiences.$inferSelect;
 export type ExperienceDraftRow = typeof experienceDrafts.$inferSelect;
 export type ExperienceReleaseRow = typeof experienceReleases.$inferSelect;
+export type ExperienceReportRow = typeof experienceReports.$inferSelect;
 export type IdempotencyRecordRow = typeof idempotencyRecords.$inferSelect;
 
 export interface ExperienceCursor {
@@ -446,3 +448,46 @@ export async function withIdempotencyLock<T>(
     return work(tx);
   });
 }
+
+export async function insertExperienceReport(
+  db: ProductExecutor,
+  report: typeof experienceReports.$inferInsert,
+): Promise<ExperienceReportRow> {
+  const [row] = await db.insert(experienceReports).values(report).returning();
+  if (!row) throw new Error('insert experience report returned no row');
+  return row;
+}
+
+export async function findReportById(
+  db: ProductExecutor,
+  id: string,
+): Promise<ExperienceReportRow | undefined> {
+  const [row] = await db
+    .select()
+    .from(experienceReports)
+    .where(eq(experienceReports.id, id))
+    .limit(1);
+  return row;
+}
+
+export async function findLatestReport(
+  db: ProductExecutor,
+  experienceId: string,
+  contentHash: string,
+  kind: 'validation' | 'evaluation',
+): Promise<ExperienceReportRow | undefined> {
+  const [row] = await db
+    .select()
+    .from(experienceReports)
+    .where(
+      and(
+        eq(experienceReports.experience_id, experienceId),
+        eq(experienceReports.content_hash, contentHash),
+        eq(experienceReports.kind, kind),
+      ),
+    )
+    .orderBy(desc(experienceReports.created_at))
+    .limit(1);
+  return row;
+}
+

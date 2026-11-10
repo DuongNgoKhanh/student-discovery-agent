@@ -91,6 +91,7 @@ describe('Product migration', () => {
       expect(await regclass(c, 'product.experiences')).toBe('product.experiences');
       expect(await regclass(c, 'product.experience_drafts')).toBe('product.experience_drafts');
       expect(await regclass(c, 'product.experience_releases')).toBe('product.experience_releases');
+      expect(await regclass(c, 'product.experience_reports')).toBe('product.experience_reports');
       expect(await regclass(c, 'product.idempotency_records')).toBe('product.idempotency_records');
       for (const table of ['auth_sessions', 'auth_refresh_tokens', 'auth_registration_limits']) {
         expect(await regclass(c, `product.${table}`)).toBe(`product.${table}`);
@@ -313,6 +314,24 @@ describe('Product migration', () => {
         /experience_releases is immutable/i,
       );
       expect((await c.query(`SELECT count(*)::int AS n FROM product.experience_releases`)).rows[0].n).toBe(1);
+
+      await c.query(
+        `INSERT INTO product.experience_reports (id, experience_id, kind, draft_revision, content_hash, definition_schema_version, engine_version, status, mandatory_passed, report)
+         VALUES ('rep-1', 'exp-1', 'validation', 1, 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', '1.0', '1.0', 'passed', true, '{}'::jsonb)`,
+      );
+
+      await expect(
+        c.query(`UPDATE product.experience_reports SET status = 'failed' WHERE id = 'rep-1'`),
+      ).rejects.toThrow(/experience_reports is immutable/i);
+
+      await expect(
+        c.query(`DELETE FROM product.experience_reports WHERE id = 'rep-1'`),
+      ).rejects.toThrow(/experience_reports is immutable/i);
+
+      await expect(c.query(`TRUNCATE product.experience_reports`)).rejects.toThrow(
+        /experience_reports is immutable/i,
+      );
+      expect((await c.query(`SELECT count(*)::int AS n FROM product.experience_reports`)).rows[0].n).toBe(1);
 
       // Revisions span the full contract range (0..2^53-1), so the columns must be bigint.
       const types = await c.query(

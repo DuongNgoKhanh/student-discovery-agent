@@ -76,3 +76,30 @@ export const idempotencyRecords = productSchema.table(
     primaryKey({ columns: [table.scope, table.key] }),
   ],
 );
+
+/**
+ * `product.experience_reports` - Stored validation and evaluation reports by content hash and revision.
+ */
+export const experienceReports = productSchema.table(
+  'experience_reports',
+  {
+    id: text('id').primaryKey(),
+    experience_id: text('experience_id')
+      .notNull()
+      .references(() => experiences.id),
+    kind: text('kind').notNull(), // 'validation' | 'evaluation'
+    draft_revision: bigint('draft_revision', { mode: 'number' }).notNull(),
+    content_hash: text('content_hash').notNull(),
+    definition_schema_version: text('definition_schema_version').notNull(),
+    engine_version: text('engine_version').notNull(),
+    status: text('status').notNull(), // 'passed' | 'failed' | 'unsupported'
+    mandatory_passed: boolean('mandatory_passed').notNull(),
+    report: jsonb('report').$type<Record<string, unknown>>().notNull(),
+    created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+  },
+);
+
+export type ExperienceReportRecord = typeof experienceReports.$inferSelect;
+export type NewExperienceReportRecord = typeof experienceReports.$inferInsert;
+
+
