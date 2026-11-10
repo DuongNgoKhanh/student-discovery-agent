@@ -85,7 +85,7 @@ components:
           maxItems: 100
           items: {$ref: '#/components/schemas/ChatflowEdge'}
         budget: {$ref: '#/components/schemas/ChatflowBudget'}
-      description: Trùng id (node, cạnh, tên biến) là duplicate_items. Kiểm DAG, handle, biểu thức, tool và KB thuộc validator đồ thị (T14).
+      description: Trùng id (node, cạnh, tên biến) là duplicate_items; id node sys, conv, profile, result là workflow_node_id_reserved. Kiểm DAG, handle, biểu thức, tool và KB thuộc validator đồ thị (T14).
     ChatflowPersonaTurn:
       type: object
       additionalProperties: false
