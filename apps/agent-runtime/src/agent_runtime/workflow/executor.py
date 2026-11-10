@@ -101,7 +101,10 @@ def _live_nodes(workflow: Workflow) -> set[str]:
 
 def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budget,
                  new_id: Callable[[], str] = lambda: uuid4().hex, on_event: Callable[[Any], None] | None = None,
-                 should_stop: Callable[[], bool] | None = None, implicit: bool = False) -> WorkflowRun:
+                 should_stop: Callable[[], bool] | None = None, implicit: bool = False,
+                 reply_required: bool = True) -> WorkflowRun:
+    """``reply_required``: an explicit graph whose answer yields no block (and no handoff) falls back rather than
+    commit an empty reply; a handled interaction passes False, since the fixed handler's block is its reply."""
     emit = on_event or (lambda event: None)
     stop = should_stop or (lambda: False)
     nodes = {node.id: node for node in workflow.nodes}
@@ -148,6 +151,9 @@ def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budg
             calls, tokens_in, tokens_out = budget.delta(before)
             duration = int((budget.clock() - started) * 1000)
             handles = spec.handles(config) if config is not None else ()
+            if (error is None and result.handle is None and not result.blocks and reply_required and not implicit
+                    and state.handoff is None):
+                error = NodeError("invalid_output")  # an empty reply is never committed
             if error is not None:
                 target = edges.get((node.id, "error")) if "error" in handles else None
                 handle = "error" if target else None

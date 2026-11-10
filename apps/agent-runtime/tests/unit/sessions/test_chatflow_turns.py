@@ -250,3 +250,18 @@ def test_run_message_turn_returns_the_budget_it_used_and_the_workflow_that_ran()
                                            clock=lambda: 0.0)
     assert (used.nodes, used.llm_calls) == (len(run.path), 1)
     assert [node.id for node in workflow.nodes] == ["start", "agent", "answer"]
+
+
+def test_only_a_message_turn_requires_the_graph_to_produce_a_reply(monkeypatch):
+    required = []
+
+    def capture(workflow, scope, ports, **kwargs):
+        required.append(kwargs["reply_required"])
+        return WorkflowRun("completed", (), (), (), scope.conv_values())
+    monkeypatch.setattr(chatflow_turns, "run_workflow", capture)
+    run_message_turn(snapshot(chatflow_agent()), message("chào"), model=None, executor=None,
+                     tool_context=NO_CONTEXT, knowledge_port=None, clock=lambda: 0.0)
+    after = SimpleNamespace(status="in_progress", display_name="Ngân", current_question=None)
+    run_interaction_turn(chat_snapshot(), request("set_name"), draft(next_state=after), model=None,
+                         tool_context=NO_CONTEXT, knowledge_port=None, knowledge=None, clock=lambda: 0.0)
+    assert required == [True, False]  # a handled interaction already has the handler's block as its reply

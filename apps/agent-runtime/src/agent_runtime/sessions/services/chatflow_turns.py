@@ -45,7 +45,7 @@ def _result_of(snapshot: MessageSnapshot) -> dict | None:
 def _execute(snapshot: MessageSnapshot, *, query: str, interaction: str | None, outcome: str, explain: bool,
              result: dict | None, user_text: str, model, executor, tool_context, knowledge_port,
              profile: ProfilePort | None, emit, should_stop, deadline, clock,
-             knowledge_fields: dict | None) -> tuple[WorkflowRun, Budget, Workflow]:
+             knowledge_fields: dict | None, reply_required: bool = True) -> tuple[WorkflowRun, Budget, Workflow]:
     """``mode = agent`` runs the implicit start -> agent -> answer graph, keeping the agent's own fallbacks.
 
     Returns the run, the Budget it used (its counters feed the trace) and the workflow that ran.
@@ -70,7 +70,7 @@ def _execute(snapshot: MessageSnapshot, *, query: str, interaction: str | None, 
                   user_text=user_text)
     budget = Budget(workflow.budget, clock=clock, deadline=deadline)
     run = run_workflow(workflow, scope, ports, budget=budget, on_event=emit, should_stop=should_stop,
-                       implicit=implicit)
+                       implicit=implicit, reply_required=reply_required)
     return run, budget, workflow
 
 
@@ -105,7 +105,8 @@ def run_interaction_turn(chat: MessageSnapshot, request, draft: TurnDraft, *, mo
                     explain=False, result=result, user_text=summary, model=model,
                     executor=SnapshotToolExecutor(post, knowledge), tool_context=tool_context,
                     knowledge_port=knowledge_port, profile=profile, emit=emit, should_stop=should_stop,
-                    deadline=deadline, clock=clock, knowledge_fields=knowledge_fields)
+                    deadline=deadline, clock=clock, knowledge_fields=knowledge_fields,
+                    reply_required=False)  # the handler's own block is the reply
 
 
 def plan_from_run(snapshot: MessageSnapshot, run: WorkflowRun, request: MessageTurnInput, *, handler,

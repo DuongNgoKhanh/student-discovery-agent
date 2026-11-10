@@ -195,3 +195,43 @@ def test_only_an_unusable_reply_uses_the_unknown_message():
     from agent_runtime.agent.loop import fallback_blocks
     snapshot = AgentSnapshotV1.model_validate(MIN)
     assert fallback_blocks(snapshot, "empty_reply", ids())[0].content == UNKNOWN != BUSY
+
+
+def llm_then(answer_config, reply="Xin chào bạn"):
+    from agent_runtime.agent.model import FakeModel, ModelReply
+    wf = workflow([{"id": "start", "type": "start"}, {"id": "say", "type": "llm", "config": {"prompt": "p"}},
+                   {"id": "reply", "type": "answer", "config": answer_config}],
+                  [("start", "next", "say"), ("say", "success", "reply")])
+    events = []
+    result = run_workflow(wf, scope_for(wf), ports_for(model=FakeModel(ModelReply(text=reply))),
+                          budget=Budget(wf.budget), new_id=ids(), on_event=events.append)
+    return result, "".join(event.text for event in events if type(event).__name__ == "TextDelta")
+
+
+def test_an_upstream_answer_after_an_llm_commits_the_llms_text_once():
+    result, streamed = llm_then({"blocks": [{"type": "upstream"}]})
+    assert result.status == "completed"
+    assert [block.content for block in result.blocks] == ["Xin chào bạn"]
+    assert streamed == "Xin chào bạn"  # streamed live by the llm, not repeated by the answer
+
+
+def test_an_answer_with_a_lead_and_upstream_keeps_both_after_an_llm():
+    result, _ = llm_then({"text": "Mình trả lời nhé", "blocks": [{"type": "upstream"}]})
+    assert [block.content for block in result.blocks] == ["Mình trả lời nhé", "Xin chào bạn"]
+
+
+def test_an_explicit_answer_that_yields_no_block_falls_back_instead_of_committing_an_empty_reply():
+    wf = workflow([{"id": "start", "type": "start"}, {"id": "reply", "type": "answer", "config": {"text": "  "}}],
+                  [("start", "next", "reply")])
+    result = run(wf)
+    assert (result.status, result.fallback) == ("fallback", "workflow_node_error")
+    assert result.blocks[0].content == BUSY
+    assert (result.records[-1].node_id, result.records[-1].error) == ("reply", "invalid_output")
+
+
+def test_an_empty_answer_is_allowed_when_the_turn_does_not_need_a_reply():
+    # A handled interaction: the fixed handler's block is the reply, the graph may add nothing.
+    wf = workflow([{"id": "start", "type": "start"}, {"id": "reply", "type": "answer"}], [("start", "next", "reply")])
+    result = run_workflow(wf, scope_for(wf), ports_for(), budget=Budget(wf.budget), new_id=ids(),
+                          reply_required=False)
+    assert (result.status, result.blocks) == ("completed", ())

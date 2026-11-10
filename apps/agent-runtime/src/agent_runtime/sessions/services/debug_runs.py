@@ -233,7 +233,8 @@ class DebugRunService:
                 else:  # model nodes stream live, inside their started/finished pair
                     sink("delta", {"event": "delta", "text": event.text})
 
-        run = run_workflow(workflow, scope, ports, budget=budget, on_event=on_event, should_stop=should_stop)
+        run = run_workflow(workflow, scope, ports, budget=budget, on_event=on_event, should_stop=should_stop,
+                           reply_required=interaction is None)
         return self._result(run, workflow, created)
 
     def _result(self, run: WorkflowRun, workflow, created: datetime) -> dict:

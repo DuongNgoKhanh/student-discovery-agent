@@ -5,7 +5,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, StringConstraints, model_validator
 
 from agent_runtime.agent.catalog import render_placeholders
-from agent_runtime.agent.loop import TextDelta
+from agent_runtime.agent.loop import TextDelta, text_block
 from agent_runtime.agent.model import SystemMessage, UserMessage
 from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.workflow.nodes.base import NodeContext, NodeError, NodeResult, NodeSpec
@@ -76,8 +76,10 @@ def run(ctx: NodeContext, config: LlmConfig) -> NodeResult:
     text = reply.text.strip()
     if not text:
         raise NodeError("invalid_output")
-    if config.output == "text":
-        return NodeResult("success", {"text": text}, reason={"chars": len(text)})
+    if config.output == "text":  # the text is also a block, so an answer's ``upstream`` can repeat it
+        block = text_block(ctx.new_id(), text, ctx.ports.agent.links.allowed_domains)
+        return NodeResult("success", {"text": text}, reason={"chars": len(text)},
+                          blocks=(block,) if block is not None else ())
     try:  # a failure here is the model's bad output, not a bug: it must follow the error edge
         value = json.loads(_FENCE.sub("", text))
         if not check_schema(config.json_schema, value):
