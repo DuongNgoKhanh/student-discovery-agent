@@ -41,6 +41,11 @@ def _fits(kind: str, value: Any, values: tuple[str, ...] | None) -> bool:
     return isinstance(value, list) and all(isinstance(item, str) for item in value)
 
 
+def value_fits(kind: str, value: Any, values: tuple[str, ...] | None = None) -> bool:
+    """Public form of the variable type check, shared with the chatflow runtime."""
+    return _fits(kind, value, values)
+
+
 class ConvVariable(ContractModel):
     name: Ident
     type: Literal["string", "number", "boolean", "enum", "string_list"]
