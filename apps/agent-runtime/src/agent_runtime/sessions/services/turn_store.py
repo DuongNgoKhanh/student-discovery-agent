@@ -1,7 +1,9 @@
 """Turn begin (in-progress Response) and guarded commit. Engine/agent work happens between the two transactions."""
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 from time import monotonic_ns
+from typing import Any
 from uuid import uuid4
 
 from agent_runtime.infrastructure.auth.caller import VerifiedCaller
@@ -11,7 +13,7 @@ from agent_runtime.sessions.repositories.messages import MessageRepository
 from agent_runtime.sessions.repositories.responses import ResponseRepository
 from agent_runtime.sessions.repositories.results import ResultRepository
 from agent_runtime.sessions.repositories.snapshots import SnapshotRepository
-from agent_runtime.sessions.schemas.activity import CommitPatch, NewMessage, StoredInteraction
+from agent_runtime.sessions.schemas.activity import CommitPatch, NewMessage, StoredInteraction, TypedBlock
 from agent_runtime.sessions.schemas.common import ServiceResponse
 from agent_runtime.sessions.schemas.conversation import ConversationRecord
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
@@ -47,6 +49,7 @@ class Begun:
     fingerprint: str
     owner_id: str
     started_ns: int = field(default_factory=monotonic_ns)  # trace latency spans begin..terminal state
+    chatflow: MessageSnapshot | None = None  # only for an interaction of a chatflow conversation
 
 
 def _stale_after(agent: AgentSnapshotV1) -> timedelta:
@@ -123,7 +126,15 @@ class TurnStore:
                 activity=ActivitySummary.from_view(view.active_activity) if view.active_activity else None)
             self.responses.insert(session, response=response, owner_id=caller.owner_id,
                 idempotency_key=request.idempotency_key, request_hash=fingerprint, base_revision=parent.revision)
-            return Begun(response, request, snapshot, fingerprint, caller.owner_id)
+            chatflow = None if isinstance(request, MessageTurnInput) else self._chatflow_snapshot(session, parent)
+            return Begun(response, request, snapshot, fingerprint, caller.owner_id, chatflow=chatflow)
+
+    def _chatflow_snapshot(self, session, parent: ConversationRecord) -> MessageSnapshot | None:
+        """An interaction of a chatflow conversation also runs the graph, so it needs the message-turn view."""
+        release = self.snapshots.get(session, parent.agent_snapshot)
+        if AgentSnapshotV1.model_validate(release.content).mode != "chatflow":
+            return None
+        return self._message_snapshot(session, parent)
 
     def _snapshot(self, session, parent: ConversationRecord,
                   request: ConversationTurnInput) -> TurnSnapshot | MessageSnapshot:
@@ -152,7 +163,9 @@ class TurnStore:
             raise TurnCancelled()
         return parent
 
-    def commit(self, caller: VerifiedCaller, begun: Begun, draft: TurnDraft) -> TurnResponse:
+    def commit(self, caller: VerifiedCaller, begun: Begun, draft: TurnDraft, *,
+               lead_blocks: tuple[TypedBlock, ...] = (), conv_vars: Mapping[str, Any] | None = None) -> TurnResponse:
+        """One atomic write of the handler's draft, a chatflow graph's lead-in blocks and its conversation variables."""
         request: SupportedInteraction = begun.request
         snapshot: TurnSnapshot = begun.snapshot
         with self.uow.begin() as session:
@@ -170,7 +183,7 @@ class TurnStore:
                 raise RuntimeSessionError(500, "INTERNAL_ERROR")
             now = self.access.check_open(session, caller, parent)
             finalized = finalize_turn(snapshot, request, draft, now,
-                                      input_message_id=begun.response.input_message_id)
+                                      input_message_id=begun.response.input_message_id, lead_blocks=lead_blocks)
             try:
                 self.persistence.apply_patch(session, caller, parent, current, finalized.patch, now=now)
             except RuntimeSessionError as error:
@@ -178,6 +191,8 @@ class TurnStore:
                 if error.status == 400:
                     raise RuntimeSessionError(500, "INTERNAL_ERROR") from None
                 raise
+            if conv_vars is not None and dict(conv_vars) != parent.conv_vars:
+                self.conversations.conversations.save_conv_vars(session, parent.id, parent.owner_id, dict(conv_vars))
             done = completed(begun.response, finalized.result, now)
             self.responses.finish(session, done)
         return done

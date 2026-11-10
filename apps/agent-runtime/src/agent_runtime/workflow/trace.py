@@ -41,6 +41,7 @@ class WorkflowTrace(ContractModel):
     fallback_reason: str | None
     last_node: str | None
     node_runs: Annotated[tuple[NodeRunTrace, ...], Field(max_length=50)]
+    activity_conflict: bool = False  # an interaction's graph asked for a handoff; the fixed handler won
 
 
 # Output keys whose values are workflow config or ids, never student text.
@@ -128,7 +129,7 @@ def _shrink(value: Any) -> Any:
 
 
 def build_trace(run: WorkflowRun, *, redaction: Redaction, agent_release_id: str | None, content_hash: str | None,
-                mode: Literal["agent", "chatflow"], budget: Budget) -> WorkflowTrace:
+                mode: Literal["agent", "chatflow"], budget: Budget, activity_conflict: bool = False) -> WorkflowTrace:
     """``budget`` must be the Budget the run used, so its counters are this turn's."""
     runs = tuple(NodeRunTrace(
         node_id=record.node_id, type=record.type, order=record.order, handle=record.handle,
@@ -139,4 +140,5 @@ def build_trace(run: WorkflowRun, *, redaction: Redaction, agent_release_id: str
     return WorkflowTrace(mode=mode, agent_release_id=agent_release_id, content_hash=content_hash,
                          budget={"nodes": budget.nodes, "llm_calls": budget.llm_calls, "max_nodes": budget.max_nodes,
                                  "max_llm_calls": budget.max_llm_calls},
-                         fallback_reason=run.fallback, last_node=run.last_node, node_runs=runs)
+                         fallback_reason=run.fallback, last_node=run.last_node, node_runs=runs,
+                         activity_conflict=activity_conflict)
