@@ -208,6 +208,7 @@ def run_agent_debug_run(request: Request):
 
 @router.get("/workflow/node-types", operation_id="internalGetWorkflowNodeTypes")
 def get_workflow_node_types(request: Request):
+    _require_service(request, "agent.validate")
     _query(request, ())
     return success(ServiceResponse(status=200, data=node_type_catalog()), *request.state.meta)
 

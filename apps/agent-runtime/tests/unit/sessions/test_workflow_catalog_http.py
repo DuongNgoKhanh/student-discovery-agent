@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 
 from agent_runtime.api.internal.dependencies import RuntimeContainer
@@ -16,11 +17,11 @@ STUDIO_KEY = b"studio-test-key-at-least-32-bytes!!"
 TARGET = "/api/v1/internal/workflow/node-types"
 
 
-def get(purpose="agent.validate", student=False):
+def get(purpose="agent.validate", student=False, target=TARGET):
     runtime = RuntimeContainer(policy=RuntimePolicy(environment="demo"),
                                verifier=CallerVerifier({"s": STUDENT_KEY}, FakeClock(NOW)),
                                service_verifier=ServiceVerifier({"studio": STUDIO_KEY}, FakeClock(NOW)))
-    context = RawRequestContext("GET", TARGET, b"")
+    context = RawRequestContext("GET", target, b"")
     if student:
         token = sign_request(context, owner_id="owner_" + "a" * 24, now=NOW, key=STUDENT_KEY, kid="s")
         caller = "sda-product-bff"
@@ -28,7 +29,7 @@ def get(purpose="agent.validate", student=False):
         token = sign_service_request(context, now=NOW, key=STUDIO_KEY, kid="studio", purpose=purpose)
         caller = "sda-studio-api"
     with TestClient(create_app(runtime)) as client:
-        return client.get(TARGET, headers={"X-Internal-Caller": caller, "X-Caller-Context": token})
+        return client.get(target, headers={"X-Internal-Caller": caller, "X-Caller-Context": token})
 
 
 def test_catalog_is_served_to_a_validate_token():
@@ -43,3 +44,18 @@ def test_a_student_token_cannot_read_the_catalog():
 
 def test_a_retrieval_token_cannot_read_the_catalog():
     assert get(purpose="knowledge.retrieval").status_code == 403
+
+
+@pytest.mark.parametrize("target", ["/api/v1/internal/workflow/node%2Dtypes", "/api/v1/internal/workflow%2Fnode-types"])
+def test_a_percent_encoded_catalog_path_is_still_a_studio_route(target):
+    assert get(student=True, target=target).status_code == 403
+    assert get(purpose="knowledge.retrieval", target=target).status_code == 403
+    assert get(target=target).status_code == 200  # the Studio token still reaches it, under either spelling
+
+
+def test_the_catalog_route_itself_refuses_a_caller_that_is_not_the_studio_validate_service(monkeypatch):
+    from agent_runtime.api.internal import dependencies
+
+    monkeypatch.setattr(dependencies, "SERVICE_ROUTES", {})  # the boundary table no longer guards the route
+    assert get(student=True).status_code == 403
+    assert get(student=True, target="/api/v1/internal/workflow/node%2Dtypes").status_code == 403
