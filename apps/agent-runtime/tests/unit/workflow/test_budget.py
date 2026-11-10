@@ -67,3 +67,17 @@ def test_delta_reports_what_one_node_used():
     before = b.counters()
     BudgetedModel(FakeModel(ModelReply("a", usage=ModelUsage(2, 5))), b).invoke([], [], SETTINGS)
     assert b.delta(before) == (1, 2, 5)
+
+
+def test_a_node_without_external_calls_may_start_after_the_deadline_but_still_counts():
+    clock = Clock()
+    b = Budget(WorkflowBudget(turn_timeout_ms=1000, max_nodes=1), clock=clock)
+    clock.now += 2
+    b.start_node(checks_deadline=False)
+    assert b.nodes == 1
+    with pytest.raises(BudgetExceeded) as error:
+        b.start_node(checks_deadline=False)
+    assert error.value.kind == "nodes"
+    with pytest.raises(BudgetExceeded) as error:
+        Budget(WorkflowBudget(turn_timeout_ms=1000), clock=clock, deadline=clock.now - 1).start_node()
+    assert error.value.kind == "deadline"

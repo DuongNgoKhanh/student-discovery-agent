@@ -141,3 +141,59 @@ def test_an_invalid_agent_config_is_a_node_error():
     result = run_workflow(wf, scope_for(wf), ports, budget=Budget(wf.budget), new_id=ids())
     assert (result.status, result.fallback, result.records[-1].error) == (
         "fallback", "workflow_node_error", "invalid_output")
+
+
+class JumpingClock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+
+def late(reply, clock):
+    """The model answers, but only after the turn deadline has passed."""
+    def outcome(messages):
+        clock.now = 1000.0
+        return reply
+    return outcome
+
+
+def test_a_reply_that_arrives_after_the_deadline_is_still_answered_in_agent_mode():
+    clock = JumpingClock()
+    snapshot = agent()
+    wf = implicit_workflow(snapshot)
+    ports = ports_for(snapshot=snapshot, model=FakeModel(late(ModelReply(text="Muộn nhưng xong"), clock)),
+                      tools=Tools(), agent_context=CONTEXT, user_text="chào")
+    result = run_workflow(wf, scope_for(wf), ports, budget=Budget(wf.budget, clock=clock), new_id=ids(),
+                          implicit=True)
+    assert (result.status, result.fallback, result.path) == ("completed", None, ("start", "agent", "answer"))
+    assert [block.content for block in result.blocks] == ["Muộn nhưng xong"]
+
+
+def test_a_handoff_that_arrives_after_the_deadline_is_kept_in_agent_mode():
+    clock = JumpingClock()
+    snapshot = agent()
+    wf = implicit_workflow(snapshot)
+    reply = ModelReply(text="Mình ghi tên nhé", tool_calls=(
+        ToolCall("c1", "assessment.set_name", {"display_name": "Minh"}),))
+    ports = ports_for(snapshot=snapshot, model=FakeModel(late(reply, clock)), tools=Tools(), agent_context=CONTEXT,
+                      user_text="mình là Minh")
+    result = run_workflow(wf, scope_for(wf), ports, budget=Budget(wf.budget, clock=clock), new_id=ids(),
+                          implicit=True)
+    assert (result.status, result.fallback) == ("completed", None)
+    assert result.handoff.name == "assessment.set_name" and ports.tools.calls == ["assessment.set_name"]
+
+
+def test_a_model_node_past_the_deadline_still_falls_back_in_an_explicit_graph():
+    clock = JumpingClock()
+    wf = workflow([{"id": "start", "type": "start"}, {"id": "a", "type": "agent", "config": {"tools": ["*"]}},
+                   {"id": "reply", "type": "answer", "config": {"blocks": [{"type": "upstream"}]}}],
+                  [("start", "next", "a"), ("a", "success", "reply")])
+    model = FakeModel()
+    ports = ports_for(model=model, tools=Tools(), agent_context=CONTEXT, user_text="chào")
+    budget = Budget(wf.budget, clock=clock)
+    clock.now = 1000.0  # past the deadline before the turn starts: start may run, the agent may not
+    result = run_workflow(wf, scope_for(wf), ports, budget=budget, new_id=ids())
+    assert (result.status, result.fallback, result.path) == ("fallback", "workflow_budget", ("start",))
+    assert model.calls == []

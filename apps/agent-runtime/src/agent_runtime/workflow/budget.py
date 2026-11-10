@@ -49,8 +49,10 @@ class Budget:
         if self.clock() >= self.deadline:
             raise BudgetExceeded("deadline")
 
-    def start_node(self) -> None:
-        self._check_deadline()
+    def start_node(self, *, checks_deadline: bool = True) -> None:
+        """Every node counts; only a node that may call out (model, knowledge, tool) is refused past the deadline."""
+        if checks_deadline:
+            self._check_deadline()
         if self.nodes >= self.max_nodes:
             raise BudgetExceeded("nodes")
         self.nodes += 1

@@ -23,6 +23,10 @@ from agent_runtime.workflow.scope import Scope
 
 logger = logging.getLogger(__name__)
 
+# Nodes that only read the scope and make no external call: a late but finished agent reply must still be
+# answered, so these run after the deadline; the model call itself is refused by ``start_llm_call``.
+_NO_EXTERNAL_CALL = frozenset({"start", "if_else", "assign", "answer"})
+
 
 @dataclass(frozen=True)
 class NodeRecord:
@@ -109,7 +113,7 @@ def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budg
             if stop():
                 raise NodeCancelled()
             node = nodes[current]
-            budget.start_node()
+            budget.start_node(checks_deadline=node.type not in _NO_EXTERNAL_CALL)
             spec = get_spec(node.type)
             order = len(records) + 1
             emit(NodeStarted(node.id, node.type, order))
