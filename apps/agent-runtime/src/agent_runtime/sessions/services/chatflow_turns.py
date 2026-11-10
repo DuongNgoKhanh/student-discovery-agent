@@ -42,7 +42,8 @@ def build_scope(snapshot: MessageSnapshot, request: MessageTurnInput, workflow: 
 
 
 def run_message_turn(snapshot: MessageSnapshot, request: MessageTurnInput, *, model, executor, tool_context,
-                     knowledge_port, profile: ProfilePort | None = None, emit=None, should_stop=None, deadline=None,
+                     knowledge_port, knowledge_fields: dict | None = None, profile: ProfilePort | None = None,
+                     emit=None, should_stop=None, deadline=None,
                      clock) -> WorkflowRun:
     """``mode = agent`` runs the implicit start -> agent -> answer graph, keeping the agent's own fallbacks."""
     agent = snapshot.agent
@@ -52,7 +53,7 @@ def run_message_turn(snapshot: MessageSnapshot, request: MessageTurnInput, *, mo
     explain = request.explain is not None
     show = agent.tool("knowledge.show")
     ports = Ports(agent=agent, model=model, tools=executor, tool_context=tool_context, knowledge=knowledge_port,
-                  knowledge_fields=tool_context.knowledge_fields,
+                  knowledge_fields={**tool_context.knowledge_fields, **(knowledge_fields or {})},
                   show_params=KnowledgeShowParams.model_validate(show.params) if show else None, profile=profile,
                   agent_context=agent_context(snapshot, explain=explain), history=chat_history(snapshot.history),
                   user_text=EXPLAIN_REQUEST_TEXT if explain else request.content.text)

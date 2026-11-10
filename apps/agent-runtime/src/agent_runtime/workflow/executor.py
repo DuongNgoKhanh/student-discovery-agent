@@ -57,6 +57,7 @@ class WorkflowRun:
     agent_steps: int = 0
     llm_calls: int = 0
     usage: ModelUsage = ModelUsage()
+    knowledge: tuple[dict[str, Any], ...] = ()  # trace of this run's knowledge searches
 
     @property
     def path(self) -> tuple[str, ...]:
@@ -65,6 +66,10 @@ class WorkflowRun:
     @property
     def last_node(self) -> str | None:
         return self.records[-1].node_id if self.records else None
+
+
+def _searches(state: RunState) -> tuple[dict[str, Any], ...]:
+    return tuple(item for tools in state.knowledge.values() for item in tools.trace())[:8]
 
 
 class _Fallback(Exception):
@@ -172,7 +177,7 @@ def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budg
                     raise _Fallback(None)
     except NodeCancelled:
         return WorkflowRun("cancelled", tuple(records), (), (), initial_conv, None, None, state.agent_steps,
-                           budget.llm_calls, budget.usage)
+                           budget.llm_calls, budget.usage, _searches(state))
     except BudgetExceeded as exceeded:
         reason = "deadline" if implicit and exceeded.kind == "deadline" else "workflow_budget"
     except _Fallback as caught:
@@ -185,6 +190,6 @@ def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budg
         reason = "workflow_node_error"
     if reason is not None:
         return WorkflowRun("fallback", tuple(records), fallback_blocks(ports.agent, reason, new_id), (), initial_conv,
-                           None, reason, state.agent_steps, budget.llm_calls, budget.usage)
+                           None, reason, state.agent_steps, budget.llm_calls, budget.usage, _searches(state))
     return WorkflowRun("completed", tuple(records), final, tuple(effects), scope.conv_values(), state.handoff, None,
-                       state.agent_steps, budget.llm_calls, budget.usage)
+                       state.agent_steps, budget.llm_calls, budget.usage, _searches(state))

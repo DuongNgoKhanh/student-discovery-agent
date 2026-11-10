@@ -2,6 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, StringConstraints, model_validator
 
+from agent_runtime.agent.catalog import KnowledgeShowArguments
 from agent_runtime.agent.loop import TextDelta, text_block
 from agent_runtime.sessions.schemas.activity import SuggestionsBlock, TypedBlock
 from agent_runtime.sessions.schemas.common import ContractModel
@@ -45,7 +46,11 @@ def _blocks(ctx: NodeContext, config: AnswerConfig) -> tuple[TypedBlock, ...]:
 
 
 def _cards(ctx: NodeContext, ref: str) -> list[TypedBlock]:
-    return []  # replaced in Task 10
+    node_id, _, short = ref.partition(".")
+    tools = ctx.state.knowledge.get(node_id)
+    if tools is None or "error" in tools.show(KnowledgeShowArguments(refs=(short,))):
+        return []  # the node did not run this turn, or the ref is not one of its results: no card, no error
+    return list(tools.cards())
 
 
 def run(ctx: NodeContext, config: AnswerConfig) -> NodeResult:

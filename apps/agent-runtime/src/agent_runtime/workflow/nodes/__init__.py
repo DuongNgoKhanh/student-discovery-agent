@@ -1,2 +1,11 @@
 """Importing this package registers every node type."""
-from agent_runtime.workflow.nodes import agent, answer, assign, if_else, intent_classifier, llm, start  # noqa: F401
+from agent_runtime.workflow.nodes import (  # noqa: F401
+    agent,
+    answer,
+    assign,
+    if_else,
+    intent_classifier,
+    knowledge_retrieval,
+    llm,
+    start,
+)

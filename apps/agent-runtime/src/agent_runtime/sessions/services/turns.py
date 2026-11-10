@@ -146,6 +146,17 @@ class TurnService:
                                allowed_domains=agent.links.allowed_domains)
         return ToolContext(knowledge_fields=fields), tools
 
+    def _workflow_fields(self, agent: AgentSnapshotV1, known: dict) -> dict:
+        """Metadata fields of every KB a chatflow node reads; read once per turn, outside any transaction."""
+        if agent.workflow is None:
+            return {}
+        wanted = {node.config["knowledge_base_id"] for node in agent.workflow.nodes
+                  if node.type == "knowledge_retrieval" and isinstance(node.config.get("knowledge_base_id"), str)}
+        merged: dict = {}
+        for kb_id in wanted - set(known):
+            merged.update(self._read_fields(kb_id))
+        return merged
+
     def _run(self, caller: VerifiedCaller, begun: Begun, on_event, observed: dict) -> TurnResponse:
         request, snapshot = begun.request, begun.snapshot
         if not isinstance(request, MessageTurnInput):
@@ -167,13 +178,16 @@ class TurnService:
         tool_context, knowledge = self._knowledge(agent)
         executor = SnapshotToolExecutor(snapshot, knowledge)
         run = run_message_turn(snapshot, request, model=model, executor=executor, tool_context=tool_context,
-                               knowledge_port=self.knowledge, profile=self.profile, emit=emit,
+                               knowledge_port=self.knowledge,
+                               knowledge_fields=self._workflow_fields(agent, tool_context.knowledge_fields),
+                               profile=self.profile, emit=emit,
                                should_stop=self._should_stop(caller, begun.response.id), deadline=deadline,
                                clock=self._clock)
         observed.update(agent_steps=run.agent_steps, input_tokens=run.usage.input_tokens,
                         output_tokens=run.usage.output_tokens, fallback=run.fallback is not None,
                         fallback_reason=run.fallback)
-        if knowledge is not None and (searches := knowledge.trace()):
+        searches = (*(knowledge.trace() if knowledge is not None else ()), *run.knowledge)[:8]
+        if searches:
             observed["knowledge"] = searches
         if run.status == "cancelled":
             raise TurnCancelled()
