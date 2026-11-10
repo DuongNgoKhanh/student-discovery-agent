@@ -50,7 +50,7 @@ def _agent_content(*, knowledge_threshold: float | None = None):
 
 
 def build_chat(test_database, valid_v2_doc, validator, *, with_knowledge: bool = False,
-               trace_sink=None) -> SimpleNamespace:
+               trace_sink=None, agent_content=None) -> SimpleNamespace:
     """Caller owns ``dispose()``. ``with_knowledge`` loads the fictional IHRD demo KB, indexed with fake embeddings."""
     upgrade_database(test_database.url)
     db_engine = build_engine(test_database.url)
@@ -64,7 +64,7 @@ def build_chat(test_database, valid_v2_doc, validator, *, with_knowledge: bool =
     caller = VerifiedCaller("owner", "sda-product-bff", NOW + timedelta(seconds=60))
     product = FakeProductReleaseSource()
     # Fake embeddings score far below real ones, so the demo threshold would hide every hit.
-    product.agent = agent_release(content=_agent_content(knowledge_threshold=0.0 if with_knowledge else None))
+    product.agent = agent_release(content=agent_content or _agent_content(knowledge_threshold=0.0 if with_knowledge else None))
     product.experiences[(EXPERIENCE, PROFILE)] = experience_release(valid_v2_doc)
     conversations = ConversationService(uow, product, validator, policy=RuntimePolicy(environment="demo"), clock=clock)
     blocks = [*adaptive_capabilities().supported_blocks, SupportedBlock(type="markdown", schema_versions=(1,)),
@@ -107,7 +107,12 @@ def build_chat(test_database, valid_v2_doc, validator, *, with_knowledge: bool =
                 messages.c.conversation_id == conversation_id, messages.c.role == "assistant")
                 .order_by(messages.c.ordinal.desc()).limit(1)).one()
 
+    def conv_vars():
+        with uow.begin() as session:
+            return session.scalar(select(conversations_table.c.conv_vars).where(
+                conversations_table.c.id == conversation_id))
+
     return SimpleNamespace(model=model, service=service, responses=responses, conversations=conversations,
                            clock=clock, caller=caller, conversation_id=conversation_id, send=send, message_count=message_count,
                            revision=revision, user_message_ids=user_message_ids, uow=uow,
-                           last_assistant_blocks=last_assistant_blocks, dispose=db_engine.dispose)
+                           last_assistant_blocks=last_assistant_blocks, conv_vars=conv_vars, dispose=db_engine.dispose)
