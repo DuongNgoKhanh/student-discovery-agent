@@ -119,3 +119,41 @@ def test_a_run_that_crashes_ends_the_stream_with_an_error_frame():
 
     chunks = anyio.run(read)
     assert [name for name, _ in frames("".join(chunks))] == ["workflow.node_started", "error"]
+
+
+def test_streamed_debug_runs_are_capped_and_a_finished_stream_frees_its_slot(monkeypatch):
+    import threading
+
+    from agent_runtime.api.internal import routes
+
+    slots = threading.BoundedSemaphore(1)
+    monkeypatch.setattr(routes, "DEBUG_STREAMS", slots)
+    assert call(stream=True).status_code == 200
+    assert slots.acquire(timeout=2)  # released by the finished worker thread
+    full = call(stream=True)
+    assert full.status_code == 429 and full.json()["error"]["code"] == "SYS_RATE_LIMITED"
+    assert call().status_code == 200  # a JSON run does not use a stream slot
+    slots.release()
+    assert call(stream=True).status_code == 200
+
+
+def test_the_worker_frees_its_slot_even_when_the_run_crashes(caplog):
+    import anyio
+
+    from agent_runtime.api.internal.sse import stream_events
+
+    done = []
+
+    def boom(emit, should_stop):
+        raise RuntimeError("học phí của Ngân")
+
+    async def read():
+        return [chunk async for chunk in stream_events(boom, poll_seconds=0.001, on_done=lambda: done.append(1))]
+
+    anyio.run(read)
+    for _ in range(200):
+        if done:
+            break
+        anyio.run(anyio.sleep, 0.01)
+    assert done == [1]
+    assert "RuntimeError" in caplog.text and "Ngân" not in caplog.text  # the type only, never the message

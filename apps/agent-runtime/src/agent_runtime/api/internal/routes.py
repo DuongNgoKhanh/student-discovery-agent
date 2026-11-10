@@ -1,5 +1,6 @@
 """Ten synchronous operations; FastAPI dispatches all service/DB work to its pool."""
 import re
+import threading
 
 from fastapi import APIRouter, Request
 from pydantic import ValidationError
@@ -24,6 +25,8 @@ from .sse import stream_events, stream_turn
 
 router = APIRouter(prefix=PREFIX)
 SSE_HEADERS = {"X-Accel-Buffering": "no"}
+# Each streamed debug run holds a worker thread for up to a turn timeout: at most this many at once per process.
+DEBUG_STREAMS = threading.BoundedSemaphore(8)
 
 
 def _service(request, name):
@@ -190,8 +193,16 @@ def run_agent_debug_run(request: Request):
     work = _service(request, "debug_runs").prepare(data["content"], data["request"])  # a bad request is a plain 422
     if not _wants_stream(request):
         return success(ServiceResponse(status=200, data=work(None, None)), *request.state.meta)
+    slots = DEBUG_STREAMS
+    if not slots.acquire(blocking=False):
+        raise RuntimeSessionError(429, "RATE_LIMITED")
+    try:
+        body = stream_events(work, on_done=slots.release)  # the worker thread frees the slot when it ends
+    except Exception:  # the worker never started, so nothing else will release it
+        slots.release()
+        raise
     request_id, trace_id, _ = request.state.meta
-    return StreamingResponse(stream_events(work), media_type="text/event-stream",
+    return StreamingResponse(body, media_type="text/event-stream",
                              headers={**SSE_HEADERS, "X-Request-ID": request_id, "X-Trace-ID": trace_id})
 
 

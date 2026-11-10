@@ -83,3 +83,19 @@ def test_a_stub_that_is_not_text_is_a_json_reply():
 
     reply = StubModel({"a": "ă"}).invoke([], (), None)
     assert reply.text == '{"a": "ă"}'
+
+
+@pytest.mark.parametrize("activity", [{"status": ["in_progress"]}, {"status": "in_progress", "display_name": 3},
+                                      {"current_question": {"title": 1, "options": []}},
+                                      {"current_question": {"options": [{"id": "a", "label": {"x": 1}}]}}])
+def test_a_fake_activity_with_non_text_fields_is_a_422(activity):
+    with pytest.raises(RuntimeSessionError) as error:
+        service().prepare(CONTENT, {"message": "x", "state": {"activity": activity}})
+    assert error.value.status == 422
+
+
+def test_a_fake_activity_with_text_fields_runs():
+    activity = {"status": "in_progress", "display_name": "Ngân",
+                "current_question": {"title": "Câu 1", "options": [{"id": "a", "label": "A"}, {"id": "b"}]}}
+    result = service().run(CONTENT, {"message": "x", "state": {"activity": activity}, "llm_stubs": {"ask": "other"}})
+    assert result["status"] == "completed"

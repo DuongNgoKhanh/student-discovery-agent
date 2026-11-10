@@ -7,6 +7,7 @@ the request's correlation ids.
 """
 import contextvars
 import json
+import logging
 import queue
 import threading
 import time
@@ -16,6 +17,7 @@ import anyio
 
 from agent_runtime.sessions.schemas.responses import TERMINAL_EVENTS
 
+logger = logging.getLogger(__name__)
 PING_SECONDS = 15.0
 POLL_SECONDS = 0.05
 # A worker blocked on a full queue gives up after this long without a reader (a body that was never iterated
@@ -107,11 +109,13 @@ async def _read(created: str | None, events: queue.Queue, closed: threading.Even
 
 def stream_events(work: Callable[[Callable[[str, dict], None], Callable[[], bool]], dict], *,
                   ping_seconds: float = PING_SECONDS, poll_seconds: float = POLL_SECONDS,
-                  abandon_seconds: float = ABANDON_SECONDS) -> AsyncIterator[str]:
+                  abandon_seconds: float = ABANDON_SECONDS,
+                  on_done: Callable[[], None] | None = None) -> AsyncIterator[str]:
     """Debug-run stream: ``work(emit, should_stop)`` runs on a worker thread; each emit is one SSE frame.
 
     The run is disposable: nothing is committed, so a reader that goes away stops it at the next node boundary
     (``should_stop``) and undelivered frames are dropped. ``completed`` (or ``error``) is the last frame.
+    ``on_done`` runs once when the worker thread ends, whatever happened (it frees the stream's slot).
     """
     events: queue.Queue = queue.Queue(maxsize=512)
     closed = threading.Event()
@@ -127,18 +131,25 @@ def stream_events(work: Callable[[Callable[[str, dict], None], Callable[[], bool
     def emit(name: str, data: dict) -> None:
         try:
             events.put_nowait(frame(name, data))
-        except queue.Full:  # nobody is reading fast enough (or at all): the run is disposable
+        except queue.Full:
+            # Nobody is reading fast enough (or at all): the frame is dropped. A client that missed frames
+            # rebuilds the run from the ``completed`` result, which always carries the whole run.
             pass
 
     def run() -> None:
         try:
-            result = work(emit, closed.is_set)
-            terminal = frame("completed", {"event": "completed", "result": result})
-        except Exception:
-            terminal = frame("error", {"event": "error", "code": "INTERNAL_ERROR"})
-        deadline = time.monotonic() + abandon_seconds
-        put(terminal, deadline)
-        put(_DONE, deadline)
+            try:
+                result = work(emit, closed.is_set)
+                terminal = frame("completed", {"event": "completed", "result": result})
+            except Exception as error:  # the type only: an exception message may quote the draft or its input
+                logger.error("debug run failed: %s", type(error).__name__)
+                terminal = frame("error", {"event": "error", "code": "INTERNAL_ERROR"})
+            deadline = time.monotonic() + abandon_seconds
+            put(terminal, deadline)
+            put(_DONE, deadline)
+        finally:
+            if on_done is not None:
+                on_done()
 
     threading.Thread(target=contextvars.copy_context().run, args=(run,), name="debug-run", daemon=True).start()
     return _read(None, events, closed, ping_seconds, poll_seconds)
