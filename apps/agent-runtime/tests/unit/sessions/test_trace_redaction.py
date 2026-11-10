@@ -198,6 +198,13 @@ def test_agent_observation_reaches_the_turn_trace():
     assert event.conversation_id == "conv1"
 
 
+def test_openrouter_agent_observation_reaches_the_turn_trace():
+    service = _turn_service(_TurnStore(), _completed(provider="openrouter", agent_steps=1, fallback=False))
+    service.finish(None, service.begin(None, "conv1", None))
+    (event,) = service.trace_sink.events
+    assert event.provider == "openrouter" and event.agent_steps == 1 and event.fallback is False
+
+
 def test_bad_agent_observation_is_dropped_but_the_turn_identifiers_stay():
     bad = {**KNOWLEDGE, "hits": [["doc_a", 2, 0]]}  # lists are not tuples under strict validation
     service = _turn_service(_TurnStore(), _completed(agent_steps=2, knowledge=(bad,)))

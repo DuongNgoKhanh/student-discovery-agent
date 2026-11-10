@@ -87,6 +87,11 @@ def test_openai_models_are_supported():
     assert (snapshot.model.provider, snapshot.model.settings().model_id) == ("openai", "gpt-4.1-mini")
 
 
+def test_openrouter_models_are_supported():
+    snapshot = AgentSnapshotV1.model_validate(mutate(("model", "ref"), "openrouter/google/gemini-2.0-flash-exp:free"))
+    assert (snapshot.model.provider, snapshot.model.settings().model_id) == ("openrouter", "google/gemini-2.0-flash-exp:free")
+
+
 def test_invalid_tool_params_name_the_failing_field():
     with pytest.raises(ValidationError, match=r"experiences\.0\.label"):
         AgentSnapshotV1.model_validate(mutate(("tools", 0, "params", "experiences", 0, "label"), " "))

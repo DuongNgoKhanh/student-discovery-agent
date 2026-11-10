@@ -15,6 +15,7 @@ from agent_runtime.agent.model import (
 from agent_runtime.infrastructure.llm.gemini_model import GeminiChatModel
 from agent_runtime.infrastructure.llm.model_registry import MODEL_PROVIDERS, build_model_port
 from agent_runtime.infrastructure.llm.openai_model import OpenAIChatModel
+from agent_runtime.infrastructure.llm.openrouter_model import OpenRouterChatModel
 from agent_runtime.infrastructure.llm.vllm_model import VllmChatModel
 from agent_runtime.sessions.schemas.release import AgentModelConfig
 
@@ -63,9 +64,22 @@ def test_vllm_needs_both_a_key_and_a_base_url():
                                                                       PROXY_URL=None)), UnconfiguredModel)
 
 
-def test_model_ids_may_contain_slashes():
+def test_openrouter_needs_both_a_key_and_a_base_url():
+    openrouter = SimpleNamespace(OPENROUTER_API_KEY="sk-or-v1", OPENROUTER_BASE_URL="https://openrouter.ai/api/v1",
+                                 PROXY_URL=None)
+    port = build_model_port("openrouter", config=openrouter)
+    assert isinstance(port, OpenRouterChatModel) and port._base_url == "https://openrouter.ai/api/v1"
+    assert "HTTP-Referer" in port.request_options.get("extra_headers", {})
+    assert isinstance(build_model_port("openrouter", config=SimpleNamespace(OPENROUTER_API_KEY="",
+                                                                            OPENROUTER_BASE_URL="https://openrouter.ai/api/v1",
+                                                                            PROXY_URL=None)), UnconfiguredModel)
+
+
+def test_model_ids_may_contain_slashes_and_colons():
     config = AgentModelConfig(ref="vllm/hosted_vllm/Qwen/Qwen3.5-35B-A3B-FP8")
     assert (config.provider, config.model_id) == ("vllm", "hosted_vllm/Qwen/Qwen3.5-35B-A3B-FP8")
+    free_config = AgentModelConfig(ref="openrouter/google/gemini-2.0-flash-exp:free")
+    assert (free_config.provider, free_config.model_id) == ("openrouter", "google/gemini-2.0-flash-exp:free")
     for ref in ("vllm/", "vllm//x", "vllm/x/", "gemini"):
         with pytest.raises(ValueError):
             AgentModelConfig(ref=ref)

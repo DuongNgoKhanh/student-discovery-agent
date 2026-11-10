@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # OpenAI-compatible vLLM endpoint (or a LiteLLM proxy in front of it): chat provider `vllm` and vLLM embeddings
     VLLM_API_KEY: str = ""
     VLLM_BASE_URL: str = ""
+    # OpenRouter API (OpenAI-compatible) endpoint: chat provider `openrouter`
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     GOOGLE_CLOUD_PROJECT: str = ""
     GOOGLE_CLOUD_LOCATION: str = ""
     GOOGLE_EMBEDDING_MODEL: str = "text-embedding-004"

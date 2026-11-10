@@ -70,7 +70,7 @@
           additionalProperties: false
           required: [ref]
           properties:
-            ref: {type: string, pattern: '^[a-z0-9-]+/[A-Za-z0-9._-]+$', description: "provider/model; provider hiện hỗ trợ: gemini, openai"}
+            ref: {type: string, pattern: '^[a-z0-9-]+(/[A-Za-z0-9._:-]+)+$', description: "provider/model; model id có thể chứa slash và colon; provider hiện hỗ trợ: gemini, openai, vllm, openrouter"}
             temperature: {type: number, minimum: 0, maximum: 2}
             max_output_tokens: {type: integer, minimum: 1, maximum: 4096}
             timeout_ms: {type: integer, minimum: 10000, maximum: 30000, description: "Gemini từ chối deadline dưới 10s."}

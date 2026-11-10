@@ -52,7 +52,7 @@ class TraceEvent(ContractModel):
     algorithm_profile: Literal["riasec.mean.bounds.v2"] | None = None
     engine_version: Reference | None = None
     latency_ms: JsonSafeInt | None = None
-    provider: Literal["gemini", "openai"] | None = None
+    provider: Literal["gemini", "openai", "vllm", "openrouter"] | None = None
     fallback: Annotated[bool, Field(strict=True)] | None = None
     fallback_reason: Fallback | None = None
     agent_steps: JsonSafeInt | None = None
