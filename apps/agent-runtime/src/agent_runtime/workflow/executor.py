@@ -103,8 +103,8 @@ def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budg
     effects: list[Effect] = []
     final: tuple[TypedBlock, ...] = ()
     reason: Fallback | None = None
+    current: str | None = workflow.entry
     try:
-        current: str | None = workflow.entry
         while current is not None:
             if stop():
                 raise NodeCancelled()
@@ -125,6 +125,16 @@ def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budg
                 error = caught
             except ValidationError:
                 error = NodeError("invalid_output", cause="invalid_config")
+            except (BudgetExceeded, NodeCancelled, Exception) as interrupted:
+                # Keep the node that was running in the trace, then let the outer handlers decide the outcome.
+                code = ("budget" if isinstance(interrupted, BudgetExceeded)
+                        else "cancelled" if isinstance(interrupted, NodeCancelled) else "unexpected")
+                calls, tokens_in, tokens_out = budget.delta(before)
+                duration = int((budget.clock() - started) * 1000)
+                records.append(NodeRecord(node.id, node.type, order, None, duration, {}, None, None, calls,
+                                          (tokens_in, tokens_out), (), code))
+                emit(NodeFinished(node.id, None, duration, calls, tokens_in, tokens_out, code))
+                raise
             calls, tokens_in, tokens_out = budget.delta(before)
             duration = int((budget.clock() - started) * 1000)
             handles = spec.handles(config) if config is not None else ()
@@ -163,7 +173,8 @@ def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budg
     except _Fallback as caught:
         reason = caught.cause if implicit and caught.cause else "workflow_node_error"
     except Exception as unexpected:
-        logger.warning("workflow turn failed: %s", type(unexpected).__name__)
+        # The traceback may name the node and exception type; never log scope values or student text here.
+        logger.exception("workflow turn failed at node %s (%s)", current, type(unexpected).__name__)
         reason = "workflow_node_error"
     if reason is not None:
         return WorkflowRun("fallback", tuple(records), fallback_blocks(ports.agent, reason, new_id), (), initial_conv,
