@@ -8,6 +8,7 @@ from agent_runtime.evaluations.services.validator import calculate_content_hash
 from agent_runtime.sessions.errors import RuntimeSessionError
 
 SEED = json.loads((Path(__file__).resolve().parents[5] / "infra/local-releases/agent.json").read_text(encoding="utf-8"))
+ADVISORY_FIELDS = ("major", "province", "enterprise", "internship_support", "university", "entry_level")
 
 
 class Bases:
@@ -42,7 +43,8 @@ def start_experience(content):
 
 
 def validator(bases=None, experiences=None):
-    return AgentSnapshotValidator(bases if bases is not None else Bases({kb_of(SEED): frozenset({"school", "major"})}),
+    fields = frozenset({"school", "major", "doc_type", *ADVISORY_FIELDS})
+    return AgentSnapshotValidator(bases if bases is not None else Bases({kb_of(SEED): fields}),
                                   experiences or Experiences((start_experience(SEED),)), "demo")
 
 
@@ -50,6 +52,25 @@ def test_seed_config_is_valid_and_hash_matches():
     result = validator().validate(SEED)
     assert result.valid, result.issues
     assert result.content_hash == calculate_content_hash(SEED)
+
+
+def tool_of(content, name):
+    return next(t for t in content["tools"] if t["name"] == name)
+
+
+def test_seed_lets_search_filter_on_the_advisory_metadata_and_shows_it():
+    search = tool_of(SEED, "knowledge.search")["params"]
+    assert search["auto_filter_fields"] == list(ADVISORY_FIELDS)
+    show = tool_of(SEED, "knowledge.show")["params"]
+    assert [item["field"] for item in show["display"]] == list(ADVISORY_FIELDS)
+    assert all(item["label"] for item in show["display"])
+
+
+def test_seed_is_reported_when_the_knowledge_base_lacks_an_advisory_field():
+    bases = Bases({kb_of(SEED): frozenset({"school", "major", "doc_type"})})
+    issues = validator(bases=bases).validate(SEED).issues
+    missing = {i.path.split(".params.")[1] for i in issues if i.code == "field_not_found"}
+    assert "auto_filter_fields[1]" in missing and "display[1].field" in missing, issues
 
 
 @pytest.mark.parametrize("patch,path,code", [
@@ -78,9 +99,9 @@ def test_unknown_auto_filter_field_and_display_field_are_reported():
     content = json.loads(json.dumps(SEED))
     search = next(t for t in content["tools"] if t["name"] == "knowledge.search")
     search["params"]["auto_filter_fields"] = ["school", "ghost"]
-    content["tools"].append({"name": "knowledge.show", "version": 1, "params": {"display": [
+    tool_of(content, "knowledge.show")["params"]["display"] = [
         {"field": "major", "label": "Ngành"}, {"field": "source_url", "label": "Nguồn"},
-        {"field": "title", "label": "Tên"}]}})
+        {"field": "title", "label": "Tên"}]
     issues = validator().validate(content).issues
     paths = {(i.path.split(".params.")[1], i.code) for i in issues}
     assert paths == {("auto_filter_fields[1]", "field_not_found"), ("display[2].field", "field_not_found")}, issues
@@ -134,7 +155,7 @@ def test_schema_value_errors_have_specific_codes_and_vietnamese_messages():
 
 def test_whole_snapshot_rules_point_at_the_field_to_fix():
     def show_only(c):
-        c["tools"] = [t for t in c["tools"] if t["name"] != "knowledge.search"]
+        c["tools"] = [t for t in c["tools"] if t["name"] not in ("knowledge.search", "knowledge.show")]
         c["tools"].append({"name": "knowledge.show", "version": 1, "params": {"max_cards": 1,
                           "display": [{"field": "source_url", "label": "Nguồn"}]}})
 

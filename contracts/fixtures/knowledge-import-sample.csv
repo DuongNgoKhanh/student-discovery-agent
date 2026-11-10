@@ -1,0 +1,86 @@
+document_id,title,body,source_url,doc_type,university,major,entry_level,province,enterprise,internship_support
+doanh-nghiep-mau-a,Mẫu A — doanh nghiệp liên kết IHRD,"# Mẫu A (TP. Hồ Chí Minh)
+
+Mẫu A là doanh nghiệp mẫu.
+
+- **Ngành học liên kết và quyền lợi của học viên:**
+  - Chuyên doanh tài chính, chứng khoán: hoàn phí, lương thực tập sinh, cam kết việc làm.
+  - Kinh doanh quốc tế: lương thực tập sinh, cam kết việc làm.",,doanh_nghiep,,"Chuyên doanh tài chính, chứng khoán;Kinh doanh quốc tế",,TP. Hồ Chí Minh,Mẫu A,hoan_phi;luong_thuc_tap;cam_ket_viec_lam
+doanh-nghiep-mau-b,Mẫu B — doanh nghiệp liên kết IHRD,"# Mẫu B (TP. Hồ Chí Minh)
+
+Mẫu B là doanh nghiệp mẫu.
+
+- **Ngành học liên kết và quyền lợi của học viên:**
+  - Chuyên doanh công nghệ: hoàn phí, lương thực tập sinh, cam kết việc làm.
+  - Chuyên ngành Trí tuệ nhân tạo: lương thực tập sinh, cam kết việc làm.
+
+## Mẫu B (Đồng Tháp)
+
+Chi nhánh tại Đồng Tháp.
+
+- **Ngành học liên kết và quyền lợi của học viên:**
+  - Chuyên ngành phần mềm (Web, App): lương thực tập sinh, cam kết việc làm.",,doanh_nghiep,,"Chuyên doanh công nghệ;Chuyên ngành Trí tuệ nhân tạo;Chuyên ngành phần mềm (Web, App)",,TP. Hồ Chí Minh;Đồng Tháp,Mẫu B,hoan_phi;luong_thuc_tap;cam_ket_viec_lam
+doanh-nghiep-mau-c,Mẫu C — doanh nghiệp liên kết IHRD,"# Mẫu C (Đồng Tháp)
+
+Mẫu C là doanh nghiệp mẫu.
+
+- **Ngành học liên kết và quyền lợi của học viên:**
+  - Chuyên doanh tài chính, chứng khoán: hoàn phí, lương thực tập sinh, cam kết việc làm.",,doanh_nghiep,,"Chuyên doanh tài chính, chứng khoán",,Đồng Tháp,Mẫu C,hoan_phi;luong_thuc_tap;cam_ket_viec_lam
+doanh-nghiep-mau-d,Mẫu D — doanh nghiệp liên kết IHRD,"# Mẫu D (phạm vi toàn quốc)
+
+Mẫu D là doanh nghiệp mẫu.
+
+- **Ngành học liên kết:** chưa gắn ngành cụ thể; phù hợp các ngành thuộc lĩnh vực nêu trên.",,doanh_nghiep,,,,Toàn quốc,Mẫu D,
+quyen-loi-theo-nganh,Quyền lợi học viên theo ngành — Chương trình doanh nghiệp liên kết IHRD,"# Quyền lợi học viên theo ngành — Chương trình doanh nghiệp liên kết IHRD
+
+- Chuyên doanh công nghệ",,quyen_loi_nganh,,,,,,
+tuyen-sinh-mtu,Đại học Minh Họa (MTU) — Thông tin tuyển sinh,"# Đại học Minh Họa (MTU) — Thông tin tuyển sinh
+
+Đại học Minh Họa, viết tắt MTU, tuyển sinh 2 ngành qua IHRD.
+
+## Thông tin chung của trường
+
+
+## Các ngành đào tạo
+
+Đại học Minh Họa (MTU) đang đào tạo 2 ngành qua IHRD: Công nghệ thông tin, Kế toán.
+
+- Công nghệ thông tin: Đã tốt nghiệp THPT, Đã tốt nghiệp Cao đẳng
+- Kế toán: Đã tốt nghiệp THPT
+
+## Ngành Công nghệ thông tin
+
+
+### Công nghệ thông tin — Đã tốt nghiệp THPT
+
+- **Học phí:** 500.000đ/tín chỉ
+
+### Công nghệ thông tin — Đã tốt nghiệp Cao đẳng
+
+- **Học phí:** 500.000đ/tín chỉ
+
+## Ngành Kế toán
+
+
+### Kế toán — Đã tốt nghiệp THPT
+
+- **Học phí:** 500.000đ/tín chỉ",,tuyen_sinh,MTU,Công nghệ thông tin;Kế toán,THPT;Cao đẳng,,,
+tuyen-sinh-ptit,Học viện Mẫu (PTIT) — Thông tin tuyển sinh,"# Học viện Mẫu (PTIT) — Thông tin tuyển sinh
+
+Học viện Mẫu, viết tắt PTIT, tuyển sinh 1 ngành qua IHRD.
+
+## Thông tin chung của trường
+
+
+## Các ngành đào tạo
+
+Học viện Mẫu (PTIT) đang đào tạo 1 ngành qua IHRD: Công nghệ thông tin.
+
+- Công nghệ thông tin: Đã tốt nghiệp THPT
+
+## Ngành Công nghệ thông tin
+
+
+### Công nghệ thông tin — Đã tốt nghiệp THPT
+
+- **Học phí:** 500.000đ/tín chỉ",,tuyen_sinh,PTIT,Công nghệ thông tin,THPT,,,

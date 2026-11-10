@@ -70,6 +70,39 @@ docker compose --project-name sda-full-local --env-file .local-docker/.env -f do
 
 Revision kẹt ở `indexing` do tiến trình index bị dừng giữa chừng được nhận lại sau 120 giây, ở lượt index kế tiếp. Runtime tự chạy một lượt khi khởi động (sau restart hoặc khi instance free tier thức dậy) nên tài liệu đang chờ được index mà không cần bấm. Nút "Chạy index" cũng gửi lại các tài liệu `error` vào hàng đợi trước khi chạy. Lưu trữ (archive) không xoá chunk: khôi phục tài liệu là tìm lại được ngay.
 
+### Nạp KB tư vấn nhu cầu (doanh nghiệp liên kết, metadata)
+
+Mục đích: để `knowledge.search` lọc theo ngành, địa phương, doanh nghiệp, hỗ trợ thực tập, trường và đối tượng đầu vào (DEC-27), seed agent [agent.json](../../infra/local-releases/agent.json) khai báo `auto_filter_fields` và `knowledge.show` cho đúng sáu field này. KB `mastertuyensinh` (là `knowledge_base_id` của seed [agent.json](../../infra/local-releases/agent.json)) cần có bảy field sau (tất cả bật `filterable`; tên và kiểu không đổi được sau khi tạo):
+
+| Field | Kiểu | Giá trị |
+|---|---|---|
+| `doc_type` | string | Loại tài liệu (không auto-filter, không hiển thị). |
+| `university` | string | Trường. |
+| `major` | string_list | Ngành. |
+| `entry_level` | string_list | Đối tượng đầu vào. |
+| `province` | string_list | Địa phương. |
+| `enterprise` | string_list | Doanh nghiệp liên kết. |
+| `internship_support` | string_list | Hỗ trợ thực tập. |
+
+Chưa tạo `tuition_total_vnd` và `tuition_text` (thuộc T33).
+
+Sinh CSV nhập (mỗi lệnh ghi thêm `import.csv` cạnh các file nguồn):
+
+```bash
+python3 scripts/xlsx_to_kb_md.py docs/operations/Data_TUYENSINH_v2.xlsx docs/operations/kb-tuyensinh
+python3 scripts/enterprise_kb_to_csv.py docs/operations/kb-doanh-nghiep-lien-ket
+```
+
+Nạp: trong Studio, tạo đủ bảy field cho KB `mastertuyensinh`, rồi dùng nhập CSV; ánh xạ `document_id`, `title`, `body`, `source_url` và từng cột metadata sang field cùng tên. Mỗi lần tối đa 200 dòng; xem trước rồi mới ghi.
+
+Sau khi nạp CSV theo từng doanh nghiệp, hãy lưu trữ (archive) các tài liệu cũ theo từng tỉnh `doanh-nghiep-lien-ket-*` nếu trước đó chúng đã được nạp từ các file `.md` (chúng không có metadata và sẽ trả lại cùng nội dung hai lần); tài liệu trường không bị ảnh hưởng vì CSV dùng cùng id với tên file (`tuyen-sinh-<mã>`).
+
+Nếu KB thiếu field: seed agent không kiểm tra nên vẫn thành công; khi lọc theo field không có trong KB, tool trả `invalid_filter` cho model (lượt chat không lỗi); `knowledge.show` không hiện thẻ nếu không field hiển thị nào có trong tài liệu; validate/publish báo `field_not_found`.
+
+Cảnh báo P3: các file doanh nghiệp có nội dung hoàn phí và cam kết việc làm chưa được quản lý xác nhận. Chỉ nạp vào KB dev cục bộ, không nạp vào KB thật.
+
+Hạn chế: bước tạo field và import vào KB đang chạy là thủ công. Chứng cứ lọc đúng nằm ở `apps/agent-runtime/tests/integration/test_knowledge_ihrd_metadata.py` (cần `RUNTIME_TEST_ADMIN_DATABASE_URL` trỏ tới Postgres 16).
+
 ## Chat học sinh
 
 `http://localhost:3000/chat` gọi thật qua BFF studio-api (`/api/v1/conversations*`, `/api/v1/responses/{id}`); UI được build với `NEXT_PUBLIC_CHAT_MOCK=false`. Lần tạo hội thoại đầu tiên cấp cookie ẩn danh `sda_owner` (HttpOnly, `Path=/api/v1`); studio-api ký `X-Caller-Context` cho học sinh bằng `SDA_LOCAL_RUNTIME_INTERNAL_KEY` rồi chuyển sang runtime. Agent không còn đọc từ `infra/local-releases/agent.json`: runtime lấy release agent đang active từ studio-api (xem mục "Cấu hình agent"). Bộ đánh giá vẫn đọc `infra/local-releases/experiences/` (mount read-only); sửa file trong đó rồi `docker compose ... restart agent-runtime` để áp dụng. Model dùng `GOOGLE_API_KEY` và proxy như phần Knowledge Base.
