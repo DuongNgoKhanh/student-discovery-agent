@@ -17,7 +17,7 @@ _UNAVAILABLE = {"knowledge_unavailable", "knowledge_base_unavailable"}
 
 
 class KnowledgeRetrievalConfig(ContractModel):
-    knowledge_base_id: OpaqueId
+    knowledge_base_id: OpaqueId = Field(json_schema_extra={"x-widget": "kb_picker"})
     query: Annotated[str, StringConstraints(min_length=1)]
     fixed_filter: MetadataCondition | None = None
     filter_from_vars: dict[FieldName, Annotated[str, StringConstraints(pattern=PATH.pattern)]] = Field(

@@ -47,6 +47,8 @@ PREFIX = "/api/v1/internal"
 SERVICE_ROUTES: dict[tuple[str, str], str] = {
     ("POST", PREFIX + "/knowledge/retrieval"): "knowledge.retrieval",
     ("POST", PREFIX + "/agent-snapshots:validate"): "agent.validate",
+    ("GET", PREFIX + "/workflow/node-types"): "agent.validate",
+    ("POST", PREFIX + "/agent-debug-runs:run"): "agent.validate",
     ("POST", PREFIX + "/knowledge/index-runs"): "knowledge.index",
     ("POST", PREFIX + "/experience-validations:run"): "experience.validate",
     ("POST", PREFIX + "/experience-evaluations:run"): "experience.evaluate",

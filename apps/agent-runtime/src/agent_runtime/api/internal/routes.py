@@ -15,6 +15,7 @@ from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import ServiceResponse
 from agent_runtime.sessions.schemas.conversation import CreateConversationInput, EndConversationInput
 from agent_runtime.sessions.services.turn_input import parse_message_input
+from agent_runtime.workflow.catalog import node_type_catalog
 
 from .dependencies import PREFIX
 from .envelopes import success
@@ -165,6 +166,12 @@ def validate_agent_snapshot(request: Request):
         raise RuntimeSessionError(422, "INVALID_INPUT")
     result = _service(request, "agent_validation").validate(data["content"])
     return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)
+
+
+@router.get("/workflow/node-types", operation_id="internalGetWorkflowNodeTypes")
+def get_workflow_node_types(request: Request):
+    _query(request, ())
+    return success(ServiceResponse(status=200, data=node_type_catalog()), *request.state.meta)
 
 
 @router.post("/knowledge/index-runs", status_code=202, operation_id="internalStartKnowledgeIndexRun")

@@ -19,7 +19,7 @@ _UNAVAILABLE = {"not_configured", "rate_limited", "timeout", "provider_error", "
 
 class AgentConfig(ContractModel):
     instructions: str = ""
-    tools: tuple[str, ...] = ()
+    tools: tuple[str, ...] = Field(default=(), json_schema_extra={"x-widget": "tool_picker"})
     max_tool_steps: Annotated[int, Field(strict=True, ge=1, le=8)] | None = None
 
 

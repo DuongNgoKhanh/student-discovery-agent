@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from agent_runtime.agent.catalog import TOOL_DECLARATIONS, SuggestRepliesArguments
 from agent_runtime.agent.loop import Handoff
@@ -12,7 +12,7 @@ from agent_runtime.workflow.templates import render
 
 
 class ToolConfig(ContractModel):
-    tool: str
+    tool: str = Field(json_schema_extra={"x-widget": "tool_picker"})
     arguments: dict[str, Any] = {}
 
 

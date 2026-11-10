@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.workflow.expressions import ExpressionError, evaluate, parse
@@ -9,7 +9,7 @@ from agent_runtime.workflow.registry import register
 
 
 class IfElseConfig(ContractModel):
-    condition: dict[str, Any]
+    condition: dict[str, Any] = Field(json_schema_extra={"x-widget": "condition_builder"})
 
     @field_validator("condition")
     @classmethod
