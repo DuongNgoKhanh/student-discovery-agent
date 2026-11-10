@@ -47,7 +47,8 @@ def budget_for(wf, **kwargs):
     return Budget(wf.budget, **kwargs)
 
 
-def run_node(node_dict, wf=None, *, model=None, scope=None, state=None, **ports_args):
+def run_node(node_dict, wf=None, *, model=None, scope=None, state=None, streaming=True, should_stop=None,
+             **ports_args):
     """Run one node in isolation; returns (spec, result, scope, emitted events)."""
     node = WorkflowNode.model_validate(node_dict)
     wf = wf or workflow([node_dict], [])
@@ -59,6 +60,6 @@ def run_node(node_dict, wf=None, *, model=None, scope=None, state=None, **ports_
     ports_args.setdefault("agent_context", AgentContext(today=date(2026, 11, 10)))
     ctx = NodeContext(node=node, scope=scope, ports=ports_for(**ports_args),
                       model=BudgetedModel(model, budget) if model else None, budget=budget,
-                      state=state or RunState(), new_id=ids(), emit=emitted.append, should_stop=lambda: False,
-                      streaming=True)
+                      state=state or RunState(), new_id=ids(), emit=emitted.append, should_stop=should_stop or (lambda: False),
+                      streaming=streaming)
     return spec, spec.run(ctx, config), scope, emitted
