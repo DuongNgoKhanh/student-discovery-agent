@@ -54,6 +54,9 @@ def run(ctx: NodeContext, config: AgentConfig) -> NodeResult:
     if live and ctx.streaming:
         ctx.state.streamed.add(ctx.node.id)
     calls_before = ctx.budget.llm_calls
+    cards_of = getattr(ports.tools, "cards", lambda: ())
+    # The executor's cards are per turn (the last knowledge.show's): an earlier agent node's are not this node's.
+    cards_before = cards_of()
     try:
         turn = run_agent_turn(_view(ports.agent, config), ctx.model, ports.tools,
                               ports.agent_context or AgentContext(today=date.today()), ports.history,
@@ -70,8 +73,8 @@ def run(ctx: NodeContext, config: AgentConfig) -> NodeResult:
     if turn.fallback is not None:
         raise NodeError("model_unavailable" if turn.fallback in _UNAVAILABLE else "invalid_output",
                         cause=turn.fallback)
-    cards = ports.tools.cards() if hasattr(ports.tools, "cards") else ()
-    blocks = with_cards(turn.blocks, cards)
+    cards = cards_of()
+    blocks = with_cards(turn.blocks, () if cards is cards_before else cards)
     output = {"text": _text_of(blocks), "handoff": turn.handoff.name if turn.handoff else None}
     if turn.handoff is not None:
         ctx.state.handoff = turn.handoff

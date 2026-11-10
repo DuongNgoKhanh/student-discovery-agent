@@ -197,3 +197,39 @@ def test_a_model_node_past_the_deadline_still_falls_back_in_an_explicit_graph():
     result = run_workflow(wf, scope_for(wf), ports, budget=budget, new_id=ids())
     assert (result.status, result.fallback, result.path) == ("fallback", "workflow_budget", ("start",))
     assert model.calls == []
+
+
+class CardTools(Tools):
+    """Per-turn cards, as SnapshotToolExecutor.cards() returns them: the last knowledge.show's, shared by nodes."""
+
+    def __init__(self):
+        super().__init__()
+        self._cards = ()
+
+    def execute(self, name, arguments):
+        self.calls.append(name)
+        from agent_runtime.sessions.schemas.activity import KnowledgeCardBlock
+        self._cards = (KnowledgeCardBlock(
+            block_id="card1", type="knowledge_card", schema_version=1, title="Học phí",
+            fields=({"label": "Mức", "value": "10 triệu"},), document_id="doc1", revision=1,
+            updated_at="2026-11-10T00:00:00Z"),)
+        return {"shown": 1}
+
+    def cards(self):
+        return self._cards
+
+
+def test_each_agent_node_keeps_only_the_cards_its_own_run_produced():
+    from agent_runtime.sessions.schemas.activity import NewMessage
+    wf = workflow([{"id": "start", "type": "start"},
+                   {"id": "a1", "type": "agent", "config": {"tools": ["*"]}},
+                   {"id": "a2", "type": "agent", "config": {"tools": ["*"]}},
+                   {"id": "reply", "type": "answer", "config": {"blocks": [{"type": "upstream"}]}}],
+                  [("start", "next", "a1"), ("a1", "success", "a2"), ("a2", "success", "reply")])
+    model = FakeModel(ModelReply(text="", tool_calls=(ToolCall("c1", "knowledge.show", {"refs": ["k1"]}),)),
+                      ModelReply(text="Đây là học phí"), ModelReply(text="Còn gì nữa không?"))
+    ports = ports_for(model=model, tools=CardTools(), agent_context=CONTEXT, user_text="học phí")
+    result = run_workflow(wf, scope_for(wf), ports, budget=Budget(wf.budget), new_id=ids())
+    assert result.status == "completed" and ports.tools.calls == ["knowledge.show"]
+    assert [block.type for block in result.blocks].count("knowledge_card") == 1
+    NewMessage(message_id="m1", turn_id="t1", role="assistant", blocks=result.blocks)  # ids stay unique
