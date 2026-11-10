@@ -5,6 +5,7 @@ import {
   patchExperienceSchema,
   publishReleaseSchema,
   saveDraftSchema,
+  snapshotCommandSchema,
   toExperienceDraftDTO,
   toExperienceMetadataDTO,
   toExperienceReleaseDTO,
@@ -148,6 +149,18 @@ describe('experiences.schemas', () => {
           idempotency_key: 'k1',
         }),
       ).toThrow();
+    });
+  });
+
+  describe('snapshotCommandSchema', () => {
+    const base = { expected_revision: 1, content_hash: `sha256:${'a'.repeat(64)}` };
+
+    it('accepts an idempotency key of 128 characters (runtime limit)', () => {
+      expect(snapshotCommandSchema.safeParse({ ...base, idempotency_key: 'k'.repeat(128) }).success).toBe(true);
+    });
+
+    it('rejects an idempotency key longer than 128 characters before it reaches the runtime', () => {
+      expect(snapshotCommandSchema.safeParse({ ...base, idempotency_key: 'k'.repeat(129) }).success).toBe(false);
     });
   });
 

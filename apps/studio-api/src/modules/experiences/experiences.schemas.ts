@@ -62,7 +62,8 @@ export type PublishReleaseInput = z.infer<typeof publishReleaseSchema>;
 export const snapshotCommandSchema = z.object({
   expected_revision: revisionSchema,
   content_hash: contentHashSchema,
-  idempotency_key: idempotencyKeySchema,
+  // The runtime's ExperienceSnapshotCommand caps idempotency_key at 128 characters.
+  idempotency_key: idempotencyKeySchema.max(128),
 }).strict();
 export type SnapshotCommandInput = z.infer<typeof snapshotCommandSchema>;
 

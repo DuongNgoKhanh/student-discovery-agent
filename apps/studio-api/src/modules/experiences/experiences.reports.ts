@@ -1,3 +1,4 @@
+import { ProductError } from '@/http/errors';
 import { getProductDatabase, type ProductDatabase } from '@/infrastructure/db/client';
 import { findReportById, type ProductExecutor } from '@/modules/experiences/experiences.repository';
 import {
@@ -58,7 +59,7 @@ export class RuntimeReportVerifier implements PublishReportVerifier {
     if (!evalReport || evalReport.kind !== 'evaluation') {
       return { verified: false, reason: `Evaluation report '${input.evaluation_id}' not found` };
     }
-    if (!evalReport.mandatory_passed) {
+    if (evalReport.status !== 'passed' || !evalReport.mandatory_passed) {
       return { verified: false, reason: `Evaluation report '${input.evaluation_id}' did not pass mandatory cases` };
     }
     if (
@@ -77,8 +78,14 @@ export class RuntimeReportVerifier implements PublishReportVerifier {
         return { verified: false, reason: remote.reason ?? 'Runtime verification rejected reports' };
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Runtime verification failed';
-      return { verified: false, reason: msg };
+      // An outage (5xx) must stay retryable instead of being reported as an invalid report.
+      if (err instanceof ProductError && err.status >= 500) {
+        throw err;
+      }
+      console.error('[experience-reports] runtime verification failed', {
+        error: err instanceof Error ? err.name : 'Error',
+      });
+      return { verified: false, reason: 'Runtime verification failed' };
     }
 
     return { verified: true, reason: null };

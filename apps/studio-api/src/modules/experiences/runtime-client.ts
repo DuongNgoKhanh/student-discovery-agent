@@ -10,6 +10,8 @@ export const EVALUATE_TARGET = '/api/v1/internal/experience-evaluations:run';
 export const VERIFY_TARGET = '/api/v1/internal/experience-reports:verify';
 
 const TIMEOUT_MS = 5000;
+/** Internal runtime boundary rejects bodies over this size (runtime-api.yaml, max_json_bytes). */
+export const RUNTIME_MAX_BODY_BYTES = 65536;
 
 export const validationIssueSchema = z.object({
   path: z.string(),
@@ -88,6 +90,13 @@ async function callRuntime<T>(
   }
 
   const body = JSON.stringify(payload);
+  if (Buffer.byteLength(body, 'utf8') > RUNTIME_MAX_BODY_BYTES) {
+    throw new ProductError(
+      413,
+      'VAL_PAYLOAD_TOO_LARGE',
+      `Experience definition exceeds the ${RUNTIME_MAX_BODY_BYTES} byte limit of the runtime`,
+    );
+  }
   const token = await signServiceRequest(
     'POST',
     target,
@@ -155,7 +164,9 @@ async function callRuntime<T>(
     throw unavailable('misconfigured');
   }
   if (response.status === 409) {
-    const code = runtimeCode === 'IDEMPOTENCY_KEY_COLLISION' ? 'IDEMPOTENCY_KEY_COLLISION' : 'REVISION_CONFLICT';
+    // The runtime exposes CONFLICT_IDEMPOTENCY_KEY on the wire (error_codes.py); the internal name is kept for older runtimes.
+    const isCollision = runtimeCode === 'CONFLICT_IDEMPOTENCY_KEY' || runtimeCode === 'IDEMPOTENCY_KEY_COLLISION';
+    const code = isCollision ? 'IDEMPOTENCY_KEY_COLLISION' : 'REVISION_CONFLICT';
     throw new ProductError(409, code, envelope?.error?.message ?? 'Runtime reported conflict');
   }
   if (response.status >= 400 && response.status < 500) {

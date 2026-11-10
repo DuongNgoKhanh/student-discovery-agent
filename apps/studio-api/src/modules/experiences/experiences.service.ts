@@ -457,6 +457,23 @@ export async function listExperienceReleases(
   };
 }
 
+/** A report must describe exactly the draft snapshot that was sent; never persist one for another snapshot. */
+function assertReportMatchesRequest(
+  report: { experience_id: string; content_hash: string; draft_revision: number },
+  experienceId: string,
+  input: { content_hash: string; expected_revision: number },
+): void {
+  if (
+    report.experience_id !== experienceId ||
+    report.content_hash !== input.content_hash ||
+    report.draft_revision !== input.expected_revision
+  ) {
+    throw new ProductError(503, 'SYS_UNAVAILABLE', 'Runtime returned a report for a different draft snapshot', false, {
+      kind: 'report_mismatch',
+    });
+  }
+}
+
 export async function validateExperienceDraft(
   db: ProductDatabase,
   experienceId: string,
@@ -513,6 +530,7 @@ export async function validateExperienceDraft(
       ctx,
     );
 
+    assertReportMatchesRequest(report, experienceId, input);
     await insertExperienceReport(tx, {
       id: report.id,
       experience_id: experienceId,
@@ -586,6 +604,7 @@ export async function evaluateExperienceDraft(
       ctx,
     );
 
+    assertReportMatchesRequest(report, experienceId, input);
     await insertExperienceReport(tx, {
       id: report.id,
       experience_id: experienceId,

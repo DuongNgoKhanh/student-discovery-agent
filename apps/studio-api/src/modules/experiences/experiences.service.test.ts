@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ProductError } from '@/http/errors';
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import { computeContentHash } from '@/modules/experiences/canonical';
 import * as repo from '@/modules/experiences/experiences.repository';
@@ -1111,6 +1112,148 @@ describe('experiences.service', () => {
       const res = await verifier.verify(input);
       expect(res.verified).toBe(false);
       expect(res.reason).toBe('Report expired in memory');
+    });
+  });
+
+  describe('RuntimeReportVerifier gate checks', () => {
+    const input = {
+      experience_id: 'exp_1',
+      definition_hash: 'sha256:def_hash',
+      definition_schema_version: '1.0',
+      engine_version: '1.0.0',
+      validation_id: 'val_100',
+      evaluation_id: 'eval_200',
+    };
+
+    const reportRow = (kind: 'validation' | 'evaluation', overrides: Record<string, unknown> = {}) => ({
+      id: kind === 'validation' ? 'val_100' : 'eval_200',
+      experience_id: 'exp_1',
+      kind,
+      draft_revision: 1,
+      content_hash: 'sha256:def_hash',
+      definition_schema_version: '1.0',
+      engine_version: '1.0.0',
+      status: 'passed',
+      mandatory_passed: true,
+      report: {},
+      created_at: new Date(),
+      ...overrides,
+    });
+
+    const arrange = (
+      overrides: { validation?: Record<string, unknown>; evaluation?: Record<string, unknown> } = {},
+      verify = vi.fn().mockResolvedValue({ verified: true, reason: null }),
+    ) => {
+      vi.mocked(repo.findReportById).mockImplementation(async (_db, id) => {
+        if (id === 'val_100') return reportRow('validation', overrides.validation) as never;
+        if (id === 'eval_200') return reportRow('evaluation', overrides.evaluation) as never;
+        return undefined;
+      });
+      const client = { validate: vi.fn(), evaluate: vi.fn(), verify };
+      return { client, verifier: new RuntimeReportVerifier(() => mockDb, () => client) };
+    };
+
+    it.each(['validation', 'evaluation'] as const)('rejects a %s report computed for another snapshot', async (kind) => {
+      for (const override of [
+        { experience_id: 'exp_other' },
+        { content_hash: 'sha256:other' },
+        { definition_schema_version: '9.9' },
+        { engine_version: '9.9.9' },
+      ]) {
+        const { client, verifier } = arrange({ [kind]: override });
+        const res = await verifier.verify(input);
+        expect(res.verified, JSON.stringify(override)).toBe(false);
+        expect(client.verify).not.toHaveBeenCalled();
+      }
+    });
+
+    it.each([{ status: 'failed' }, { status: 'unsupported' }])(
+      'rejects an evaluation report with status $status even when mandatory_passed is true',
+      async (override) => {
+        const { client, verifier } = arrange({ evaluation: override });
+        const res = await verifier.verify(input);
+        expect(res.verified).toBe(false);
+        expect(client.verify).not.toHaveBeenCalled();
+      },
+    );
+
+    it('rejects an evaluation id passed as validation_id and the reverse', async () => {
+      const { verifier } = arrange();
+      expect((await verifier.verify({ ...input, validation_id: 'eval_200' })).verified).toBe(false);
+      expect((await verifier.verify({ ...input, evaluation_id: 'val_100' })).verified).toBe(false);
+    });
+
+    it('rethrows a runtime outage so the caller can retry', async () => {
+      const outage = new ProductError(503, 'SYS_UNAVAILABLE', 'down', true, { kind: 'dependency_down' });
+      const { verifier } = arrange({}, vi.fn().mockRejectedValue(outage));
+      await expect(verifier.verify(input)).rejects.toBe(outage);
+    });
+
+    it('reports an unexpected error as unverified without echoing its message', async () => {
+      const { verifier } = arrange({}, vi.fn().mockRejectedValue(new Error('secret internal detail')));
+      expect(await verifier.verify(input)).toEqual({ verified: false, reason: 'Runtime verification failed' });
+    });
+  });
+
+  describe('report integrity at insert', () => {
+    const ctx = { requestId: 'req_i', traceId: 'trace_i' };
+    const command = { expected_revision: 2, content_hash: 'sha256:def_hash', idempotency_key: 'key_i' };
+    const base = {
+      experience_id: 'exp_1',
+      draft_revision: 2,
+      content_hash: 'sha256:def_hash',
+      definition_schema_version: '1.0',
+      engine_version: '1.0.0',
+      status: 'passed' as const,
+      mandatory_passed: true,
+      created_at: '2026-11-03T10:00:00Z',
+    };
+
+    beforeEach(() => {
+      vi.mocked(repo.findIdempotencyRecord).mockResolvedValue(undefined);
+      vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
+        draft_id: 'draft_1',
+        experience_id: 'exp_1',
+        revision: 2,
+        content_hash: 'sha256:def_hash',
+        content: { def: true },
+        updated_by: 'admin',
+        updated_at: new Date(),
+      });
+    });
+
+    afterEach(() => {
+      setExperienceRuntimeClient(null);
+    });
+
+    it.each([
+      { experience_id: 'exp_other' },
+      { content_hash: 'sha256:other' },
+      { draft_revision: 1 },
+    ])('does not store a validation report that differs from the request (%o)', async (override) => {
+      const report = { ...base, id: 'val_x', issues: [], ...override };
+      setExperienceRuntimeClient({ validate: vi.fn().mockResolvedValue(report), evaluate: vi.fn(), verify: vi.fn() });
+      await expect(validateExperienceDraft(mockDb, 'exp_1', command, ctx)).rejects.toMatchObject({
+        status: 503,
+        details: { kind: 'report_mismatch' },
+      });
+      expect(repo.insertExperienceReport).not.toHaveBeenCalled();
+      expect(repo.saveIdempotencyRecord).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { experience_id: 'exp_other' },
+      { content_hash: 'sha256:other' },
+      { draft_revision: 1 },
+    ])('does not store an evaluation report that differs from the request (%o)', async (override) => {
+      const report = { ...base, id: 'eval_x', cases: [], ...override };
+      setExperienceRuntimeClient({ validate: vi.fn(), evaluate: vi.fn().mockResolvedValue(report), verify: vi.fn() });
+      await expect(evaluateExperienceDraft(mockDb, 'exp_1', command, ctx)).rejects.toMatchObject({
+        status: 503,
+        details: { kind: 'report_mismatch' },
+      });
+      expect(repo.insertExperienceReport).not.toHaveBeenCalled();
+      expect(repo.saveIdempotencyRecord).not.toHaveBeenCalled();
     });
   });
 });

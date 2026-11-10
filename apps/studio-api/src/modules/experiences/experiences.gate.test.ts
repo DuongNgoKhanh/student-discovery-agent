@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ProductError } from '@/http/errors';
 import type { ProductDatabase } from '@/infrastructure/db/client';
 import * as repo from '@/modules/experiences/experiences.repository';
 import { setPublishReportVerifier } from '@/modules/experiences/experiences.reports';
@@ -257,11 +258,60 @@ describe('Experience Validation Gate AT-03 / AT-04 Requirements', () => {
       details: {
         issues: [
           expect.objectContaining({
-            message: 'Connection refused by runtime',
+            // The raw error message is not echoed back to the client.
+            message: 'Runtime verification failed',
           }),
         ],
       },
     });
+  });
+
+  it('keeps a runtime outage during verify retryable instead of reporting invalid reports', async () => {
+    vi.mocked(repo.findDraftByExperienceId).mockResolvedValue({
+      draft_id: 'd_1',
+      experience_id: 'exp_1',
+      revision: 1,
+      content_hash: 'sha256:hash_1',
+      content: sampleValidContent,
+      updated_by: 'admin',
+      updated_at: new Date(),
+    });
+    vi.mocked(repo.findReportById).mockImplementation(async (_db, id) => ({
+      id,
+      experience_id: 'exp_1',
+      kind: id === 'val_1' ? 'validation' : 'evaluation',
+      draft_revision: 1,
+      content_hash: 'sha256:hash_1',
+      definition_schema_version: '1.0',
+      engine_version: '1.0.0',
+      status: 'passed',
+      mandatory_passed: true,
+      report: {},
+      created_at: new Date(),
+    }));
+
+    setExperienceRuntimeClient({
+      validate: vi.fn(),
+      evaluate: vi.fn(),
+      verify: vi.fn().mockRejectedValue(new ProductError(503, 'SYS_UNAVAILABLE', 'down', true, { kind: 'timeout' })),
+    });
+
+    await expect(
+      publishExperienceRelease(
+        mockDb,
+        'exp_1',
+        {
+          expected_draft_revision: 1,
+          content_hash: 'sha256:hash_1',
+          validation_id: 'val_1',
+          evaluation_id: 'eval_1',
+          approval_refs: [],
+          idempotency_key: 'pub_key_runtime_timeout',
+        },
+        mockAdmin,
+      ),
+    ).rejects.toMatchObject({ status: 503, code: 'SYS_UNAVAILABLE', retryable: true });
+    expect(repo.insertExperienceRelease).not.toHaveBeenCalled();
   });
 
   it('verifies report and successfully publishes when all gates pass', async () => {

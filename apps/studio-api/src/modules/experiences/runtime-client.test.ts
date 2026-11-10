@@ -3,6 +3,7 @@ import { decodeJwt } from 'jose';
 import {
   defaultExperienceRuntimeClient,
   EVALUATE_TARGET,
+  RUNTIME_MAX_BODY_BYTES,
   VALIDATE_TARGET,
   VERIFY_TARGET,
 } from '@/modules/experiences/runtime-client';
@@ -83,6 +84,42 @@ describe('defaultExperienceRuntimeClient', () => {
           ctx,
         ),
       ).rejects.toMatchObject({ status: 503, code: 'SYS_UNAVAILABLE' });
+    });
+
+    it.each(['CONFLICT_IDEMPOTENCY_KEY', 'IDEMPOTENCY_KEY_COLLISION'])(
+      'maps runtime %s to IDEMPOTENCY_KEY_COLLISION, not a revision conflict',
+      async (runtimeCode) => {
+        respond(409, { success: false, error: { code: runtimeCode, message: 'Key reused' } });
+        await expect(
+          defaultExperienceRuntimeClient.validate(
+            {
+              experience_id: 'exp_1',
+              definition: {},
+              expected_revision: 1,
+              content_hash: 'sha256:abc',
+              idempotency_key: 'k1',
+            },
+            ctx,
+          ),
+        ).rejects.toMatchObject({ status: 409, code: 'IDEMPOTENCY_KEY_COLLISION' });
+      },
+    );
+
+    it('rejects a definition above the runtime body limit with 413 without calling the runtime', async () => {
+      respond(200, { success: true, data: {} });
+      await expect(
+        defaultExperienceRuntimeClient.validate(
+          {
+            experience_id: 'exp_1',
+            definition: { blob: 'x'.repeat(RUNTIME_MAX_BODY_BYTES) },
+            expected_revision: 1,
+            content_hash: 'sha256:abc',
+            idempotency_key: 'k1',
+          },
+          ctx,
+        ),
+      ).rejects.toMatchObject({ status: 413, code: 'VAL_PAYLOAD_TOO_LARGE' });
+      expect(fetch).not.toHaveBeenCalled();
     });
 
     it('re-throws 409 conflict when runtime reports hash/revision conflict', async () => {
