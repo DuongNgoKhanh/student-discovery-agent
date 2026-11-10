@@ -72,6 +72,10 @@ def _searches(state: RunState) -> tuple[dict[str, Any], ...]:
     return tuple(item for tools in state.knowledge.values() for item in tools.trace())[:8]
 
 
+class _Redacted(Exception):
+    """Stands in for a logged exception whose message may carry student text; holds only its type name."""
+
+
 class _Fallback(Exception):
     def __init__(self, cause: str | None):
         super().__init__(cause)
@@ -191,8 +195,11 @@ def run_workflow(workflow: Workflow, scope: Scope, ports: Ports, *, budget: Budg
     except Exception as unexpected:
         if implicit:
             raise  # mode = agent has always failed the turn (INTERNAL_ERROR) here rather than answer from a template
-        # The traceback may name the node and exception type; never log scope values or student text here.
-        logger.exception("workflow turn failed at node %s (%s)", current, type(unexpected).__name__)
+        # Only the node id, the exception type and the traceback's frames: an exception's message (e.g. a pydantic
+        # ValidationError's input_value) may carry student text, so a stand-in without it is logged instead.
+        name = type(unexpected).__name__
+        logger.error("workflow turn failed at node %s (%s)", current, name,
+                     exc_info=(_Redacted, _Redacted(name), unexpected.__traceback__))
         reason = "workflow_node_error"
     if reason is not None:
         return WorkflowRun("fallback", tuple(records), fallback_blocks(ports.agent, reason, new_id), (), initial_conv,

@@ -235,3 +235,25 @@ def test_an_empty_answer_is_allowed_when_the_turn_does_not_need_a_reply():
     result = run_workflow(wf, scope_for(wf), ports_for(), budget=Budget(wf.budget), new_id=ids(),
                           reply_required=False)
     assert (result.status, result.blocks) == ("completed", ())
+
+
+def test_a_validation_error_inside_a_node_never_logs_the_input_it_rejected(monkeypatch, caplog):
+    from pydantic import BaseModel, ValidationError
+
+    class Strict(BaseModel):
+        count: int
+
+    student_text = "XQ-" + "7731 em tên Lan"  # built at run time: traceback source lines must not hold it
+    try:
+        Strict.model_validate({"count": student_text})
+    except ValidationError as error:
+        rejected = error
+    wf = workflow(LLM_WF, LLM_EDGES)
+    failing_llm(monkeypatch, exc=rejected)
+    with caplog.at_level(logging.ERROR, logger="agent_runtime.workflow.executor"):
+        result = run(wf)
+    assert result.fallback == "workflow_node_error"
+    [record] = [r for r in caplog.records if r.name == "agent_runtime.workflow.executor"]
+    formatted = logging.Formatter().format(record)
+    assert "XQ-7731" not in formatted and "ValidationError" in formatted
+    assert "Traceback" in formatted and "boom" in formatted  # the frames are kept, the message is not
