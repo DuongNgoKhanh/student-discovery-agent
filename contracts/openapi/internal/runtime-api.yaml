@@ -329,6 +329,60 @@ paths:
                             message: {type: string}
         default:
           $ref: '#/components/responses/RuntimeError'
+  /workflow/node-types:
+    get:
+      operationId: internalGetWorkflowNodeTypes
+      summary: Danh mục loại node chatflow do runtime sở hữu
+      description: |
+        Studio as a service (`purpose=agent.validate`, như /agent-snapshots:validate). Nguồn duy nhất của JSON Schema
+        `config`, handle ra và kiểu output; thêm loại node mới chỉ cần sửa runtime và danh mục này.
+      responses:
+        '200':
+          description: Danh mục hiện hành.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: ../schemas/chatflow-authoring.yaml#/components/schemas/WorkflowNodeTypeCatalog
+        default:
+          $ref: '#/components/responses/RuntimeError'
+  /agent-debug-runs:run:
+    post:
+      operationId: internalRunAgentDebugRun
+      summary: Chạy thử một chatflow draft, không ghi dữ liệu thật
+      description: |
+        Studio as a service (`purpose=agent.validate`). Runtime không giữ trạng thái: nhận nguyên nội dung draft và
+        trạng thái giả lập, trả kết quả; Studio lưu kết quả 24 giờ. Accept text/event-stream phát
+        workflow.node_started/workflow.node_finished/delta/completed. Cùng ngân sách và trần cứng như lượt học sinh.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [content, request]
+              properties:
+                content: {type: object, additionalProperties: true, description: Nội dung agent.snapshot.v1 của draft.}
+                request:
+                  $ref: ../schemas/chatflow-authoring.yaml#/components/schemas/WorkflowDebugRunRequest
+      responses:
+        '200':
+          description: Kết quả chạy thử.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: ../schemas/chatflow-authoring.yaml#/components/schemas/WorkflowDebugRunResult
+            text/event-stream:
+              schema:
+                $ref: ../schemas/chatflow-authoring.yaml#/components/schemas/WorkflowDebugStreamEvent
+        default:
+          $ref: '#/components/responses/RuntimeError'
   /experience-validations:run:
     post:
       operationId: internalRunExperienceValidation

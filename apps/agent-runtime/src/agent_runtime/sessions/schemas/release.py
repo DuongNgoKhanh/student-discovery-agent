@@ -14,6 +14,7 @@ from agent_runtime.agent.catalog import (
 from agent_runtime.agent.model import ModelSettings, worst_case_ms
 
 from .common import ContentHash, ContractModel, JsonObject, NonEmptyText, OpaqueId
+from .workflow import PersonaCase, Workflow
 
 
 def _known_variables(text: str) -> str:
@@ -145,6 +146,9 @@ class AgentSnapshotV1(ContractModel):
     guardrails: AgentGuardrails = AgentGuardrails()
     links: AgentLinks = AgentLinks()
     templates: AgentTemplates = AgentTemplates()
+    mode: Literal["agent", "chatflow"] = "agent"
+    workflow: Workflow | None = None
+    persona_cases: Annotated[tuple[PersonaCase, ...], Field(max_length=30)] = ()
 
     def tool(self, name: str) -> AgentToolBinding | None:
         return next((binding for binding in self.tools if binding.name == name), None)
@@ -152,6 +156,12 @@ class AgentSnapshotV1(ContractModel):
     @model_validator(mode="after")
     def consistent(self) -> "AgentSnapshotV1":
         # Whole-snapshot rules have no location of their own; ctx "field" names the one the admin should fix.
+        if self.mode == "chatflow" and self.workflow is None:
+            raise PydanticCustomError("workflow_required", "chatflow mode requires a workflow",
+                                      {"field": "workflow"})
+        if self.mode == "agent" and self.workflow is not None:
+            raise PydanticCustomError("workflow_not_allowed", "agent mode cannot carry a workflow",
+                                      {"field": "workflow"})
         if len(set(self.allowed_activity_profiles)) != len(self.allowed_activity_profiles):
             raise PydanticCustomError("duplicate_items", "activity profiles must be unique",
                                       {"field": "allowed_activity_profiles"})

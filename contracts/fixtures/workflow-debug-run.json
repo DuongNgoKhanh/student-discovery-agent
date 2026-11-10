@@ -1,0 +1,42 @@
+{
+  "request": {
+    "message": "học phí MTU",
+    "state": {
+      "profile": {"entry_level": "cao_dang"},
+      "result": null,
+      "conv": {"stage": "welcome"},
+      "activity": null
+    },
+    "llm_stubs": {}
+  },
+  "result": {
+    "run_id": "dbg_0123456789abcdef01234567",
+    "status": "completed",
+    "fallback_reason": null,
+    "path": ["start", "in_test", "reply"],
+    "node_runs": [
+      {"node_id": "start", "type": "start", "order": 1, "handle": "next", "duration_ms": 1, "llm_calls": 0,
+       "tokens": {"input": 0, "output": 0}},
+      {"node_id": "in_test", "type": "if_else", "order": 2, "handle": "false",
+       "reason": {"left": "welcome", "operator": "==", "right": "assessment", "matched": false},
+       "duration_ms": 1, "llm_calls": 0, "tokens": {"input": 0, "output": 0}},
+      {"node_id": "reply", "type": "answer", "order": 3, "handle": null,
+       "output": {"text": "Xin chào!"}, "duration_ms": 2, "llm_calls": 0, "tokens": {"input": 0, "output": 0}}
+    ],
+    "blocks": [{"type": "text", "text": "Xin chào!"}],
+    "effects": [],
+    "llm_calls": 0,
+    "tokens": {"input": 0, "output": 0},
+    "created_at": "2026-11-10T08:00:00Z",
+    "expires_at": "2026-11-11T08:00:00Z"
+  },
+  "stream": [
+    {"event": "workflow.node_started", "node_id": "start", "type": "start", "order": 1, "started_at": "2026-11-10T08:00:00Z"},
+    {"event": "workflow.node_finished", "node_id": "start", "handle": "next", "duration_ms": 1, "llm_calls": 0, "tokens": {"input": 0, "output": 0}, "error": null},
+    {"event": "workflow.node_started", "node_id": "in_test", "type": "if_else", "order": 2, "started_at": "2026-11-10T08:00:01Z"},
+    {"event": "workflow.node_finished", "node_id": "in_test", "handle": "false", "duration_ms": 1, "llm_calls": 0, "tokens": {"input": 0, "output": 0}, "error": null},
+    {"event": "workflow.node_started", "node_id": "reply", "type": "answer", "order": 3, "started_at": "2026-11-10T08:00:02Z"},
+    {"event": "workflow.node_finished", "node_id": "reply", "handle": null, "duration_ms": 2, "llm_calls": 0, "tokens": {"input": 0, "output": 0}, "error": null},
+    {"event": "delta", "text": "Xin chào!"}
+  ]
+}

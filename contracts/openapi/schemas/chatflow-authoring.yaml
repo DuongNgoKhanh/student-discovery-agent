@@ -1,0 +1,195 @@
+components:
+  schemas:
+    WorkflowNamespace:
+      type: object
+      additionalProperties: false
+      required: [name, title, access, source]
+      properties:
+        name: {type: string, enum: [sys, conv, profile, result, node]}
+        title: {type: string}
+        access:
+          type: string
+          enum: [read_only, assign_only]
+          description: assign_only chỉ ghi qua node assign (conv.*); còn lại chỉ đọc.
+        source:
+          type: string
+          enum: [static, workflow_variables, profile_catalog, node_output]
+          description: static có sẵn danh sách variables; các nguồn còn lại Studio suy ra từ workflow, danh mục hồ sơ hoặc output của node chạy trước.
+        variables:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, type]
+            properties:
+              name: {type: string}
+              type: {type: string, enum: [string, number, boolean, enum, string_list]}
+              nullable: {type: boolean}
+    WorkflowHandleSpec:
+      type: object
+      additionalProperties: false
+      required: [static]
+      properties:
+        static:
+          type: array
+          items: {type: string}
+          description: Handle cố định. Rỗng và không có from_config nghĩa là node kết thúc nhánh (answer).
+        from_config:
+          type: object
+          additionalProperties: false
+          required: [array, id_field]
+          properties:
+            array: {type: string, description: "Thuộc tính của config chứa mảng, ví dụ labels."}
+            id_field: {type: string, description: "Trường của mỗi phần tử dùng làm tên handle, ví dụ id."}
+          description: Handle sinh thêm từ config (mỗi nhãn của intent_classifier là một handle).
+    WorkflowNodeType:
+      type: object
+      additionalProperties: false
+      required: [type, title, description, config_schema, handles, output_schema]
+      properties:
+        type: {$ref: chatflow.yaml#/components/schemas/ChatflowNodeType}
+        title: {type: string}
+        description: {type: string}
+        config_schema:
+          type: object
+          additionalProperties: true
+          description: JSON Schema của config. Widget riêng khai báo bằng x-widget (condition_builder, kb_picker, tool_picker) trên từng thuộc tính.
+        handles: {$ref: '#/components/schemas/WorkflowHandleSpec'}
+        output_schema:
+          type: object
+          additionalProperties: true
+          description: JSON Schema của output node, đọc qua <node_id>.<field>.
+    WorkflowNodeTypeCatalog:
+      type: object
+      additionalProperties: false
+      required: [catalog_version, namespaces, node_types]
+      properties:
+        catalog_version: {type: string, description: "Đổi khi danh mục đổi; Studio dùng để làm mới form đã cache."}
+        namespaces:
+          type: array
+          items: {$ref: '#/components/schemas/WorkflowNamespace'}
+        node_types:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/WorkflowNodeType'}
+    WorkflowDebugRunState:
+      type: object
+      additionalProperties: false
+      properties:
+        profile: {type: object, additionalProperties: true, description: "Hồ sơ giả lập; trường vắng là null."}
+        result: {type: object, nullable: true, additionalProperties: true, description: "Result giả lập hoặc null."}
+        conv: {type: object, additionalProperties: true, description: "Giá trị conv.*; biến vắng dùng default."}
+        activity: {type: object, nullable: true, additionalProperties: true}
+      description: "Trạng thái giả lập; debug run không đọc hay ghi conversation, hồ sơ, activity, proposal hay hàng đợi thật."
+    WorkflowDebugRunRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        message: {type: string, minLength: 1, maxLength: 4000}
+        interaction: {type: object, additionalProperties: true}
+        state: {$ref: '#/components/schemas/WorkflowDebugRunState'}
+        llm_stubs:
+          type: object
+          additionalProperties: true
+          description: "Output cố định cho node gọi model, khóa là node id; node không có stub gọi model thật."
+      oneOf:
+        - required: [message]
+        - required: [interaction]
+      description: "Đúng một trong message hoặc interaction. Chạy đồ thị của draft hiện tại với cùng ngân sách và trần cứng như học sinh."
+    WorkflowDebugTokens:
+      type: object
+      additionalProperties: false
+      required: [input, output]
+      properties:
+        input: {type: integer, minimum: 0}
+        output: {type: integer, minimum: 0}
+    WorkflowDebugNodeRun:
+      type: object
+      additionalProperties: false
+      required: [node_id, type, order, handle, duration_ms, llm_calls, tokens]
+      properties:
+        node_id: {$ref: chatflow.yaml#/components/schemas/ChatflowIdentifier}
+        type: {$ref: chatflow.yaml#/components/schemas/ChatflowNodeType}
+        order: {type: integer, minimum: 1}
+        handle: {type: string, nullable: true, description: "Handle đã chọn; null với node kết thúc nhánh."}
+        reason:
+          type: object
+          additionalProperties: true
+          description: "Lý do rẽ nhánh, ví dụ giá trị từng vế của điều kiện hoặc nhãn classifier."
+        input: {description: "Input rút gọn của node."}
+        output: {description: "Output rút gọn của node."}
+        duration_ms: {type: integer, minimum: 0}
+        llm_calls: {type: integer, minimum: 0}
+        tokens: {$ref: '#/components/schemas/WorkflowDebugTokens'}
+        refs: {type: array, items: {type: string}}
+        error: {type: string, nullable: true}
+    WorkflowDebugEffect:
+      type: object
+      additionalProperties: true
+      required: [kind]
+      properties:
+        kind: {type: string, description: "Loại effect dự kiến, ví dụ assign_conv, profile_write, activity_change. Không có gì được ghi thật."}
+    WorkflowDebugRunResult:
+      type: object
+      additionalProperties: false
+      required: [run_id, status, path, node_runs, blocks, effects, llm_calls, tokens, created_at, expires_at]
+      properties:
+        run_id: {type: string, pattern: '^dbg_[0-9a-f]{24}$'}
+        status: {type: string, enum: [completed, fallback]}
+        fallback_reason:
+          type: string
+          nullable: true
+          enum: [workflow_budget, workflow_node_error, null]
+        path:
+          type: array
+          items: {$ref: chatflow.yaml#/components/schemas/ChatflowIdentifier}
+          description: "Node đã chạy theo thứ tự."
+        node_runs:
+          type: array
+          items: {$ref: '#/components/schemas/WorkflowDebugNodeRun'}
+        blocks:
+          type: array
+          items: {type: object, additionalProperties: true}
+          description: "Block do server dựng (typed-blocks.yaml)."
+        effects:
+          type: array
+          items: {$ref: '#/components/schemas/WorkflowDebugEffect'}
+        llm_calls: {type: integer, minimum: 0}
+        tokens: {$ref: '#/components/schemas/WorkflowDebugTokens'}
+        created_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time, description: "created_at cộng 24 giờ; sau đó đọc lại trả 404 RES_NOT_FOUND."}
+    WorkflowDebugStreamEvent:
+      description: "Event SSE của debug run. Stream của học sinh không có các event workflow.*."
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [event, node_id, type, order]
+          properties:
+            event: {type: string, enum: [workflow.node_started]}
+            node_id: {$ref: chatflow.yaml#/components/schemas/ChatflowIdentifier}
+            type: {$ref: chatflow.yaml#/components/schemas/ChatflowNodeType}
+            order: {type: integer, minimum: 1}
+            started_at: {type: string, format: date-time}
+        - type: object
+          additionalProperties: false
+          required: [event, node_id, handle, duration_ms, llm_calls]
+          properties:
+            event: {type: string, enum: [workflow.node_finished]}
+            node_id: {$ref: chatflow.yaml#/components/schemas/ChatflowIdentifier}
+            handle: {type: string, nullable: true}
+            duration_ms: {type: integer, minimum: 0}
+            llm_calls: {type: integer, minimum: 0}
+            tokens: {$ref: '#/components/schemas/WorkflowDebugTokens'}
+            error: {type: string, nullable: true}
+        - type: object
+          additionalProperties: false
+          required: [event, text]
+          properties:
+            event: {type: string, enum: [delta]}
+            text: {type: string}
+        - type: object
+          additionalProperties: false
+          required: [event, result]
+          properties:
+            event: {type: string, enum: [completed]}
+            result: {$ref: '#/components/schemas/WorkflowDebugRunResult'}

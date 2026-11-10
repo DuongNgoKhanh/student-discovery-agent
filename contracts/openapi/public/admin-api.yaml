@@ -117,6 +117,12 @@ paths:
     $ref: agent-api.yaml#/paths/~1admin~1agent~1draft
   /admin/agent/draft/validations:
     $ref: agent-api.yaml#/paths/~1admin~1agent~1draft~1validations
+  /admin/agent/workflow/node-types:
+    $ref: agent-api.yaml#/paths/~1admin~1agent~1workflow~1node-types
+  /admin/agent/draft/debug-runs:
+    $ref: agent-api.yaml#/paths/~1admin~1agent~1draft~1debug-runs
+  /admin/agent/debug-runs/{run_id}:
+    $ref: agent-api.yaml#/paths/~1admin~1agent~1debug-runs~1{run_id}
   /admin/agent/releases:
     $ref: agent-api.yaml#/paths/~1admin~1agent~1releases
   /admin/agent/releases/{release_id}:
