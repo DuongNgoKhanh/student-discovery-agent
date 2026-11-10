@@ -32,6 +32,8 @@ def _filter(ctx: NodeContext, config: KnowledgeRetrievalConfig, types: dict[str,
         if value is None or value == "":
             continue  # an unknown variable never narrows the search
         kind = types.get(field)
+        if kind is None and not types:
+            raise NodeError("kb_unavailable")  # the field read failed: the filter cannot be checked, not misconfigured
         if kind is None or isinstance(value, bool | list | dict):
             raise NodeError("invalid_output")
         conditions.append(Condition(name=field, comparison_operator=_OPERATOR[kind], value=value))

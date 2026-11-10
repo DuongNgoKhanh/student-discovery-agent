@@ -110,3 +110,24 @@ def test_a_workflow_run_builds_the_card_traces_the_search_and_routes_a_failed_se
     failed = go(Port(KnowledgeUnavailable("timeout")))
     assert failed.path == ("start", "kb", "sorry") and failed.status == "completed"
     assert failed.knowledge[0]["error"] == "knowledge_unavailable"
+
+
+def test_unreadable_kb_fields_with_a_filter_variable_is_kb_unavailable_not_invalid_output():
+    with pytest.raises(NodeError) as error:
+        run_node(NODE, WF, scope=scope_for(WF, profile={"entry_level": "cao_dang"}),
+                 knowledge=Port(RetrievalResult(records=())), knowledge_fields={})
+    assert error.value.error_type == "kb_unavailable"
+    # a null variable never needs the field types, so the search still runs
+    port = Port(RetrievalResult(records=()))
+    run_node(NODE, WF, scope=scope_for(WF, profile={}), knowledge=port, knowledge_fields={})
+    assert len(port.calls) == 1
+
+
+def test_trace_shows_every_card_of_two_blocks_on_one_node():
+    answer = {"id": "reply", "type": "answer", "config": {"blocks": [
+        {"type": "knowledge_card", "ref": "kb.k1"}, {"type": "knowledge_card", "ref": "kb.k2"}]}}
+    state = RunState()
+    run(Port(RetrievalResult(records=(record("a", tuition=1), record("b", tuition=2)))), state=state)
+    _, result, _, _ = run_node(answer, state=state, show_params=SHOW)
+    assert [b.title for b in result.blocks] == ["Trường a", "Trường b"]
+    assert state.knowledge["kb"].trace()[0]["shown"] == ("a", "b")
