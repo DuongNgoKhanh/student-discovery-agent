@@ -83,7 +83,8 @@ class Redaction:
         for key, value in record.reason.items():
             if key == "parts":
                 out["parts"] = [{"operator": part.operator, "matched": part.matched,
-                                 "operands": [self._operand(path, operand) for path, operand in part.operands]}
+                                 "operands": [{"path": path, "present": bool(operand)} if part.operator == "missing"
+                                              else self._operand(path, operand) for path, operand in part.operands]}
                                 for part in value]
             elif key in _REASON_KEYS or self.full:
                 out[key] = _plain(value)

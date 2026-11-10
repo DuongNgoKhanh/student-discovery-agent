@@ -45,7 +45,10 @@ Expr = Var | Lit | Op
 
 @dataclass(frozen=True)
 class Part:
-    """One evaluated comparison, kept for the trace: operands are (variable path or None, value)."""
+    """One evaluated comparison, kept for the trace: operands are (variable path or None, value).
+
+    A ``missing`` part holds (path, whether a value was present) instead: it never needs the value itself.
+    """
     operator: str
     operands: tuple[tuple[str | None, Any], ...]
     matched: bool
@@ -174,7 +177,7 @@ def _value(expression: Expr, lookup: Callable[[str], Any], parts: list[Part]) ->
         return not bool(_value(args[0], lookup, parts))
     if op == "missing":
         matched = any(lookup(arg.path) is None for arg in args)
-        parts.append(Part("missing", tuple((arg.path, None) for arg in args), matched))
+        parts.append(Part("missing", tuple((arg.path, lookup(arg.path) is not None) for arg in args), matched))
         return matched
     left, right = (_value(arg, lookup, parts) for arg in args)
     matched = _compare(op, left, right)

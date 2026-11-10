@@ -284,3 +284,17 @@ def test_trace_records_order_handles_tokens_and_the_last_node():
 def test_redaction_mode_is_checked():
     with pytest.raises(ValueError):
         Redaction("debug", {})
+
+
+@pytest.mark.parametrize("mode", ["production", "full"])
+def test_a_missing_check_records_which_variables_were_present_but_never_their_values(mode):
+    flow = workflow(
+        [{"id": "start", "type": "start"},
+         {"id": "known", "type": "if_else", "config": {"condition": {"missing": ["profile.phone", "profile.x"]}}},
+         {"id": "reply", "type": "answer", "config": {"text": "ok"}}],
+        [("start", "next", "known"), ("known", "true", "reply"), ("known", "false", "reply")])
+    _, text = traced(mode, flow)
+    assert "0900123456" not in text
+    known = next(item for item in json.loads(text)["node_runs"] if item["node_id"] == "known")
+    assert known["reason"]["parts"] == [{"operator": "missing", "matched": True, "operands": [
+        {"path": "profile.phone", "present": True}, {"path": "profile.x", "present": False}]}]

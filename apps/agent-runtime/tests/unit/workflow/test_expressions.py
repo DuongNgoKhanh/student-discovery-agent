@@ -95,3 +95,8 @@ def test_path_pattern_is_equally_strict_when_reused_as_a_pydantic_constraint():
     assert adapter.validate_python("conv.stage") == "conv.stage"
     with pytest.raises(ValidationError):
         adapter.validate_python("conv.stage\n")
+
+
+def test_a_missing_part_records_presence_and_not_the_value():
+    result = evaluate(parse({"missing": ["profile.phone", "profile.x"]}), {"profile.phone": "0900123456"}.get)
+    assert result.parts == (Part("missing", (("profile.phone", True), ("profile.x", False)), True),)
