@@ -130,6 +130,10 @@ class KnowledgeTools:
         self._cards = tuple(card for record in chosen if (card := self._build_card(record)) is not None)
         return {"shown": len(self._cards)}
 
+    def views(self) -> tuple[dict[str, Any], ...]:
+        """Every record this turn's searches returned, as the model saw it (ref, title, fields)."""
+        return tuple(_view(ref, record) for ref, record in self._records.items())
+
     def cards(self) -> tuple[KnowledgeCardBlock, ...]:
         return self._cards
 
