@@ -1,7 +1,8 @@
-"""Free-text message turns: the agent loop proposes, the server checks tools against captured state and renders.
+"""Message turns: the agent loop or a chatflow graph proposes, the server checks tools against captured state.
 
-Pure apart from the injected engine/Product calls in ``plan_message_turn``; no DB access. The executor only
-validates a call against the preflight snapshot and records it; every state change is committed afterwards
+Pure apart from the injected engine/Product calls in ``plan_handoff`` (``plan_message_turn`` keeps the agent loop's
+own entry for tests; production turns plan through ``chatflow_turns.plan_from_run``); no DB access. The executor
+only validates a call against the preflight snapshot and records it; every state change is committed afterwards
 under the parent lock by ``TurnStore.commit_message``.
 """
 import logging
