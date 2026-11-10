@@ -73,6 +73,8 @@ services:
       RUNTIME_PRODUCT_SIGNING_KEY: ${PILOT_KEY_C:?}
       RUNTIME_PRODUCT_SIGNING_KID: runtime
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       KNOWLEDGE_EMBEDDING_MODELS: gemini-embedding-2
       RUNTIME_KNOWLEDGE_INDEXER_DATABASE_URL: postgresql+psycopg://pilot_owner:pilot_owner@db:5432/sda_runtime
     depends_on:

@@ -164,6 +164,8 @@ describe('agent snapshot contract parity', () => {
   it('accepts the demo fixture and rejects values past the runtime ceilings', () => {
     const validate = validator('schemas/session-lifecycle.yaml', 'AgentSnapshotV1');
     expect(validate(demo), JSON.stringify(validate.errors)).toBe(true);
+    expect(validate({ ...demo, model: { ...demo.model, ref: 'openrouter/google/gemini-2.0-flash-exp:free' } }),
+      JSON.stringify(validate.errors)).toBe(true);
     expect(validate({ ...demo, limits: { ...demo.limits, max_tool_steps: 9 } })).toBe(false);
     expect(validate({ ...demo, persona: { ...demo.persona, name: '   ' } })).toBe(false);
     expect(validate({ ...demo, guardrails: { ...demo.guardrails,

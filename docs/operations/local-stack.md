@@ -59,6 +59,7 @@ Khoá ký Studio↔runtime, keyring/cursor key của runtime và password `kb_st
 |---|---|
 | `GOOGLE_API_KEY` | Key embedding Gemini cho runtime. |
 | `VLLM_API_KEY`, `VLLM_BASE_URL` | Endpoint OpenAI-compatible (vLLM/LiteLLM proxy, ví dụ `https://.../v1`): chat model `vllm/<model id>` và embedding `nomic-embed-text-v1.5`, `multilingual-e5-large`. |
+| `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL` | OpenRouter API (mặc định `https://openrouter.ai/api/v1`): chat model `openrouter/<model id>`, gồm các model `:free`. |
 | `SDA_LOCAL_KNOWLEDGE_EMBEDDING_MODEL` | Danh sách phân tách bằng dấu phẩy, mặc định `gemini-embedding-2`; admin chọn một model cho mỗi KB khi tạo. Hỗ trợ `gemini-embedding-2`, `nomic-embed-text-v1.5`, `multilingual-e5-large`; đặt `fake-embedding` để chạy offline (search chỉ theo từ khoá; runtime tự index bằng embedding giả, không cần biến nào khác). Đổi model trên DB đã seed cần requeue KB. |
 | `SDA_LOCAL_PROXY_HOST` / `SDA_LOCAL_PROXY_PORT` | Proxy ra ngoài cho runtime khi container không có route trực tiếp (ví dụ mạng công ty). |
 
@@ -72,7 +73,7 @@ Revision kẹt ở `indexing` do tiến trình index bị dừng giữa chừng 
 
 ## Chat học sinh
 
-`http://localhost:3000/chat` gọi thật qua BFF studio-api (`/api/v1/conversations*`, `/api/v1/responses/{id}`); UI được build với `NEXT_PUBLIC_CHAT_MOCK=false`. Lần tạo hội thoại đầu tiên cấp cookie ẩn danh `sda_owner` (HttpOnly, `Path=/api/v1`); studio-api ký `X-Caller-Context` cho học sinh bằng `SDA_LOCAL_RUNTIME_INTERNAL_KEY` rồi chuyển sang runtime. Agent không còn đọc từ `infra/local-releases/agent.json`: runtime lấy release agent đang active từ studio-api (xem mục "Cấu hình agent"). Bộ đánh giá vẫn đọc `infra/local-releases/experiences/` (mount read-only); sửa file trong đó rồi `docker compose ... restart agent-runtime` để áp dụng. Model dùng `GOOGLE_API_KEY` và proxy như phần Knowledge Base.
+`http://localhost:3000/chat` gọi thật qua BFF studio-api (`/api/v1/conversations*`, `/api/v1/responses/{id}`); UI được build với `NEXT_PUBLIC_CHAT_MOCK=false`. Lần tạo hội thoại đầu tiên cấp cookie ẩn danh `sda_owner` (HttpOnly, `Path=/api/v1`); studio-api ký `X-Caller-Context` cho học sinh bằng `SDA_LOCAL_RUNTIME_INTERNAL_KEY` rồi chuyển sang runtime. Agent không còn đọc từ `infra/local-releases/agent.json`: runtime lấy release agent đang active từ studio-api (xem mục "Cấu hình agent"). Bộ đánh giá vẫn đọc `infra/local-releases/experiences/` (mount read-only); sửa file trong đó rồi `docker compose ... restart agent-runtime` để áp dụng. Model chat dùng credential theo provider (`GOOGLE_API_KEY`, `VLLM_API_KEY` + `VLLM_BASE_URL`, hoặc `OPENROUTER_API_KEY` + `OPENROUTER_BASE_URL`).
 
 Giới hạn hiện tại: UI chỉ dùng JSON (chưa stream SSE); sửa đáp án (`edit_answer`) và xác nhận làm rõ chưa được runtime hỗ trợ ở profile adaptive.
 
