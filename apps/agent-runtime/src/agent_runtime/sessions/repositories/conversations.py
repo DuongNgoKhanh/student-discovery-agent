@@ -33,3 +33,8 @@ class ConversationRepository:
         values = record.model_dump(include={"status", "revision", "display_name", "active_activity_id", "ended_at"})
         session.execute(conversations.update().where(conversations.c.id == record.id,
                                                      conversations.c.owner_id == record.owner_id).values(**values))
+
+    def save_conv_vars(self, session: Session, conversation_id: str, owner_id: str, conv_vars: dict) -> None:
+        """Chatflow variables change only under the parent write lock, in the turn's own transaction."""
+        session.execute(conversations.update().where(conversations.c.id == conversation_id,
+                                                     conversations.c.owner_id == owner_id).values(conv_vars=conv_vars))
