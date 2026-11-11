@@ -82,6 +82,7 @@ paths:
         "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
         "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
         "422": {$ref: "#/components/responses/AgentUnprocessable"}
+        "429": {$ref: ../schemas/common.yaml#/components/responses/ChatError429}
         "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
   /admin/agent/debug-runs/{run_id}:
     get:
