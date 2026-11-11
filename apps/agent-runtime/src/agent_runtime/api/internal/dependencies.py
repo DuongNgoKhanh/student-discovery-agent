@@ -240,7 +240,8 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         from agent_runtime.agent.validation import AgentSnapshotValidator
         from agent_runtime.evaluations.services.persona import PersonaRunner
         from agent_runtime.sessions.services.debug_runs import DebugRunService
-        # Persona cases run on stubs only: the model is never configured, so a gate run costs no tokens.
+        # Persona cases never reach a model (a node without a stub fails the case). Knowledge nodes still query the
+        # real knowledge base, so a re-index can change a case's outcome; stubbing retrieval is a follow-up.
         personas = PersonaRunner(DebugRunService(models=lambda provider: UnconfiguredModel(), knowledge=knowledge))
         agent_validation = AgentSnapshotValidator(knowledge, product, policy.environment, personas)
         from agent_runtime.evaluations.services.publish_gate import PublishGateService

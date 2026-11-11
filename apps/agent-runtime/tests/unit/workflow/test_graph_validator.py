@@ -1,6 +1,6 @@
 import copy
 
-from agent_runtime.workflow.validator import validate_workflow
+from agent_runtime.workflow.validator import knowledge_base_ids, validate_workflow
 from tests.helpers.chatflow import FLOW, chatflow_content
 
 KB = {"kb1": frozenset({"major", "province"})}
@@ -183,3 +183,45 @@ def test_the_budget_may_not_exceed_the_hard_ceiling():
     for key in budget:
         assert (f"workflow.budget.{key}", "workflow_budget_exceeds_ceiling") in found
     assert check(flow(budget={"max_nodes": 40, "max_llm_calls": 8, "turn_timeout_ms": 30000})) == []
+
+
+def hostile():
+    """Shapes the schema layer rejects but that reach this validator first, because it must report everything."""
+    def with_(**changes):
+        value = copy.deepcopy(FLOW)
+        for key, item in changes.items():
+            value[key] = item
+        return value
+
+    bad_assign = copy.deepcopy(FLOW["nodes"])
+    bad_assign[1]["config"]["assignments"] = [{"variable": "conv.x", "operation": ["add"], "value": 1}]
+    enum_assign = copy.deepcopy(FLOW["nodes"])
+    enum_assign[1]["config"]["assignments"] = [{"variable": "conv.x", "value": "a"}]
+    tool_node = copy.deepcopy(FLOW["nodes"])
+    tool_node[1] = {"id": "begin", "type": "tool", "config": {"tool": "assessment.start"}}
+    kb = [*FLOW["nodes"], {"id": "kb", "type": "knowledge_retrieval", "config": {"knowledge_base_id": ["a"], "query": "q"}}]
+    return [
+        (with_(variables=[{"name": "x", "type": ["string"]}]), {}),
+        (with_(variables=[{"name": "x", "type": "number", "default": 0}], nodes=bad_assign), {}),
+        (with_(variables=[{"name": "x", "type": "enum", "values": 5, "default": "a"}], nodes=enum_assign), {}),
+        (with_(nodes=tool_node), {"tools": [{"name": "assessment.start", "version": [1]}]}),
+        (with_(nodes=kb), {}),
+        (with_(nodes=[{"id": ["x"], "type": {"a": 1}, "config": 3}], edges=[{"source": {}, "target": []}]), {}),
+    ]
+
+
+def test_hostile_shapes_never_raise():
+    for workflow, extra in hostile():
+        content = chatflow_content(workflow)
+        content.update(extra)
+        found = validate_workflow(content["workflow"], content, {})
+        assert "workflow_unverifiable" not in {item.code for item in found}  # the checks ran, none crashed
+        knowledge_base_ids(content["workflow"])
+
+
+def test_a_checker_bug_reads_as_a_finding_not_an_exception(monkeypatch):
+    from agent_runtime.workflow import validator
+
+    monkeypatch.setattr(validator._Check, "_semantics", lambda self: 1 / 0)
+    found = validate_workflow(FLOW, chatflow_content(FLOW), {})
+    assert [item.code for item in found] == ["workflow_unverifiable"]

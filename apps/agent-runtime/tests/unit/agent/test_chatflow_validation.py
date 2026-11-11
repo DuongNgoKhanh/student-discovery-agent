@@ -116,3 +116,12 @@ def test_a_stale_case_is_an_issue_and_agent_mode_runs_no_personas():
     assert ("persona_cases[1].turns[0].expect.path[1]", "persona_case_stale") in {(i.path, i.code) for i in result.issues}
     agent = AgentSnapshotValidator(knowledge=None, experiences=None, environment="demo", personas=runner())
     assert agent.validate({"greeting_text": "x", "allowed_activity_profiles": []}).persona_report is None
+
+
+def test_a_debug_run_validation_does_not_need_persona_cases():
+    """personas=False is what Studio sends before a debug run: no cases yet must not block running the graph."""
+    result = run([], personas=False)
+    assert result.valid and result.persona_report is None
+    stale = run([case("a", path=["start", "removed"])], personas=False)
+    assert stale.valid
+    assert not run([]).valid  # the Validate button still insists on two mandatory cases

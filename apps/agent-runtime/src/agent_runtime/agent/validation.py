@@ -135,13 +135,15 @@ class AgentSnapshotValidator:
             snapshot = AgentSnapshotV1.model_validate(content)
         except ValidationError as error:
             issues = self._merge(_param_issues(content, error), self._graph(content))
-            issues = self._merge(issues, self._insufficient(content))
+            if personas:
+                issues = self._merge(issues, self._insufficient(content))
             return AgentValidationResult(valid=False, content_hash=content_hash, issues=tuple(issues))
         issues = self._merge(list(self._references(snapshot)), self._graph(content))
         broken = bool(issues)  # a broken graph makes running the cases meaningless
-        issues = self._merge(issues, self._insufficient(content))
-        issues = self._merge(issues, [Finding(path, "persona_case_stale", message)
-                                      for path, message in stale_cases(snapshot)])
+        if personas:  # a debug run only needs the graph: the cases are the Validate button's concern
+            issues = self._merge(issues, self._insufficient(content))
+            issues = self._merge(issues, [Finding(path, "persona_case_stale", message)
+                                          for path, message in stale_cases(snapshot)])
         report = None
         if personas and self._personas is not None and snapshot.mode == "chatflow" and not broken:
             report = self._personas.run(snapshot, content)

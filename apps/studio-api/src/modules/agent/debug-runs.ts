@@ -120,10 +120,12 @@ function relay(source: ReadableStream<Uint8Array>, save: (result: z.infer<typeof
       for (let cut = buffer.indexOf('\n\n'); cut >= 0; cut = buffer.indexOf('\n\n')) {
         const frame = buffer.slice(0, cut);
         buffer = buffer.slice(cut + 2);
-        if (!/^event: completed$/m.test(frame)) continue;
-        const data = /^data: (.*)$/m.exec(frame)?.[1];
+        // Split on \n only: JSON from the runtime may carry U+2028/U+2029, which a regex `.` or `$` would cut at.
+        const lines = frame.split('\n');
+        if (!lines.includes('event: completed')) continue;
+        const data = lines.filter(line => line.startsWith('data: ')).map(line => line.slice(6)).join('\n');
         try {
-          const parsed = resultSchema.safeParse((JSON.parse(data ?? 'null') as { result?: unknown } | null)?.result);
+          const parsed = resultSchema.safeParse((JSON.parse(data || 'null') as { result?: unknown } | null)?.result);
           if (parsed.success) await save(parsed.data);
         } catch (error) {
           console.error('[agent] could not store a streamed debug run', { error: error instanceof Error ? error.name : 'Error' });

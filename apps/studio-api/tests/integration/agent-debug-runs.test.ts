@@ -228,6 +228,16 @@ describe('streamed debug runs', () => {
     expect((await dispatch(call('GET', '/admin/agent/debug-runs/dbg_eeeeeeeeeeeeeeeeeeeeeeee', admin))).status).toBe(404);
   });
 
+  it('stores a run whose text contains U+2028 and U+2029', async () => {
+    const result = RESULT({ run_id: 'dbg_888888888888888888888888', path: ['start', 'a\u2028b\u2029c'] });
+    const frame = `event: completed\ndata: ${JSON.stringify({ event: 'completed', result })}\n\n`;
+    setRuntimeCaller(async () => sse([frame]));
+    await (await dispatch(request(admin))).text();
+    const read = await dispatch(call('GET', `/admin/agent/debug-runs/${result.run_id}`, admin));
+    expect(read.status).toBe(200);
+    expect((await json(read)).data.path[1]).toBe('a\u2028b\u2029c');
+  });
+
   it('copes with a completed frame split across chunks', async () => {
     const result = RESULT({ run_id: 'dbg_999999999999999999999999' });
     const frame = `event: completed\ndata: ${JSON.stringify({ event: 'completed', result })}\n\n`;

@@ -3,6 +3,7 @@
 It works on the raw dict, not the parsed model, so one bad node cannot hide the rest. Each check only uses what the
 earlier checks accepted; anything it cannot read is skipped here and reported by the schema layer instead.
 """
+import logging
 import re
 from collections import defaultdict, deque
 from collections.abc import Mapping
@@ -17,6 +18,8 @@ from agent_runtime.workflow.budget import HARD_CEILING
 from agent_runtime.workflow.catalog import HANDLE_SPECS, NAMESPACES
 from agent_runtime.workflow.expressions import COMPARISONS, ExpressionError, Lit, Op, Var, parse, variables
 from agent_runtime.workflow.templates import placeholders
+
+logger = logging.getLogger(__name__)
 
 MAX_NODES, MAX_EDGES, MAX_VARIABLES = 50, 100, 30
 IDENT = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
@@ -60,13 +63,17 @@ def _literal_kind(value: Any) -> str | None:
 
 def knowledge_base_ids(raw: object) -> list[str]:
     """Every knowledge base a ``knowledge_retrieval`` node names, so the caller can fetch their fields once."""
-    found = {_dict(node.get("config")).get("knowledge_base_id") for node in _list(_dict(raw).get("nodes"))
-             if isinstance(node, dict) and node.get("type") == "knowledge_retrieval"}
-    return sorted(item for item in found if isinstance(item, str))
+    found = [_dict(node.get("config")).get("knowledge_base_id") for node in _list(_dict(raw).get("nodes"))
+             if isinstance(node, dict) and node.get("type") == "knowledge_retrieval"]
+    return sorted({item for item in found if isinstance(item, str)})
 
 
 def validate_workflow(raw: object, agent: Mapping[str, Any], kb_fields: Mapping[str, frozenset[str]]) -> list[Finding]:
-    return _Check(raw, agent, kb_fields).run()
+    try:
+        return _Check(raw, agent, kb_fields).run()
+    except Exception as error:  # the input is hostile by nature: a checker bug must read as a failure, never a 500
+        logger.error("workflow validation failed to run: %s", type(error).__name__)
+        return [Finding("workflow", "workflow_unverifiable", "Không kiểm tra được workflow này; kiểm tra lại cấu trúc JSON.")]
 
 
 class _Check:
@@ -95,7 +102,8 @@ class _Check:
         self.nodes, self.edges = _list(self.raw.get("nodes")), _list(self.raw.get("edges"))
         self.variables = _list(self.raw.get("variables"))
         for item in self.variables:
-            if isinstance(item, dict) and isinstance(item.get("name"), str) and item.get("type") in VARIABLE_KINDS:
+            if (isinstance(item, dict) and isinstance(item.get("name"), str) and isinstance(item.get("type"), str)
+                    and item["type"] in VARIABLE_KINDS):
                 self.vars.setdefault(item["name"], item)
         self._sizes()
         self._duplicates()
@@ -282,7 +290,7 @@ class _Check:
     @property
     def enabled(self) -> dict[str, Any]:
         return {tool["name"]: tool.get("version") for tool in _list(self.agent.get("tools"))
-                if isinstance(tool, dict) and isinstance(tool.get("name"), str)}
+                if isinstance(tool, dict) and isinstance(tool.get("name"), str)}  # version is checked where it is used
 
     def _ancestors(self, node_id: str) -> set[str]:
         if node_id not in self._ancestors_cache:
@@ -426,6 +434,8 @@ class _Check:
 
     def _assign_type(self, node_id: str, declared: dict[str, Any], item: dict[str, Any], base: str) -> None:
         kind, operation = declared["type"], item.get("operation", "set")
+        if not isinstance(operation, str):
+            return  # the schema layer rejects it; nothing here can be judged against it
         needed = {"append": "string_list", "add": "number"}.get(operation)
         if needed and kind != needed:
             self.add(f"{base}.operation", "workflow_assign_invalid", f"Phép '{operation}' chỉ dùng cho biến {needed}.")
@@ -446,12 +456,15 @@ class _Check:
         elif operation == "add":
             fits = isinstance(value, int | float) and not isinstance(value, bool)
         else:
-            fits = value_fits(kind, value, tuple(declared.get("values") or ()) or None)
+            listed = declared.get("values")
+            allowed = tuple(item for item in listed if isinstance(item, str)) if isinstance(listed, list) else None
+            fits = value_fits(kind, value, allowed or None)
         if not fits:
             self.add(f"{base}.value", "workflow_assign_invalid", f"Giá trị không khớp biến kiểu {kind}.")
 
     def _is_handoff(self, name: str) -> bool:
-        declaration = TOOL_DECLARATIONS.get((name, self.enabled.get(name)))
+        version = self.enabled.get(name)
+        declaration = TOOL_DECLARATIONS.get((name, version)) if isinstance(version, int) else None
         return bool(declaration and declaration.handoff)
 
     def _terminal(self, node_id: str, index: int, handle: str) -> None:
