@@ -26,6 +26,7 @@
     "blocks": [{"type": "text", "text": "Xin chào!"}],
     "effects": [],
     "llm_calls": 0,
+    "live_llm_calls": 0,
     "tokens": {"input": 0, "output": 0},
     "created_at": "2026-11-10T08:00:00Z",
     "expires_at": "2026-11-11T08:00:00Z"

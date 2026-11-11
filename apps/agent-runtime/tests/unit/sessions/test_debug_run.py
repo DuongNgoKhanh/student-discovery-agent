@@ -99,3 +99,10 @@ def test_a_fake_activity_with_text_fields_runs():
                 "current_question": {"title": "Câu 1", "options": [{"id": "a", "label": "A"}, {"id": "b"}]}}
     result = service().run(CONTENT, {"message": "x", "state": {"activity": activity}, "llm_stubs": {"ask": "other"}})
     assert result["status"] == "completed"
+
+
+def test_live_llm_calls_counts_only_the_nodes_that_were_not_stubbed():
+    stubbed = service().run(CONTENT, {"message": "x", "llm_stubs": {"ask": "other"}})
+    assert stubbed["llm_calls"] == 1 and stubbed["live_llm_calls"] == 0
+    live = service(FakeModel(ModelReply(text="other"))).run(CONTENT, {"message": "x"})
+    assert live["llm_calls"] == 1 and live["live_llm_calls"] == 1

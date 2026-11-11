@@ -132,7 +132,7 @@ components:
     WorkflowDebugRunResult:
       type: object
       additionalProperties: false
-      required: [run_id, status, path, node_runs, blocks, effects, llm_calls, tokens, created_at, expires_at]
+      required: [run_id, status, path, node_runs, blocks, effects, llm_calls, live_llm_calls, tokens, created_at, expires_at]
       properties:
         run_id: {type: string, pattern: '^dbg_[0-9a-f]{24}$'}
         status: {type: string, enum: [completed, fallback]}
@@ -155,6 +155,7 @@ components:
           type: array
           items: {$ref: '#/components/schemas/WorkflowDebugEffect'}
         llm_calls: {type: integer, minimum: 0}
+        live_llm_calls: {type: integer, minimum: 0, description: "Số lần gọi model thật (không tính node đã có stub); dùng cho hạn mức 30 lần/giờ của DEC-24."}
         tokens: {$ref: '#/components/schemas/WorkflowDebugTokens'}
         created_at: {type: string, format: date-time}
         expires_at: {type: string, format: date-time, description: "created_at cộng 24 giờ; sau đó đọc lại trả 404 RES_NOT_FOUND."}

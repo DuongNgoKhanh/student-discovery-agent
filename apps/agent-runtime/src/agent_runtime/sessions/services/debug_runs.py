@@ -235,9 +235,9 @@ class DebugRunService:
 
         run = run_workflow(workflow, scope, ports, budget=budget, on_event=on_event, should_stop=should_stop,
                            reply_required=interaction is None)
-        return self._result(run, workflow, created)
+        return self._result(run, workflow, created, stubs)
 
-    def _result(self, run: WorkflowRun, workflow, created: datetime) -> dict:
+    def _result(self, run: WorkflowRun, workflow, created: datetime, stubs: dict[str, Any]) -> dict:
         # The Admin's own run, never persisted by the runtime: node inputs and values are shown in full.
         full = Redaction("full", {variable.name: variable for variable in workflow.variables})
         node_runs = []
@@ -255,5 +255,6 @@ class DebugRunService:
                 "path": list(run.path), "node_runs": node_runs,
                 "blocks": [block.model_dump(mode="json") for block in run.blocks],
                 "effects": [_effect(effect) for effect in run.effects], "llm_calls": run.llm_calls,
+                "live_llm_calls": sum(record.llm_calls for record in run.records if record.node_id not in stubs),
                 "tokens": {"input": run.usage.input_tokens, "output": run.usage.output_tokens},
                 "created_at": _iso(created), "expires_at": _iso(created + timedelta(seconds=KEEP_SECONDS))}
