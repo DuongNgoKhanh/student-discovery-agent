@@ -1,6 +1,9 @@
 import copy
 
+from agent_runtime.agent.model import UnconfiguredModel
 from agent_runtime.agent.validation import AgentSnapshotValidator
+from agent_runtime.evaluations.services.persona import PersonaRunner
+from agent_runtime.sessions.services.debug_runs import DebugRunService
 from tests.helpers.chatflow import FLOW, chatflow_content
 
 
@@ -61,3 +64,55 @@ def test_fewer_than_two_mandatory_cases_is_one_issue():
     content["persona_cases"] = content["persona_cases"][:1]
     _, found = report(content)
     assert ("persona_cases", "persona_cases_insufficient") in found
+
+PATH = ["start", "begin", "ask", "reply"]
+
+
+def runner():
+    return PersonaRunner(DebugRunService(models=lambda provider: UnconfiguredModel(), knowledge=None))
+
+
+def run(cases, **flags):
+    content = content_of(FLOW, persona_cases=cases)
+    checker = AgentSnapshotValidator(knowledge=None, experiences=None, environment="demo", personas=runner())
+    return checker.validate(content, **flags)
+
+
+def case(id, *, path=PATH, mandatory=True, stub="hoi_hoc_phi"):
+    return {"id": id, "title": f"Persona {id}", "mandatory": mandatory,
+            "turns": [{"input": {"text": "x"}, "llm_stubs": {"ask": stub}, "expect": {"path": path}}]}
+
+
+def test_passing_mandatory_cases_keep_the_snapshot_valid_and_are_reported():
+    result = run([case("a"), case("b")])
+    assert result.valid and [c.passed for c in result.persona_report.cases] == [True, True]
+
+
+def test_a_failing_mandatory_case_blocks_and_names_the_case_and_the_step():
+    result = run([case("a"), case("b", path=["start", "ask", "reply"])])
+    assert not result.valid
+    issue = next(i for i in result.issues if i.code == "persona_case_failed")
+    assert issue.path == "persona_cases[1].turns[0].expect.path"
+    assert "Persona b" in issue.message and "Bước 2" in issue.message
+
+
+def test_a_failing_optional_case_is_reported_but_does_not_block():
+    result = run([case("a"), case("b"), case("c", path=["start"], mandatory=False)])
+    assert result.valid
+    assert [c.passed for c in result.persona_report.cases] == [True, True, False]
+
+
+def test_personas_can_be_skipped_and_are_skipped_when_the_graph_is_broken():
+    assert run([case("a"), case("b")], personas=False).persona_report is None
+    broken = content_of(FLOW)
+    broken["workflow"]["edges"] = broken["workflow"]["edges"][:2]
+    checker = AgentSnapshotValidator(knowledge=None, experiences=None, environment="demo", personas=runner())
+    result = checker.validate(broken)
+    assert not result.valid and result.persona_report is None
+
+
+def test_a_stale_case_is_an_issue_and_agent_mode_runs_no_personas():
+    result = run([case("a"), case("b", path=["start", "removed"])])
+    assert ("persona_cases[1].turns[0].expect.path[1]", "persona_case_stale") in {(i.path, i.code) for i in result.issues}
+    agent = AgentSnapshotValidator(knowledge=None, experiences=None, environment="demo", personas=runner())
+    assert agent.validate({"greeting_text": "x", "allowed_activity_profiles": []}).persona_report is None

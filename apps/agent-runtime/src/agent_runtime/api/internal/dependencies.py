@@ -236,15 +236,19 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         knowledge = PgKnowledge(uow, build_embedding_ports(
             settings, timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS, max_retries=0),
             timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS)
+        from agent_runtime.agent.model import UnconfiguredModel
         from agent_runtime.agent.validation import AgentSnapshotValidator
-        agent_validation = AgentSnapshotValidator(knowledge, product, policy.environment)
+        from agent_runtime.evaluations.services.persona import PersonaRunner
+        from agent_runtime.sessions.services.debug_runs import DebugRunService
+        # Persona cases run on stubs only: the model is never configured, so a gate run costs no tokens.
+        personas = PersonaRunner(DebugRunService(models=lambda provider: UnconfiguredModel(), knowledge=knowledge))
+        agent_validation = AgentSnapshotValidator(knowledge, product, policy.environment, personas)
         from agent_runtime.evaluations.services.publish_gate import PublishGateService
         evaluations = PublishGateService()
         responses = ResponseService(uow, trace_sink=trace_sink)
         models = functools.cache(build_model_port)
         turns = TurnService(store, handler, models=models, responses=responses,
                             knowledge=knowledge, trace_sink=trace_sink)
-        from agent_runtime.sessions.services.debug_runs import DebugRunService
         debug_runs = DebugRunService(models=models, knowledge=knowledge)
         return RuntimeContainer(policy=policy, verifier=verifier, service_verifier=service_verifier,
             conversations=conversations,

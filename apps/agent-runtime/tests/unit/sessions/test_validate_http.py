@@ -20,7 +20,7 @@ TARGET = "/api/v1/internal/agent-snapshots:validate"
 
 
 class StubValidator:
-    def validate(self, content):
+    def validate(self, content, personas=True):
         return AgentValidationResult(valid=False, content_hash="sha256:x",
                                      issues=(Issue(path="greeting_text", code="missing", message="Thiếu"),))
 
@@ -49,7 +49,7 @@ def call(purpose="agent.validate", target=TARGET, validator=STUB, payload=None, 
 def test_validation_result_is_returned_with_200():
     response = call()
     assert response.status_code == 200
-    assert response.json()["data"] == {"valid": False, "content_hash": "sha256:x",
+    assert response.json()["data"] == {"valid": False, "content_hash": "sha256:x", "persona_report": None,
                                        "issues": [{"path": "greeting_text", "code": "missing", "message": "Thiếu"}]}
 
 
@@ -72,3 +72,17 @@ def test_a_student_token_cannot_call_validate():
 @pytest.mark.parametrize("payload", [{}, {"content": {"greeting_text": "x"}, "extra": True}])
 def test_body_must_be_exactly_a_content_object(payload):
     assert call(payload=payload).status_code == 422
+
+
+def test_personas_false_is_passed_through_and_must_be_a_boolean():
+    seen = []
+
+    class Spy(StubValidator):
+        def validate(self, content, personas=True):
+            seen.append(personas)
+            return super().validate(content)
+
+    assert call(validator=Spy(), payload={"content": {"a": 1}, "personas": False}).status_code == 200
+    assert call(validator=Spy(), payload={"content": {"a": 1}}).status_code == 200
+    assert seen == [False, True]
+    assert call(payload={"content": {"a": 1}, "personas": "no"}).status_code == 422

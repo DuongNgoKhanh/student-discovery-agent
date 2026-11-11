@@ -174,9 +174,12 @@ def validate_agent_snapshot(request: Request):
     _require_service(request, "agent.validate")
     _query(request, ())
     data = read_strict_json(request.state.raw_body)
-    if not isinstance(data, dict) or set(data) != {"content"}:
+    if not isinstance(data, dict) or not {"content"} <= set(data) <= {"content", "personas"}:
         raise RuntimeSessionError(422, "INVALID_INPUT")
-    result = _service(request, "agent_validation").validate(data["content"])
+    personas = data.get("personas", True)
+    if not isinstance(personas, bool):
+        raise RuntimeSessionError(422, "INVALID_INPUT")
+    result = _service(request, "agent_validation").validate(data["content"], personas=personas)
     return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)
 
 

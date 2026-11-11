@@ -33,7 +33,7 @@ GRAPH_LAYER = frozenset({
     "workflow_start_invalid", "workflow_edge_invalid", "workflow_unknown_handle", "workflow_duplicate_handle_edge",
     "workflow_too_large", "workflow_unknown_variable", "workflow_assign_invalid", "workflow_tool_not_enabled",
     "workflow_handoff_not_terminal", "workflow_budget_exceeds_ceiling", "workflow_type_mismatch",
-    "workflow_invalid_expression", "persona_cases_insufficient"})
+    "workflow_invalid_expression", "persona_cases_insufficient", "persona_case_stale"})
 
 
 def issues_of(content):

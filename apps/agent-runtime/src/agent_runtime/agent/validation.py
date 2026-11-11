@@ -11,6 +11,7 @@ from agent_runtime.agent.catalog import (
     KnowledgeShowParams,
     StartAssessmentParams,
 )
+from agent_runtime.evaluations.services.persona import PersonaReport, PersonaRunner, stale_cases
 from agent_runtime.evaluations.services.validator import calculate_content_hash
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.ports import ProductReleaseSource
@@ -74,6 +75,7 @@ class AgentValidationResult(ContractModel):
     valid: bool
     content_hash: str
     issues: tuple[Issue, ...]
+    persona_report: PersonaReport | None = None  # chatflow only; optional cases that fail are listed here, not in issues
 
 
 def _path(loc: Sequence[object]) -> str:
@@ -119,8 +121,10 @@ def _param_issues(content: Mapping[str, object], error: ValidationError) -> list
 
 
 class AgentSnapshotValidator:
-    def __init__(self, knowledge: KnowledgeBases | None, experiences: ProductReleaseSource, environment: str):
+    def __init__(self, knowledge: KnowledgeBases | None, experiences: ProductReleaseSource, environment: str,
+                 personas: PersonaRunner | None = None):
         self._knowledge, self._experiences, self._environment = knowledge, experiences, environment
+        self._personas = personas
 
     def validate(self, content: object, personas: bool = True) -> AgentValidationResult:
         if not isinstance(content, dict):
@@ -134,8 +138,26 @@ class AgentSnapshotValidator:
             issues = self._merge(issues, self._insufficient(content))
             return AgentValidationResult(valid=False, content_hash=content_hash, issues=tuple(issues))
         issues = self._merge(list(self._references(snapshot)), self._graph(content))
+        broken = bool(issues)  # a broken graph makes running the cases meaningless
         issues = self._merge(issues, self._insufficient(content))
-        return AgentValidationResult(valid=not issues, content_hash=content_hash, issues=tuple(issues))
+        issues = self._merge(issues, [Finding(path, "persona_case_stale", message)
+                                      for path, message in stale_cases(snapshot)])
+        report = None
+        if personas and self._personas is not None and snapshot.mode == "chatflow" and not broken:
+            report = self._personas.run(snapshot, content)
+            issues = self._merge(issues, self._failures(report))
+        return AgentValidationResult(valid=not issues, content_hash=content_hash, issues=tuple(issues),
+                                     persona_report=report)
+
+    @staticmethod
+    def _failures(report: PersonaReport) -> list[Finding]:
+        found = []
+        for case in report.cases:
+            if case.mandatory and not case.passed:
+                first = case.mismatches[0]
+                found.append(Finding(first.path, "persona_case_failed",
+                                     f"Persona case '{case.title}' không đạt: {first.message}"))
+        return found
 
     @staticmethod
     def _merge(issues: list[Issue], findings: Sequence[Finding]) -> list[Issue]:
