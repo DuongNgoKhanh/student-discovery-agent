@@ -312,6 +312,31 @@ components:
         content_hash: {type: string}
         issues: {type: array, items: {$ref: "#/components/schemas/AgentIssue"}}
         draft_revision: {$ref: "#/components/schemas/Revision"}
+        persona_report:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [cases]
+          description: "Kết quả chạy persona case ở chế độ stub; null khi không chạy (chế độ agent, đồ thị còn lỗi). Case không bắt buộc không đạt chỉ nằm ở đây, không chặn phát hành."
+          properties:
+            cases:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [id, title, mandatory, passed, mismatches]
+                properties:
+                  id: {type: string}
+                  title: {type: string}
+                  mandatory: {type: boolean}
+                  passed: {type: boolean}
+                  mismatches:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [path, message]
+                      properties: {path: {type: string}, message: {type: string}}
     AgentPublishInput:
       type: object
       additionalProperties: false

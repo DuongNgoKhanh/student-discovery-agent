@@ -5,12 +5,20 @@ import type { RequestContext } from '@/http/types';
 import { signingKey, signServiceRequest } from '@/modules/knowledge/runtime-client';
 
 export const VALIDATE_TARGET = '/api/v1/internal/agent-snapshots:validate';
-const TIMEOUT_MS = 5000;
+// A persona gate can run a few hundred stubbed turns, so validation gets more room than a lookup.
+const TIMEOUT_MS = 15000;
 
+const personaReportSchema = z.object({
+  cases: z.array(z.object({
+    id: z.string(), title: z.string(), mandatory: z.boolean(), passed: z.boolean(),
+    mismatches: z.array(z.object({ path: z.string(), message: z.string() })),
+  })),
+});
 const reportSchema = z.object({
   valid: z.boolean(),
   content_hash: z.string(),
   issues: z.array(z.object({ path: z.string(), code: z.string(), message: z.string() })),
+  persona_report: personaReportSchema.nullish(),
 });
 export type AgentValidation = z.infer<typeof reportSchema>;
 export type AgentIssue = AgentValidation['issues'][number];
@@ -20,11 +28,13 @@ const unavailable = (kind: 'dependency_down' | 'timeout' | 'not_configured' | 'm
   new ProductError(503, 'SYS_UNAVAILABLE', 'Agent validation is unavailable', kind === 'dependency_down' || kind === 'timeout', { kind });
 
 /** The runtime owns agent schema rules; anything short of a well-formed report is a failure, never a pass. */
-export async function validateWithRuntime(content: Record<string, unknown>, ctx: RequestContext): Promise<AgentValidation> {
+export async function validateWithRuntime(
+  content: Record<string, unknown>, ctx: RequestContext, options: { personas?: boolean } = {},
+): Promise<AgentValidation> {
   const env = getKnowledgeEnv();
   const key = signingKey(env.STUDIO_RUNTIME_SIGNING_KEY);
   if (!env.RUNTIME_INTERNAL_URL || !key) throw unavailable('not_configured');
-  const body = JSON.stringify({ content });
+  const body = JSON.stringify(options.personas === false ? { content, personas: false } : { content });
   const token = await signServiceRequest('POST', VALIDATE_TARGET, body, key, env.STUDIO_RUNTIME_SIGNING_KID, Date.now(), 'agent.validate');
   let response: Response;
   try {
