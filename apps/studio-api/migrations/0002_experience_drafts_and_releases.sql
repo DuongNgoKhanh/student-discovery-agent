@@ -126,6 +126,21 @@ BEGIN
   );
   CREATE INDEX IF NOT EXISTS audit_events_target_at_idx ON product.audit_events (target_kind, at DESC, id DESC);
 
+  CREATE TABLE IF NOT EXISTS product.agent_debug_runs (
+    run_id TEXT NOT NULL CHECK (run_id ~ '^dbg_[0-9a-f]{24}$'),
+    actor_id TEXT NOT NULL,
+    draft_revision BIGINT NOT NULL CHECK (draft_revision >= 1),
+    content_hash TEXT NOT NULL CHECK (content_hash ~ '^sha256:[0-9a-f]{64}$'),
+    request JSONB NOT NULL CHECK (jsonb_typeof(request) = 'object'),
+    result JSONB NOT NULL CHECK (jsonb_typeof(result) = 'object'),
+    live_llm_calls INTEGER DEFAULT 0 NOT NULL CHECK (live_llm_calls >= 0),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL CHECK (expires_at > created_at),
+    PRIMARY KEY (run_id)
+  );
+  CREATE INDEX IF NOT EXISTS agent_debug_runs_actor_created_idx ON product.agent_debug_runs (actor_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS agent_debug_runs_expires_idx ON product.agent_debug_runs (expires_at);
+
   CREATE OR REPLACE FUNCTION product.prevent_agent_release_mutation()
   RETURNS trigger AS $fn$
   BEGIN

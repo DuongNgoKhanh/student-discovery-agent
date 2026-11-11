@@ -9,4 +9,4 @@ export {
   idempotencyRecords,
 } from '@/modules/experiences/experiences.table';
 export { authSessions, authRefreshTokens, authRegistrationLimits } from '@/modules/auth/auth.table';
-export { agentDraft, agentReleases, agentActive, auditEvents } from '@/modules/agent/agent.table';
+export { agentDraft, agentReleases, agentActive, agentDebugRuns, auditEvents } from '@/modules/agent/agent.table';
