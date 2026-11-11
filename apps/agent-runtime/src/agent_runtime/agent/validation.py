@@ -16,6 +16,7 @@ from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.ports import ProductReleaseSource
 from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+from agent_runtime.workflow.validator import Finding, knowledge_base_ids, validate_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +122,7 @@ class AgentSnapshotValidator:
     def __init__(self, knowledge: KnowledgeBases | None, experiences: ProductReleaseSource, environment: str):
         self._knowledge, self._experiences, self._environment = knowledge, experiences, environment
 
-    def validate(self, content: object) -> AgentValidationResult:
+    def validate(self, content: object, personas: bool = True) -> AgentValidationResult:
         if not isinstance(content, dict):
             return AgentValidationResult(valid=False, content_hash="", issues=(
                 Issue(path="", code="type_error", message="Cấu hình phải là một JSON object."),))
@@ -129,10 +130,50 @@ class AgentSnapshotValidator:
         try:
             snapshot = AgentSnapshotV1.model_validate(content)
         except ValidationError as error:
-            issues = tuple(_param_issues(content, error))
-            return AgentValidationResult(valid=False, content_hash=content_hash, issues=issues)
-        issues = self._references(snapshot)
-        return AgentValidationResult(valid=not issues, content_hash=content_hash, issues=issues)
+            issues = self._merge(_param_issues(content, error), self._graph(content))
+            issues = self._merge(issues, self._insufficient(content))
+            return AgentValidationResult(valid=False, content_hash=content_hash, issues=tuple(issues))
+        issues = self._merge(list(self._references(snapshot)), self._graph(content))
+        issues = self._merge(issues, self._insufficient(content))
+        return AgentValidationResult(valid=not issues, content_hash=content_hash, issues=tuple(issues))
+
+    @staticmethod
+    def _merge(issues: list[Issue], findings: Sequence[Finding]) -> list[Issue]:
+        """One issue per (path, code): what the schema layer already said, or an earlier finding, is not repeated."""
+        seen = {(item.path, item.code) for item in issues}
+        merged = list(issues)
+        for finding in findings:
+            if (finding.path, finding.code) not in seen:
+                seen.add((finding.path, finding.code))
+                merged.append(Issue(path=finding.path, code=finding.code, message=finding.message))
+        return merged
+
+    def _base_fields(self, kb_ids: Sequence[str]) -> Mapping[str, frozenset[str]]:
+        if self._knowledge is None:
+            raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "not_configured"})
+        try:
+            return self._knowledge.base_fields(kb_ids)
+        except Exception as error:
+            # Type name only: driver messages can carry the database URL.
+            logger.error("agent validation: knowledge database unavailable (%s)", type(error).__name__)
+            raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}) from None
+
+    def _graph(self, content: Mapping[str, object]) -> list[Finding]:
+        workflow = content.get("workflow")
+        if content.get("mode") != "chatflow" or not isinstance(workflow, dict):
+            return []
+        ids = knowledge_base_ids(workflow)
+        return validate_workflow(workflow, content, self._base_fields(ids) if ids else {})
+
+    @staticmethod
+    def _insufficient(content: Mapping[str, object]) -> list[Finding]:
+        if content.get("mode") != "chatflow":
+            return []
+        cases = content.get("persona_cases")
+        mandatory = (sum(1 for item in cases if isinstance(item, dict) and item.get("mandatory") is True)
+                     if isinstance(cases, list) else 0)
+        return [] if mandatory >= 2 else [Finding(
+            "persona_cases", "persona_cases_insufficient", "Chatflow cần ít nhất 2 persona case bắt buộc.")]
 
     def _references(self, snapshot: AgentSnapshotV1) -> tuple[Issue, ...]:
         issues: list[Issue] = []
@@ -153,14 +194,7 @@ class AgentSnapshotValidator:
         search = snapshot.tool("knowledge.search")
         if search:
             params = KnowledgeSearchParams.model_validate(search.params)
-            if self._knowledge is None:
-                raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "not_configured"})
-            try:
-                fields = self._knowledge.base_fields([params.knowledge_base_id])
-            except Exception as error:
-                # Type name only: driver messages can carry the database URL.
-                logger.error("agent validation: knowledge database unavailable (%s)", type(error).__name__)
-                raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}) from None
+            fields = self._base_fields([params.knowledge_base_id])
             at = f"tools[{index['knowledge.search']}].params"
             known = fields.get(params.knowledge_base_id)
             if known is None:
