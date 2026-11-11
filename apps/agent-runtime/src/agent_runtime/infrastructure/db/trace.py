@@ -10,5 +10,7 @@ class DatabaseTraceSink:
     def emit(self, event: TraceEvent) -> None:
         # Revalidate model_copy/model_construct so adapter cannot persist unknown fields.
         value = TraceEvent.model_validate(event.model_dump())
+        row = value.model_dump()
+        row["workflow"] = value.workflow.model_dump(mode="json") if value.workflow else None
         with self.uow.begin() as session:
-            session.execute(runtime_traces.insert().values(**value.model_dump()))
+            session.execute(runtime_traces.insert().values(**row))

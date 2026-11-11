@@ -8,7 +8,7 @@ from typing import Literal
 
 from agent_runtime.agent.catalog import NO_CONTEXT, KnowledgeSearchParams, KnowledgeShowParams, ToolContext
 from agent_runtime.agent.knowledge_tools import KnowledgePort, KnowledgeTools
-from agent_runtime.agent.loop import TextDelta, run_agent_turn
+from agent_runtime.agent.loop import TextDelta, ToolCallStarted
 from agent_runtime.agent.model import ModelPort, UnconfiguredModel
 from agent_runtime.infrastructure.auth.caller import VerifiedCaller
 from agent_runtime.sessions.errors import RuntimeSessionError
@@ -16,17 +16,18 @@ from agent_runtime.sessions.schemas.common import ServiceResponse
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.schemas.responses import TurnResponse
 from agent_runtime.sessions.schemas.turn import ConversationTurnInput, MessageTurnInput
-from agent_runtime.sessions.services.message_turns import (
-    EXPLAIN_REQUEST_TEXT,
-    SnapshotToolExecutor,
-    agent_context,
-    chat_history,
-    plan_message_turn,
-)
+from agent_runtime.sessions.schemas.turn_execution import TurnDraft
+from agent_runtime.sessions.schemas.workflow import Workflow
+from agent_runtime.sessions.services.chatflow_turns import plan_from_run, run_interaction_turn, run_message_turn
+from agent_runtime.sessions.services.message_turns import MessageSnapshot, SnapshotToolExecutor
 from agent_runtime.sessions.services.responses import ResponseService
 from agent_runtime.sessions.services.turn_handlers import TurnHandler
 from agent_runtime.sessions.services.turn_store import Begun, TurnCancelled, TurnStore
 from agent_runtime.sessions.trace import describe_metadata, emit_trace
+from agent_runtime.workflow.budget import Budget
+from agent_runtime.workflow.executor import WorkflowRun
+from agent_runtime.workflow.ports import ProfilePort
+from agent_runtime.workflow.trace import Redaction, build_trace
 
 __all__ = ["CANCEL_POLL_SECONDS", "Begun", "StreamEvent", "TurnCancelled", "TurnService", "describe_response",
            "describe_turn"]
@@ -64,8 +65,9 @@ def describe_response(subject: tuple[Begun, TurnResponse]) -> dict:
 class TurnService:
     def __init__(self, store: TurnStore, handler: TurnHandler, *, models: Callable[[str], ModelPort] | None = None,
                  responses: ResponseService | None = None, knowledge: KnowledgePort | None = None,
-                 trace_sink=None, clock=time.monotonic):
+                 trace_sink=None, clock=time.monotonic, profile: ProfilePort | None = None):
         self.store = store
+        self.profile = profile
         self.handler = handler
         self.models = models or (lambda provider: UnconfiguredModel())
         # Cancel polling reads the same rows the store writes.
@@ -149,36 +151,94 @@ class TurnService:
                                allowed_domains=agent.links.allowed_domains)
         return ToolContext(knowledge_fields=fields), tools
 
+    def _workflow_fields(self, agent: AgentSnapshotV1, known: dict) -> dict:
+        """Metadata fields of every KB a chatflow node reads; read once per turn, outside any transaction."""
+        if agent.workflow is None:
+            return {}
+        wanted = {node.config["knowledge_base_id"] for node in agent.workflow.nodes
+                  if node.type == "knowledge_retrieval" and isinstance(node.config.get("knowledge_base_id"), str)}
+        merged: dict = {}
+        for kb_id in wanted - set(known):
+            merged.update(self._read_fields(kb_id))
+        return merged
+
+    def _emitter(self, on_event):
+        if on_event is None:
+            return None
+
+        def emit(event):
+            if isinstance(event, TextDelta):
+                on_event(("delta", event.text))
+            elif isinstance(event, ToolCallStarted):
+                on_event(("tool_call", event.name))
+        return emit
+
+    def _observe(self, observed: dict, run: WorkflowRun, used: Budget, workflow: Workflow, snapshot: MessageSnapshot,
+                 response_id: str, knowledge: KnowledgeTools | None, *, activity_conflict: bool = False) -> None:
+        observed.update(agent_steps=run.agent_steps, input_tokens=run.usage.input_tokens,
+                        output_tokens=run.usage.output_tokens, fallback=run.fallback is not None,
+                        fallback_reason=run.fallback)
+        observed["response_id"] = response_id
+        try:  # a trace that cannot be built is dropped; it never fails the turn
+            # Redacted for production: no student text, rendered prompt or profile value reaches the stored trace.
+            observed["workflow"] = build_trace(
+                run, redaction=Redaction("production", {variable.name: variable for variable in workflow.variables}),
+                agent_release_id=snapshot.parent.agent_snapshot.release_id,
+                content_hash=snapshot.agent_content_hash, mode=snapshot.agent.mode, budget=used,
+                activity_conflict=activity_conflict)
+        except Exception as error:
+            logger.warning("workflow trace dropped: %s", type(error).__name__)
+        searches = (*(knowledge.trace() if knowledge is not None else ()), *run.knowledge)[:8]
+        if searches:
+            observed["knowledge"] = searches
+
     def _run(self, caller: VerifiedCaller, begun: Begun, on_event, observed: dict) -> TurnResponse:
         request, snapshot = begun.request, begun.snapshot
         if not isinstance(request, MessageTurnInput):
             # begin returns a snapshot only for supported interactions.
-            draft = self.handler.prepare(snapshot, request)
-            return self.store.commit(caller, begun, draft)
+            draft = self.handler.prepare(snapshot, request)  # a rejected interaction raises here; no graph runs
+            if begun.chatflow is None:  # mode = agent: a button press never calls the model
+                return self.store.commit(caller, begun, draft)
+            return self._run_interaction(caller, begun, draft, on_event, observed)
         agent = snapshot.agent
         if agent.model:
             observed["provider"] = agent.model.provider
         model = self.models(agent.model.provider) if agent.model else UnconfiguredModel()
-        emit = None
-        if on_event is not None:
-            def emit(event):
-                on_event(("delta", event.text) if isinstance(event, TextDelta) else ("tool_call", event.name))
         deadline = self._clock() + agent.limits.turn_timeout_ms / 1000  # field reads count against the turn budget
         tool_context, knowledge = self._knowledge(agent)
         executor = SnapshotToolExecutor(snapshot, knowledge)
-        explain = request.explain is not None
-        turn = run_agent_turn(agent, model, executor, agent_context(snapshot, explain=explain),
-                              chat_history(snapshot.history),
-                              EXPLAIN_REQUEST_TEXT if explain else request.content.text, on_event=emit,
-                              should_stop=self._should_stop(caller, begun.response.id),
-                              deadline=deadline, clock=self._clock, tool_context=tool_context)
-        observed.update(agent_steps=turn.steps, input_tokens=turn.usage.input_tokens,
-                        output_tokens=turn.usage.output_tokens, fallback=turn.fallback is not None,
-                        fallback_reason=turn.fallback)
-        if knowledge is not None and (searches := knowledge.trace()):
-            observed["knowledge"] = searches
-        if turn.cancelled:
+        run, used, workflow = run_message_turn(
+            snapshot, request, model=model, executor=executor, tool_context=tool_context,
+            knowledge_port=self.knowledge, knowledge_fields=self._workflow_fields(agent, tool_context.knowledge_fields),
+            profile=self.profile, emit=self._emitter(on_event),
+            should_stop=self._should_stop(caller, begun.response.id), deadline=deadline, clock=self._clock)
+        self._observe(observed, run, used, workflow, snapshot, begun.response.id, knowledge)
+        if run.status == "cancelled":
             raise TurnCancelled()
-        plan = plan_message_turn(snapshot, turn, request, handler=self.handler, persistence=self.store.persistence,
-                                 cards=executor.cards())
+        plan = plan_from_run(snapshot, run, request, handler=self.handler, persistence=self.store.persistence)
         return self.store.commit_message(caller, begun, plan)
+
+    def _run_interaction(self, caller: VerifiedCaller, begun: Begun, draft: TurnDraft, on_event,
+                         observed: dict) -> TurnResponse:
+        """Handler first, then the graph over the post-handler state; both land in the handler's one commit.
+
+        A handoff the graph asks for is dropped (the handler already moved the activity) and only flagged in the
+        trace; the graph contributes its blocks (before the handler's block) and its conversation variables.
+        """
+        chat = begun.chatflow
+        agent = chat.agent
+        if agent.model:
+            observed["provider"] = agent.model.provider
+        model = self.models(agent.model.provider) if agent.model else UnconfiguredModel()
+        deadline = self._clock() + agent.limits.turn_timeout_ms / 1000
+        tool_context, knowledge = self._knowledge(agent)
+        run, used, workflow = run_interaction_turn(
+            chat, begun.request, draft, model=model, tool_context=tool_context, knowledge_port=self.knowledge,
+            knowledge=knowledge, profile=self.profile, emit=self._emitter(on_event),
+            should_stop=self._should_stop(caller, begun.response.id), deadline=deadline, clock=self._clock,
+            knowledge_fields=self._workflow_fields(agent, tool_context.knowledge_fields))
+        self._observe(observed, run, used, workflow, chat, begun.response.id, knowledge,
+                      activity_conflict=run.handoff is not None)
+        if run.status == "cancelled":
+            raise TurnCancelled()
+        return self.store.commit(caller, begun, draft, lead_blocks=run.blocks, conv_vars=run.conv)

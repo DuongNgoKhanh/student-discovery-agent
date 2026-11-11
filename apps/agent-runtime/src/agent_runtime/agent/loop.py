@@ -38,8 +38,10 @@ from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.services.blocks import markdown_to_text
 
-Fallback = UnavailableReason | Literal["max_tool_steps", "empty_reply", "deadline"]
-_BUSY = frozenset({"rate_limited", "timeout", "provider_error", "deadline"})
+Fallback = UnavailableReason | Literal["max_tool_steps", "empty_reply", "deadline", "workflow_budget",
+                                       "workflow_node_error"]
+_BUSY = frozenset({"rate_limited", "timeout", "provider_error", "deadline", "workflow_budget",
+                   "workflow_node_error"})
 
 
 @dataclass(frozen=True)
@@ -94,7 +96,7 @@ def offered_tools(snapshot: AgentSnapshotV1, context: ToolContext = NO_CONTEXT) 
     return offered
 
 
-def _text_block(block_id: str, text: str, allowed_domains: tuple[str, ...]) -> TypedBlock | None:
+def text_block(block_id: str, text: str, allowed_domains: tuple[str, ...]) -> TypedBlock | None:
     clean = sanitize_markdown(text, allowed_domains)
     if not clean:
         return None
@@ -105,8 +107,7 @@ def _text_block(block_id: str, text: str, allowed_domains: tuple[str, ...]) -> T
         return TextBlock(block_id=block_id, type="text", schema_version=1, content=plain) if plain else None
 
 
-def _fallback(snapshot: AgentSnapshotV1, reason: Fallback, new_id: Callable[[], str], steps: int,
-              usage: ModelUsage) -> AgentTurn:
+def fallback_blocks(snapshot: AgentSnapshotV1, reason: Fallback, new_id: Callable[[], str]) -> tuple[TypedBlock, ...]:
     templates = snapshot.templates
     # Only a reply the agent could not use means "not understood"; the rest are on our side and worth a retry.
     content = templates.busy_message if reason in _BUSY else templates.unknown_message
@@ -114,7 +115,12 @@ def _fallback(snapshot: AgentSnapshotV1, reason: Fallback, new_id: Callable[[], 
     if templates.fallback_suggestions:
         blocks.append(SuggestionsBlock(block_id=new_id(), type="suggestions", schema_version=1, items=[
             {"label": label, "message_text": label} for label in templates.fallback_suggestions]))
-    return AgentTurn(tuple(blocks), fallback=reason, steps=steps, usage=usage)
+    return tuple(blocks)
+
+
+def _fallback(snapshot: AgentSnapshotV1, reason: Fallback, new_id: Callable[[], str], steps: int,
+              usage: ModelUsage) -> AgentTurn:
+    return AgentTurn(fallback_blocks(snapshot, reason, new_id), fallback=reason, steps=steps, usage=usage)
 
 
 def _add(usage: ModelUsage, more: ModelUsage) -> ModelUsage:
@@ -205,7 +211,7 @@ def _finish(snapshot: AgentSnapshotV1, text: str, suggestions: SuggestRepliesArg
             handoff: Handoff | None, new_id: Callable[[], str], steps: int, usage: ModelUsage,
             domains: tuple[str, ...]) -> AgentTurn:
     blocks: list[TypedBlock] = []
-    if (block := _text_block(new_id(), text, domains)) is not None:
+    if (block := text_block(new_id(), text, domains)) is not None:
         blocks.append(block)
     if not blocks and handoff is None:
         return _fallback(snapshot, "empty_reply", new_id, steps, usage)

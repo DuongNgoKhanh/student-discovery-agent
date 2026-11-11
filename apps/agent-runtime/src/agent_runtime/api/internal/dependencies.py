@@ -47,6 +47,8 @@ PREFIX = "/api/v1/internal"
 SERVICE_ROUTES: dict[tuple[str, str], str] = {
     ("POST", PREFIX + "/knowledge/retrieval"): "knowledge.retrieval",
     ("POST", PREFIX + "/agent-snapshots:validate"): "agent.validate",
+    ("GET", PREFIX + "/workflow/node-types"): "agent.validate",
+    ("POST", PREFIX + "/agent-debug-runs:run"): "agent.validate",
     ("POST", PREFIX + "/knowledge/index-runs"): "knowledge.index",
     ("POST", PREFIX + "/experience-validations:run"): "experience.validate",
     ("POST", PREFIX + "/experience-evaluations:run"): "experience.evaluate",
@@ -74,6 +76,7 @@ class RuntimeContainer:
     engine: object | None = None
     knowledge: object | None = None
     agent_validation: object | None = None
+    debug_runs: object | None = None
     knowledge_indexer: object | None = None
     knowledge_indexer_engine: object | None = None
     evaluations: PublishGateService | None = None
@@ -238,14 +241,17 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         from agent_runtime.evaluations.services.publish_gate import PublishGateService
         evaluations = PublishGateService()
         responses = ResponseService(uow, trace_sink=trace_sink)
-        turns = TurnService(store, handler, models=functools.cache(build_model_port), responses=responses,
+        models = functools.cache(build_model_port)
+        turns = TurnService(store, handler, models=models, responses=responses,
                             knowledge=knowledge, trace_sink=trace_sink)
+        from agent_runtime.sessions.services.debug_runs import DebugRunService
+        debug_runs = DebugRunService(models=models, knowledge=knowledge)
         return RuntimeContainer(policy=policy, verifier=verifier, service_verifier=service_verifier,
             conversations=conversations,
             history=HistoryService(uow, codec, trace_sink=trace_sink) if codec else None,
             lifecycle=LifecycleService(uow, trace_sink=trace_sink),
             results=ResultReadService(uow, trace_sink=trace_sink), turns=turns, responses=responses, engine=engine,
-            knowledge=knowledge, agent_validation=agent_validation, evaluations=evaluations,
+            knowledge=knowledge, agent_validation=agent_validation, debug_runs=debug_runs, evaluations=evaluations,
             knowledge_indexer=indexer, knowledge_indexer_engine=indexer_engine,
             product_ready=agent_source is not None)
     except Exception:
@@ -329,10 +335,13 @@ class InternalBoundary:
                     raise RuntimeSessionError(401, "AUTH_CALLER_CONTEXT_INVALID") from None
                 raise
             # Both directions: a service token reaches only its own route, a student token never a service route.
-            route_purpose = SERVICE_ROUTES.get((scope["method"], target))
+            # Keyed by the decoded path the router dispatches on: a percent-encoded target (``%3A``) must not
+            # slip past the service-route checks while still reaching the service route.
+            route = (scope["method"], scope["path"])
+            route_purpose = SERVICE_ROUTES.get(route)
             if (route_purpose != caller.purpose) if service else route_purpose is not None:
                 raise RuntimeSessionError(403, "FORBIDDEN")
-            if not service and (scope["method"], target) in SERVICE_ROUTES:
+            if not service and route in SERVICE_ROUTES:
                 # Defence in depth: Studio-only routes never serve a student caller, whatever the route checks.
                 raise RuntimeSessionError(403, "FORBIDDEN")
             scope.setdefault("state", {}).update(runtime=runtime, caller=caller, raw_body=bytes(raw), meta=meta)

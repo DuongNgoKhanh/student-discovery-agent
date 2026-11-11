@@ -1,5 +1,6 @@
 """Ten synchronous operations; FastAPI dispatches all service/DB work to its pool."""
 import re
+import threading
 
 from fastapi import APIRouter, Request
 from pydantic import ValidationError
@@ -8,6 +9,7 @@ from starlette.responses import StreamingResponse
 from agent_runtime.evaluations.schemas.validation import ExperienceSnapshotCommand, PublishReportInput
 from agent_runtime.evaluations.services.publish_gate import IdempotencyConflict
 from agent_runtime.evaluations.services.runner import SnapshotHashMismatch
+from agent_runtime.infrastructure.auth.caller import VerifiedService
 from agent_runtime.infrastructure.http.strict_json import read_strict_json
 from agent_runtime.knowledge.filters import FilterError
 from agent_runtime.knowledge.schemas import KnowledgeUnavailable, RetrievalRequest
@@ -15,13 +17,16 @@ from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import ServiceResponse
 from agent_runtime.sessions.schemas.conversation import CreateConversationInput, EndConversationInput
 from agent_runtime.sessions.services.turn_input import parse_message_input
+from agent_runtime.workflow.catalog import node_type_catalog
 
 from .dependencies import PREFIX
 from .envelopes import success
-from .sse import stream_turn
+from .sse import stream_events, stream_turn
 
 router = APIRouter(prefix=PREFIX)
 SSE_HEADERS = {"X-Accel-Buffering": "no"}
+# Each streamed debug run holds a worker thread for up to a turn timeout: at most this many at once per process.
+DEBUG_STREAMS = threading.BoundedSemaphore(8)
 
 
 def _service(request, name):
@@ -37,6 +42,13 @@ def _input(request, model):
         return model.model_validate(data)
     except ValidationError:
         raise RuntimeSessionError(422, "INVALID_INPUT") from None
+
+
+def _require_service(request, purpose):
+    """Defence in depth behind the boundary's route table: a Studio-only route serves only that Studio purpose."""
+    caller = request.state.caller
+    if not isinstance(caller, VerifiedService) or caller.purpose != purpose:
+        raise RuntimeSessionError(403, "FORBIDDEN")
 
 
 def _wants_stream(request):
@@ -159,12 +171,46 @@ def retrieve_knowledge(request: Request):
 
 @router.post("/agent-snapshots:validate", operation_id="internalValidateAgentSnapshot")
 def validate_agent_snapshot(request: Request):
+    _require_service(request, "agent.validate")
     _query(request, ())
     data = read_strict_json(request.state.raw_body)
     if not isinstance(data, dict) or set(data) != {"content"}:
         raise RuntimeSessionError(422, "INVALID_INPUT")
     result = _service(request, "agent_validation").validate(data["content"])
     return success(ServiceResponse(status=200, data=result.model_dump(mode="json")), *request.state.meta)
+
+
+@router.post("/agent-debug-runs:run", operation_id="internalRunAgentDebugRun")
+def run_agent_debug_run(request: Request):
+    """The Admin's own run of a draft: nothing is written and nothing is kept here (Studio stores the result)."""
+    _require_service(request, "agent.validate")
+    _query(request, ())
+    data = read_strict_json(request.state.raw_body)
+    if not isinstance(data, dict) or set(data) != {"content", "request"}:
+        raise RuntimeSessionError(422, "INVALID_INPUT")
+    if not isinstance(data["content"], dict) or not isinstance(data["request"], dict):
+        raise RuntimeSessionError(422, "INVALID_INPUT")
+    work = _service(request, "debug_runs").prepare(data["content"], data["request"])  # a bad request is a plain 422
+    if not _wants_stream(request):
+        return success(ServiceResponse(status=200, data=work(None, None)), *request.state.meta)
+    slots = DEBUG_STREAMS
+    if not slots.acquire(blocking=False):
+        raise RuntimeSessionError(429, "RATE_LIMITED")
+    try:
+        body = stream_events(work, on_done=slots.release)  # the worker thread frees the slot when it ends
+    except Exception:  # the worker never started, so nothing else will release it
+        slots.release()
+        raise
+    request_id, trace_id, _ = request.state.meta
+    return StreamingResponse(body, media_type="text/event-stream",
+                             headers={**SSE_HEADERS, "X-Request-ID": request_id, "X-Trace-ID": trace_id})
+
+
+@router.get("/workflow/node-types", operation_id="internalGetWorkflowNodeTypes")
+def get_workflow_node_types(request: Request):
+    _require_service(request, "agent.validate")
+    _query(request, ())
+    return success(ServiceResponse(status=200, data=node_type_catalog()), *request.state.meta)
 
 
 @router.post("/knowledge/index-runs", status_code=202, operation_id="internalStartKnowledgeIndexRun")

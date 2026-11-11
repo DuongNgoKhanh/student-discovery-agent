@@ -10,8 +10,9 @@ from agent_runtime.agent.validation import AgentSnapshotValidator
 from agent_runtime.evaluations.services.validator import ExperienceValidator, calculate_content_hash
 from agent_runtime.sessions.schemas.activity import CapabilitySnapshot
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
-from agent_runtime.sessions.schemas.workflow import NODE_TYPES
+from agent_runtime.sessions.schemas.workflow import NODE_TYPES, RESERVED_NODE_IDS
 from agent_runtime.sessions.services.releases import validate_release
+from agent_runtime.workflow.scope import _STATIC, Scope
 from tests.helpers.builders import agent_release
 
 FIXTURES = Path(__file__).resolve().parents[5] / "contracts/fixtures"
@@ -149,3 +150,17 @@ def test_node_types_match_the_ten_phase_one_types():
 def test_runtime_node_types_match_the_published_catalog_fixture():
     catalog = load("workflow-node-types.json")
     assert {item["type"] for item in catalog["node_types"]} == NODE_TYPES
+
+
+@pytest.mark.parametrize("reserved", sorted(RESERVED_NODE_IDS))
+def test_a_node_id_that_shadows_a_scope_namespace_is_rejected(reserved):
+    report, found = issues_of(nodes_with(1, id=reserved))
+    assert not report.valid and found == [("workflow.nodes[1].id", "workflow_node_id_reserved")]
+
+
+def test_reserved_node_ids_are_exactly_the_heads_scope_routes_to_a_namespace():
+    scope = Scope(sys={"x": 1}, conv={}, profile={"x": 2}, result={"x": 3}, variables=())
+    for head in ("sys", "profile", "result"):
+        scope.set_output(head, {"x": "node"})
+        assert scope.get(f"{head}.x") != "node"
+    assert RESERVED_NODE_IDS == {"conv", *_STATIC}

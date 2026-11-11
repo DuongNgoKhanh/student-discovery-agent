@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BeforeValidator, Field, model_validator
 
 from .activity import ActivityView, BlockCapabilityInput, CapabilitySnapshot, legacy_blocks
-from .common import ContractModel, IdempotencyKey, JsonSafeInt, NonEmptyText, OpaqueId, OwnerId, UtcDatetime
+from .common import ContractModel, IdempotencyKey, JsonObject, JsonSafeInt, NonEmptyText, OpaqueId, OwnerId, UtcDatetime
 from .release import ReleaseKey
 from .result import CurrentResultRef
 
@@ -54,6 +54,7 @@ class ConversationRecord(ContractModel):
     revision: JsonSafeInt
     agent_snapshot: ReleaseKey
     capability_snapshot: CapabilitySnapshot
+    conv_vars: JsonObject = Field(default_factory=dict)
     display_name: NonEmptyText | None = None
     active_activity_id: OpaqueId | None = None
     created_at: UtcDatetime

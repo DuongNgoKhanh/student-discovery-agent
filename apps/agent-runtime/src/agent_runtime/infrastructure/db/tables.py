@@ -27,7 +27,9 @@ conversations = Table(
     Column("revision", BigInteger, nullable=False), Column("agent_environment", Text, nullable=False),
     Column("agent_kind", Text, nullable=False), Column("agent_release_id", Text, nullable=False),
     Column("capability_snapshot", JSONB, nullable=False), Column("display_name", Text),
-    Column("active_activity_id", Text), timestamp("created_at"), timestamp("expires_at"),
+    Column("active_activity_id", Text),
+    Column("conv_vars", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
+    timestamp("created_at"), timestamp("expires_at"),
     timestamp("ended_at", nullable=True), Column("content_retention_seconds", BigInteger, nullable=False),
 )
 
@@ -89,5 +91,6 @@ runtime_traces = Table(
     Column("algorithm_profile", Text), Column("engine_version", Text), Column("latency_ms", BigInteger),
     Column("provider", Text), Column("fallback", Boolean), Column("fallback_reason", Text),
     Column("agent_steps", Integer), Column("input_tokens", Integer), Column("output_tokens", Integer),
-    Column("knowledge", JSONB), timestamp("timestamp", default=True),
+    Column("knowledge", JSONB), Column("workflow", JSONB), Column("response_id", Text),
+    timestamp("timestamp", default=True),
 )

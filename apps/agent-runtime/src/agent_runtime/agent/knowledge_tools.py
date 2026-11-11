@@ -85,6 +85,7 @@ class KnowledgeTools:
         self._domains, self._new_id, self._clock = allowed_domains, new_id, clock
         self._records: dict[str, Record] = {}
         self._cards: tuple[KnowledgeCardBlock, ...] = ()
+        self._accumulated: set[str] = set()  # documents shown by calls made with accumulate=True
         self._searches: list[_Search] = []
 
     def search(self, arguments: KnowledgeSearchArguments) -> dict[str, Any]:
@@ -117,7 +118,8 @@ class KnowledgeTools:
         self._searches.append(_Search(params.knowledge_base_id, tuple(refs), result.degraded, self._elapsed(started)))
         return {"results": [_view(ref, self._records[ref]) for ref in refs], "degraded": result.degraded}
 
-    def show(self, arguments: KnowledgeShowArguments) -> dict[str, Any]:
+    def show(self, arguments: KnowledgeShowArguments, *, accumulate: bool = False) -> dict[str, Any]:
+        """``accumulate`` keeps earlier calls' documents in the trace (a chatflow answer shows one ref per block)."""
         if self._show is None:
             return {"error": "knowledge_unavailable"}
         if any(ref not in self._records for ref in arguments.refs):
@@ -128,13 +130,19 @@ class KnowledgeTools:
             by_document.setdefault(record.metadata["document_id"], record)
         chosen = list(by_document.values())[:self._show.max_cards]
         self._cards = tuple(card for record in chosen if (card := self._build_card(record)) is not None)
+        if accumulate:
+            self._accumulated.update(card.document_id for card in self._cards)
         return {"shown": len(self._cards)}
+
+    def views(self) -> tuple[dict[str, Any], ...]:
+        """Every record this turn's searches returned, as the model saw it (ref, title, fields)."""
+        return tuple(_view(ref, record) for ref, record in self._records.items())
 
     def cards(self) -> tuple[KnowledgeCardBlock, ...]:
         return self._cards
 
     def trace(self) -> tuple[dict[str, Any], ...]:
-        shown = {card.document_id for card in self._cards}
+        shown = {card.document_id for card in self._cards} | self._accumulated
         entries = []
         for search in self._searches[:MAX_TRACED_SEARCHES]:
             records = [self._records[ref].metadata for ref in search.refs]
@@ -178,3 +186,9 @@ class KnowledgeTools:
                                   source_url=url if isinstance(url, str) and link_allowed(url, self._domains) else None,
                                   document_id=metadata["document_id"], revision=metadata["revision"],
                                   updated_at=metadata["updated_at"])
+
+
+def with_cards(blocks: tuple, cards: tuple[KnowledgeCardBlock, ...]) -> tuple:
+    """Cards follow the agent's lead-in and precede its suggestions; a handoff block is appended after both."""
+    split = next((index for index, block in enumerate(blocks) if block.type == "suggestions"), len(blocks))
+    return (*blocks[:split], *cards, *blocks[split:])

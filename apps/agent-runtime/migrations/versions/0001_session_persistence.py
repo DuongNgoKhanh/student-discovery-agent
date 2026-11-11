@@ -137,6 +137,7 @@ def upgrade() -> None:
             agent_environment text NOT NULL, agent_kind text NOT NULL CHECK (agent_kind = 'agent'),
             agent_release_id text NOT NULL,
             capability_snapshot jsonb NOT NULL CHECK (jsonb_typeof(capability_snapshot) = 'object'),
+            conv_vars jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(conv_vars) = 'object'),
             display_name text, active_activity_id text, created_at timestamptz NOT NULL,
             expires_at timestamptz NOT NULL, ended_at timestamptz,
             content_retention_seconds bigint NOT NULL CHECK (content_retention_seconds BETWEEN 0 AND 9007199254740991),
@@ -226,7 +227,7 @@ def upgrade() -> None:
             algorithm_profile text, engine_version text, latency_ms bigint CHECK (latency_ms >= 0),
             provider text, fallback boolean, fallback_reason text,
             agent_steps integer CHECK (agent_steps >= 0), input_tokens integer CHECK (input_tokens >= 0),
-            output_tokens integer CHECK (output_tokens >= 0), knowledge jsonb,
+            output_tokens integer CHECK (output_tokens >= 0), knowledge jsonb, workflow jsonb, response_id text,
             timestamp timestamptz NOT NULL DEFAULT clock_timestamp()
         );
         CREATE INDEX conversations_owner_lookup ON execution.conversations (owner_id, id);

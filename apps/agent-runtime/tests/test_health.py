@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 PRODUCT_ENV = ["DATABASE_URL", "POSTGRES_SERVER", "REDIS_HOST", "MINIO_ENDPOINT", "SECRET_KEY", "NEO4J_URI"]
 
 
-def test_health_without_product_dependencies(monkeypatch):
+def test_health_without_product_dependencies(monkeypatch, fresh_agent_runtime_imports):
     for name in PRODUCT_ENV:
         monkeypatch.delenv(name, raising=False)
     for mod in [m for m in sys.modules if m.startswith("agent_runtime.main")]:
@@ -31,6 +31,8 @@ def test_health_without_product_dependencies(monkeypatch):
         "/api/v1/internal/knowledge/retrieval": {"post"},
         "/api/v1/internal/knowledge/index-runs": {"post"},
         "/api/v1/internal/agent-snapshots:validate": {"post"},
+        "/api/v1/internal/agent-debug-runs:run": {"post"},
+        "/api/v1/internal/workflow/node-types": {"get"},
         "/api/v1/internal/experience-validations:run": {"post"},
         "/api/v1/internal/experience-evaluations:run": {"post"},
         "/api/v1/internal/experience-reports:verify": {"post"},

@@ -1,7 +1,8 @@
-"""Free-text message turns: the agent loop proposes, the server checks tools against captured state and renders.
+"""Message turns: the agent loop or a chatflow graph proposes, the server checks tools against captured state.
 
-Pure apart from the injected engine/Product calls in ``plan_message_turn``; no DB access. The executor only
-validates a call against the preflight snapshot and records it; every state change is committed afterwards
+Pure apart from the injected engine/Product calls in ``plan_handoff`` (``plan_message_turn`` keeps the agent loop's
+own entry for tests; production turns plan through ``chatflow_turns.plan_from_run``); no DB access. The executor
+only validates a call against the preflight snapshot and records it; every state change is committed afterwards
 under the parent lock by ``TurnStore.commit_message``.
 """
 import logging
@@ -12,8 +13,8 @@ from typing import Any
 from uuid import uuid4
 
 from agent_runtime.agent.catalog import StartAssessmentParams, render_placeholders
-from agent_runtime.agent.knowledge_tools import KnowledgeTools
-from agent_runtime.agent.loop import AgentTurn
+from agent_runtime.agent.knowledge_tools import KnowledgeTools, with_cards
+from agent_runtime.agent.loop import AgentTurn, Handoff
 from agent_runtime.agent.model import AssistantMessage, ChatMessage, UserMessage
 from agent_runtime.agent.prompt import AgentContext, AssessmentPhase
 from agent_runtime.sessions.errors import RuntimeSessionError
@@ -48,6 +49,8 @@ class MessageSnapshot:
     next_result_revision: int
     today: date
     current_result: tuple[str, int] | None = None  # (result_id, result_revision) of result_card
+    agent_content_hash: str | None = None  # content hash of the agent release this turn runs
+    user_turns: int = 0  # committed student messages, counted in storage (the history window may be shorter)
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,7 @@ class MessagePlan:
     blocks: tuple[TypedBlock, ...]
     start: StartPlan | None = None
     draft: TurnDraft | None = None  # set_name transition of the snapshot's activity
+    conv_vars: Mapping[str, Any] | None = None  # chatflow variables after the turn; None leaves them untouched
 
 
 def phase(snapshot: MessageSnapshot) -> AssessmentPhase:
@@ -95,6 +99,15 @@ def _block_text(block) -> str | None:
     return None  # suggestions are UI affordances, not conversation
 
 
+def interaction_summary(action: str, *, display_name: str | None = None, option_id: str | None = None) -> str:
+    """The user turn a model sees for a button press: one source for history and an interaction's graph."""
+    if action == "explain_result":
+        return EXPLAIN_REQUEST_TEXT
+    if action == "set_name":
+        return f"[Học sinh nhập tên: {display_name}]"
+    return f"[Học sinh chọn đáp án {option_id}]"
+
+
 def chat_history(views: Sequence[MessageView]) -> list[ChatMessage]:
     """Committed messages as model context; interactions are summarised, never replayed as tool calls."""
     history: list[ChatMessage] = []
@@ -102,12 +115,9 @@ def chat_history(views: Sequence[MessageView]) -> list[ChatMessage]:
         if view.role == "user":
             if view.text and view.interaction is None:
                 history.append(UserMessage(view.text))
-            elif view.interaction and view.interaction.action == "explain_result":
-                history.append(UserMessage(EXPLAIN_REQUEST_TEXT))
-            elif view.interaction and view.interaction.action == "set_name":
-                history.append(UserMessage(f"[Học sinh nhập tên: {view.text}]"))
             elif view.interaction:
-                history.append(UserMessage(f"[Học sinh chọn đáp án {view.interaction.option_id}]"))
+                history.append(UserMessage(interaction_summary(view.interaction.action, display_name=view.text,
+                                                               option_id=view.interaction.option_id)))
         elif view.role == "assistant":
             parts = [text for text in map(_block_text, view.blocks) if text]
             if parts:
@@ -194,12 +204,6 @@ def explain_fallback(card: Mapping[str, Any], display_name: str | None) -> TextB
                                          career_groups=", ".join(card["career_groups"]), quote=card["quote"]))
 
 
-def _with_cards(blocks: tuple[TypedBlock, ...], cards: tuple[KnowledgeCardBlock, ...]) -> tuple[TypedBlock, ...]:
-    """Cards follow the agent's lead-in and precede its suggestions; a handoff block is appended after both."""
-    split = next((index for index, block in enumerate(blocks) if block.type == "suggestions"), len(blocks))
-    return (*blocks[:split], *cards, *blocks[split:])
-
-
 def plan_message_turn(snapshot: MessageSnapshot, turn: AgentTurn, request: MessageTurnInput, *,
                       handler, persistence, cards: tuple[KnowledgeCardBlock, ...] = ()) -> MessagePlan:
     """Turn an agent turn into server blocks and one activity change. Engine/Product calls run here,
@@ -207,8 +211,13 @@ def plan_message_turn(snapshot: MessageSnapshot, turn: AgentTurn, request: Messa
     if getattr(request, "explain", None) is not None and turn.fallback is not None:
         return MessagePlan((explain_fallback(snapshot.result_card, snapshot.activity.state.display_name),))
     # A template fallback has no lead-in from the model, so cards would stand alone out of context.
-    blocks = _with_cards(turn.blocks, cards if turn.fallback is None else ())
-    handoff = turn.handoff
+    blocks = with_cards(turn.blocks, cards if turn.fallback is None else ())
+    return plan_handoff(snapshot, turn.handoff, blocks, request, handler=handler, persistence=persistence)
+
+
+def plan_handoff(snapshot: MessageSnapshot, handoff: Handoff | None, blocks: tuple[TypedBlock, ...],
+                 request: MessageTurnInput, *, handler, persistence) -> MessagePlan:
+    """The activity change a tool handoff asks for, rendered after the agent's own blocks."""
     if handoff is None:
         return MessagePlan(blocks)
     agent, activity = snapshot.agent, snapshot.activity

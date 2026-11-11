@@ -10,6 +10,9 @@ from .common import ContractModel, JsonObject, NonEmptyText
 NODE_TYPES = frozenset({"start", "if_else", "intent_classifier", "llm", "agent", "knowledge_retrieval",
                         "tool", "profile_propose", "assign", "answer"})
 
+# Scope routes these path heads to a namespace, so a node with such an id could never have its output read.
+RESERVED_NODE_IDS = frozenset({"sys", "conv", "profile", "result"})
+
 _JSON_SAFE_INT = 9007199254740991  # same bound as JsonSafeInt in common.py
 
 Ident = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,39}$")]
@@ -39,6 +42,11 @@ def _fits(kind: str, value: Any, values: tuple[str, ...] | None) -> bool:
     if kind == "enum":
         return isinstance(value, str) and value in (values or ())
     return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def value_fits(kind: str, value: Any, values: tuple[str, ...] | None = None) -> bool:
+    """Public form of the variable type check, shared with the chatflow runtime."""
+    return _fits(kind, value, values)
 
 
 class ConvVariable(ContractModel):
@@ -100,6 +108,10 @@ class Workflow(ContractModel):
 
     @model_validator(mode="after")
     def unique_ids(self) -> "Workflow":
+        for index, node in enumerate(self.nodes):
+            if node.id in RESERVED_NODE_IDS:
+                raise PydanticCustomError("workflow_node_id_reserved", "node id is a reserved namespace",
+                                          {"field": f"nodes.{index}.id"})
         for collection, key in (("variables", "name"), ("nodes", "id"), ("edges", "id")):
             seen: set[str] = set()
             for index, item in enumerate(getattr(self, collection)):

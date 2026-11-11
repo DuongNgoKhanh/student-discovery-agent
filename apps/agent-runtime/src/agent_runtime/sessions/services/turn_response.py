@@ -72,8 +72,12 @@ def _new_result(snapshot: TurnSnapshot, draft: TurnDraft, committed_at: datetime
 
 
 def finalize_turn(snapshot: TurnSnapshot, request: SupportedInteraction, draft: TurnDraft,
-                  committed_at: datetime, *, input_message_id: str) -> FinalizedTurn:
-    """Server-owned composition: any validation failure is an internal error and nothing is written."""
+                  committed_at: datetime, *, input_message_id: str,
+                  lead_blocks: tuple[TypedBlock, ...] = ()) -> FinalizedTurn:
+    """Server-owned composition: any validation failure is an internal error and nothing is written.
+
+    ``lead_blocks`` (a chatflow graph's lead-in) come before the server-rendered activity block.
+    """
     parent, activity = snapshot.parent, snapshot.activity
     try:
         draft = TurnDraft.model_validate(draft.model_dump(mode="json"))
@@ -86,7 +90,7 @@ def finalize_turn(snapshot: TurnSnapshot, request: SupportedInteraction, draft: 
                 question_id=None if is_name else payload.question_id,
                 option_id=None if is_name else payload.option_id))
         assistant = NewMessage(message_id=uuid4().hex, turn_id=turn_id, role="assistant",
-                               blocks=(activity_block(activity, draft),))
+                               blocks=(*lead_blocks, activity_block(activity, draft)))
         new_result = _new_result(snapshot, draft, committed_at)
         next_activity = ActivityRecord.model_validate(activity.model_dump(mode="json") | {
             "revision": activity.revision + 1, "state": draft.next_state.model_dump(mode="json")})

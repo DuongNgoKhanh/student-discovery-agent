@@ -1,103 +1,800 @@
 {
   "catalog_version": "chatflow.catalog.v1",
   "namespaces": [
-    {"name": "sys", "title": "Hệ thống", "access": "read_only", "source": "static", "variables": [
-      {"name": "query", "type": "string"},
-      {"name": "interaction", "type": "string", "nullable": true},
-      {"name": "interaction_outcome", "type": "string"},
-      {"name": "turn_index", "type": "number"},
-      {"name": "client_blocks", "type": "string_list"},
-      {"name": "activity_status", "type": "string", "nullable": true}]},
-    {"name": "conv", "title": "Biến hội thoại", "access": "assign_only", "source": "workflow_variables"},
-    {"name": "profile", "title": "Hồ sơ học sinh", "access": "read_only", "source": "profile_catalog"},
-    {"name": "result", "title": "Kết quả đánh giá", "access": "read_only", "source": "static", "variables": [
-      {"name": "house_id", "type": "string", "nullable": true},
-      {"name": "career_groups", "type": "string_list"},
-      {"name": "revision", "type": "number", "nullable": true}]},
-    {"name": "node", "title": "Output của node đã chạy", "access": "read_only", "source": "node_output"}
+    {
+      "name": "sys",
+      "title": "Hệ thống",
+      "access": "read_only",
+      "source": "static",
+      "variables": [
+        {
+          "name": "query",
+          "type": "string"
+        },
+        {
+          "name": "interaction",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "interaction_outcome",
+          "type": "string"
+        },
+        {
+          "name": "turn_index",
+          "type": "number"
+        },
+        {
+          "name": "client_blocks",
+          "type": "string_list"
+        },
+        {
+          "name": "activity_status",
+          "type": "string",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "conv",
+      "title": "Biến hội thoại",
+      "access": "assign_only",
+      "source": "workflow_variables"
+    },
+    {
+      "name": "profile",
+      "title": "Hồ sơ học sinh",
+      "access": "read_only",
+      "source": "profile_catalog"
+    },
+    {
+      "name": "result",
+      "title": "Kết quả đánh giá",
+      "access": "read_only",
+      "source": "static",
+      "variables": [
+        {
+          "name": "house_id",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "career_groups",
+          "type": "string_list"
+        },
+        {
+          "name": "revision",
+          "type": "number",
+          "nullable": true
+        }
+      ]
+    },
+    {
+      "name": "node",
+      "title": "Output của node đã chạy",
+      "access": "read_only",
+      "source": "node_output"
+    }
   ],
   "node_types": [
-    {"type": "start", "title": "Bắt đầu", "description": "Điểm vào duy nhất của đồ thị.",
-     "config_schema": {"type": "object", "additionalProperties": false, "properties": {}},
-     "handles": {"static": ["next"]},
-     "output_schema": {"type": "object", "properties": {}}},
-    {"type": "if_else", "title": "Rẽ nhánh", "description": "Chọn nhánh true hoặc false theo điều kiện chỉ đọc biến.",
-     "config_schema": {"type": "object", "additionalProperties": false, "required": ["condition"], "properties": {
-       "condition": {"type": "object", "x-widget": "condition_builder", "description": "Biểu thức tập con JSONLogic."}}},
-     "handles": {"static": ["true", "false"]},
-     "output_schema": {"type": "object", "properties": {"matched": {"type": "boolean"}}}},
-    {"type": "intent_classifier", "title": "Phân loại ý định", "description": "Model chọn đúng một nhãn trong danh sách hoặc other.",
-     "config_schema": {"type": "object", "additionalProperties": false, "required": ["labels"], "properties": {
-       "input": {"type": "string", "default": "{{sys.query}}"},
-       "labels": {"type": "array", "minItems": 2, "maxItems": 10, "items": {
-         "type": "object", "additionalProperties": false, "required": ["id", "description"], "properties": {
-           "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$"},
-           "description": {"type": "string", "minLength": 1},
-           "examples": {"type": "array", "maxItems": 5, "items": {"type": "string"}}}}},
-       "instructions": {"type": "string"},
-       "model": {"type": "string"}}},
-     "handles": {"static": ["other", "error"], "from_config": {"array": "labels", "id_field": "id"}},
-     "output_schema": {"type": "object", "properties": {"label": {"type": "string"}}}},
-    {"type": "llm", "title": "Gọi model", "description": "Sinh văn bản hoặc JSON từ prompt.",
-     "config_schema": {"type": "object", "additionalProperties": false, "required": ["prompt"], "properties": {
-       "prompt": {"type": "string", "minLength": 1},
-       "output": {"type": "string", "enum": ["text", "json"], "default": "text"},
-       "json_schema": {"type": "object"},
-       "model": {"type": "string"},
-       "max_output_tokens": {"type": "integer", "minimum": 1, "maximum": 4096},
-       "context_refs": {"type": "array", "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$"}}}},
-     "handles": {"static": ["success", "error"]},
-     "output_schema": {"type": "object", "properties": {
-       "text": {"type": "string"}, "json": {"type": "object"}, "refs": {"type": "array", "items": {"type": "string"}}}}},
-    {"type": "agent", "title": "Agent", "description": "Chạy vòng lặp agent với tập con tool đã bật.",
-     "config_schema": {"type": "object", "additionalProperties": false, "properties": {
-       "instructions": {"type": "string"},
-       "tools": {"type": "array", "items": {"type": "string"}, "x-widget": "tool_picker"},
-       "max_tool_steps": {"type": "integer", "minimum": 1, "maximum": 8}}},
-     "handles": {"static": ["success", "handoff", "error"]},
-     "output_schema": {"type": "object", "properties": {
-       "text": {"type": "string"}, "blocks": {"type": "array", "items": {"type": "object"}}, "handoff": {"type": "object"}}}},
-    {"type": "knowledge_retrieval", "title": "Truy xuất tri thức", "description": "Tìm tài liệu trong một knowledge base, có lọc theo metadata.",
-     "config_schema": {"type": "object", "additionalProperties": false, "required": ["knowledge_base_id", "query"], "properties": {
-       "knowledge_base_id": {"type": "string", "x-widget": "kb_picker"},
-       "query": {"type": "string", "minLength": 1},
-       "fixed_filter": {"type": "object"},
-       "filter_from_vars": {"type": "object", "additionalProperties": {"type": "string"}},
-       "top_k": {"type": "integer", "minimum": 1, "maximum": 8}}},
-     "handles": {"static": ["found", "empty", "error"]},
-     "output_schema": {"type": "object", "properties": {
-       "refs": {"type": "array", "items": {"type": "string"}}, "chunks": {"type": "array", "items": {"type": "object"}}}}},
-    {"type": "tool", "title": "Gọi tool", "description": "Gọi trực tiếp một tool đã bật, không qua model.",
-     "config_schema": {"type": "object", "additionalProperties": false, "required": ["tool"], "properties": {
-       "tool": {"type": "string", "x-widget": "tool_picker"},
-       "arguments": {"type": "object"}}},
-     "handles": {"static": ["success", "error"]},
-     "output_schema": {"type": "object", "additionalProperties": true}},
-    {"type": "profile_propose", "title": "Đề xuất hồ sơ", "description": "Model trích giá trị hồ sơ; server kiểm và tạo proposal, không ghi hồ sơ.",
-     "config_schema": {"type": "object", "additionalProperties": false, "required": ["fields"], "properties": {
-       "fields": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"type": "string"}},
-       "target_step": {"type": "string"},
-       "input": {"type": "string", "default": "{{sys.query}}"},
-       "instructions": {"type": "string"}}},
-     "handles": {"static": ["proposed", "none", "error"]},
-     "output_schema": {"type": "object", "properties": {
-       "proposal_id": {"type": "string"}, "fields": {"type": "array", "items": {"type": "string"}}}}},
-    {"type": "assign", "title": "Gán biến", "description": "Gán giá trị cho biến hội thoại conv.*.",
-     "config_schema": {"type": "object", "additionalProperties": false, "required": ["assignments"], "properties": {
-       "assignments": {"type": "array", "minItems": 1, "items": {
-         "type": "object", "additionalProperties": false, "required": ["variable", "value"], "properties": {
-           "variable": {"type": "string", "pattern": "^conv\\.[a-z][a-z0-9_]{0,39}$"},
-           "value": {}}}}}},
-     "handles": {"static": ["next"]},
-     "output_schema": {"type": "object", "properties": {}}},
-    {"type": "answer", "title": "Trả lời", "description": "Dựng response từ template và block; kết thúc nhánh.",
-     "config_schema": {"type": "object", "additionalProperties": false, "properties": {
-       "text": {"type": "string"},
-       "blocks": {"type": "array", "items": {"type": "object", "required": ["type"], "properties": {
-         "type": {"type": "string", "enum": ["knowledge_card", "suggestions", "upstream"]},
-         "ref": {"type": "string"},
-         "items": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "string"}}}}}}},
-     "handles": {"static": []},
-     "output_schema": {"type": "object", "properties": {"text": {"type": "string"}}}}
+    {
+      "type": "start",
+      "title": "Bắt đầu",
+      "description": "Điểm vào duy nhất của đồ thị.",
+      "config_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "handles": {
+        "static": [
+          "next"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "type": "if_else",
+      "title": "Rẽ nhánh",
+      "description": "Chọn nhánh true hoặc false theo điều kiện chỉ đọc biến.",
+      "config_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "condition": {
+            "additionalProperties": true,
+            "type": "object",
+            "x-widget": "condition_builder"
+          }
+        },
+        "required": [
+          "condition"
+        ],
+        "type": "object"
+      },
+      "handles": {
+        "static": [
+          "true",
+          "false"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "matched": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    {
+      "type": "intent_classifier",
+      "title": "Phân loại ý định",
+      "description": "Model chọn đúng một nhãn trong danh sách hoặc other.",
+      "config_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "default": "{{sys.query}}",
+            "type": "string"
+          },
+          "labels": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "pattern": "^[a-z][a-z0-9_]{0,39}$",
+                  "type": "string"
+                },
+                "description": {
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "type": "string"
+                },
+                "examples": {
+                  "default": [],
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 5,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "id",
+                "description"
+              ],
+              "type": "object"
+            },
+            "maxItems": 10,
+            "minItems": 2,
+            "type": "array"
+          },
+          "instructions": {
+            "default": "",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "history_messages": {
+            "default": 0,
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "labels"
+        ],
+        "type": "object"
+      },
+      "handles": {
+        "static": [
+          "other",
+          "error"
+        ],
+        "from_config": {
+          "array": "labels",
+          "id_field": "id"
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "error_type": {
+            "type": "string",
+            "enum": [
+              "",
+              "model_unavailable",
+              "invalid_output",
+              "tool_error",
+              "kb_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "llm",
+      "title": "Gọi model",
+      "description": "Sinh văn bản hoặc JSON từ prompt.",
+      "config_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "prompt": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "output": {
+            "default": "text",
+            "enum": [
+              "text",
+              "json"
+            ],
+            "type": "string"
+          },
+          "json_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "max_output_tokens": {
+            "anyOf": [
+              {
+                "maximum": 4096,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "context_refs": {
+            "default": [],
+            "items": {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "history_messages": {
+            "default": 0,
+            "maximum": 6,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "type": "object"
+      },
+      "handles": {
+        "static": [
+          "success",
+          "error"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "json": {
+            "type": "object"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error_type": {
+            "type": "string",
+            "enum": [
+              "",
+              "model_unavailable",
+              "invalid_output",
+              "tool_error",
+              "kb_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "agent",
+      "title": "Agent",
+      "description": "Chạy vòng lặp agent với tập con tool đã bật.",
+      "config_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "instructions": {
+            "default": "",
+            "type": "string"
+          },
+          "tools": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "x-widget": "tool_picker"
+          },
+          "max_tool_steps": {
+            "anyOf": [
+              {
+                "maximum": 8,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "type": "object"
+      },
+      "handles": {
+        "static": [
+          "success",
+          "handoff",
+          "error"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "handoff": {
+            "type": "string"
+          },
+          "error_type": {
+            "type": "string",
+            "enum": [
+              "",
+              "model_unavailable",
+              "invalid_output",
+              "tool_error",
+              "kb_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "knowledge_retrieval",
+      "title": "Truy xuất tri thức",
+      "description": "Tìm tài liệu trong một knowledge base, có lọc theo metadata.",
+      "config_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "knowledge_base_id": {
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "type": "string",
+            "x-widget": "kb_picker"
+          },
+          "query": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "fixed_filter": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "logical_operator": {
+                    "default": "and",
+                    "enum": [
+                      "and",
+                      "or"
+                    ],
+                    "type": "string"
+                  },
+                  "conditions": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "name": {
+                          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                          "type": "string"
+                        },
+                        "comparison_operator": {
+                          "maxLength": 16,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "integer"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "default": null
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "comparison_operator"
+                      ],
+                      "type": "object"
+                    },
+                    "maxItems": 10,
+                    "minItems": 1,
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "conditions"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "filter_from_vars": {
+            "maxProperties": 10,
+            "patternProperties": {
+              "^[a-z][a-z0-9_]{0,63}$": {
+                "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "top_k": {
+            "default": 5,
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "knowledge_base_id",
+          "query"
+        ],
+        "type": "object"
+      },
+      "handles": {
+        "static": [
+          "found",
+          "empty",
+          "error"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "refs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "chunks": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "error_type": {
+            "type": "string",
+            "enum": [
+              "",
+              "model_unavailable",
+              "invalid_output",
+              "tool_error",
+              "kb_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "tool",
+      "title": "Gọi tool",
+      "description": "Gọi trực tiếp một tool đã bật, không qua model.",
+      "config_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "tool": {
+            "type": "string",
+            "x-widget": "tool_picker"
+          },
+          "arguments": {
+            "additionalProperties": true,
+            "default": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "tool"
+        ],
+        "type": "object"
+      },
+      "handles": {
+        "static": [
+          "success",
+          "error"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "error_type": {
+            "type": "string",
+            "enum": [
+              "",
+              "model_unavailable",
+              "invalid_output",
+              "tool_error",
+              "kb_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "profile_propose",
+      "title": "Đề xuất hồ sơ",
+      "description": "Model trích giá trị hồ sơ; server kiểm và tạo proposal, không ghi hồ sơ.",
+      "config_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "type": "array"
+          },
+          "target_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "input": {
+            "default": "{{sys.query}}",
+            "type": "string"
+          },
+          "instructions": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fields"
+        ],
+        "type": "object"
+      },
+      "handles": {
+        "static": [
+          "proposed",
+          "none",
+          "error"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "proposal_id": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error_type": {
+            "type": "string",
+            "enum": [
+              "",
+              "model_unavailable",
+              "invalid_output",
+              "tool_error",
+              "kb_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "assign",
+      "title": "Gán biến",
+      "description": "Gán giá trị cho biến hội thoại conv.*.",
+      "config_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "assignments": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "variable": {
+                  "pattern": "^conv\\.[a-z][a-z0-9_]{0,39}$",
+                  "type": "string"
+                },
+                "operation": {
+                  "default": "set",
+                  "enum": [
+                    "set",
+                    "append",
+                    "clear",
+                    "add"
+                  ],
+                  "type": "string"
+                },
+                "value": {
+                  "default": null
+                }
+              },
+              "required": [
+                "variable"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "assignments"
+        ],
+        "type": "object"
+      },
+      "handles": {
+        "static": [
+          "next"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "type": "answer",
+      "title": "Trả lời",
+      "description": "Dựng response từ template và block; kết thúc nhánh.",
+      "config_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "default": "",
+            "type": "string"
+          },
+          "blocks": {
+            "default": [],
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "enum": [
+                    "knowledge_card",
+                    "suggestions",
+                    "upstream"
+                  ],
+                  "type": "string"
+                },
+                "ref": {
+                  "anyOf": [
+                    {
+                      "pattern": "^[a-z][a-z0-9_]{0,39}\\.k[0-9]{1,3}$",
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "items": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "maxLength": 60,
+                        "minLength": 1,
+                        "pattern": "\\S",
+                        "type": "string"
+                      },
+                      "maxItems": 4,
+                      "minItems": 1,
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "handles": {
+        "static": []
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    }
   ]
 }
