@@ -7,6 +7,16 @@ const ok = (data: unknown, meta: unknown = {}) => new Response(JSON.stringify({ 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('agentApi', () => {
+  it('loads the runtime chatflow node-type catalog', async () => {
+    const catalog = { catalog_version: 'chatflow.catalog.v1', namespaces: [], node_types: [] };
+    const fetchMock = vi.fn().mockResolvedValue(ok(catalog));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(agentApi.getNodeTypes()).resolves.toEqual(catalog);
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/v1/admin/agent/workflow/node-types');
+    expect(fetchMock.mock.calls[0]![1]).toMatchObject({ method: 'GET' });
+  });
+
   it('restores with the :restore suffix and the pointer revision', async () => {
     const fetchMock = vi.fn().mockResolvedValue(ok({ release_id: 'agr_x' }));
     vi.stubGlobal('fetch', fetchMock);

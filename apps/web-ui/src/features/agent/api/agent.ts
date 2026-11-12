@@ -1,5 +1,7 @@
 import { api } from '@/lib/api/client';
-import type { AgentActive, AgentConfig, AgentDraft, AgentRelease, AgentReleaseSummary, AgentValidation, AuditEvent, Page } from '../types';
+import type {
+  AgentActive, AgentConfig, AgentDraft, AgentRelease, AgentReleaseSummary, AgentValidation, AuditEvent, NodeTypeCatalog, Page,
+} from '../types';
 
 const BASE = 'admin/agent';
 const cursorQuery = (cursor?: string | null) => (cursor ? `?cursor=${encodeURIComponent(cursor)}` : '');
@@ -11,6 +13,7 @@ async function page<T>(path: string): Promise<Page<T>> {
 
 export const agentApi = {
   getDraft: () => api.get<AgentDraft>(`${BASE}/draft`),
+  getNodeTypes: () => api.get<NodeTypeCatalog>(`${BASE}/workflow/node-types`),
   saveDraft: (body: { content: AgentConfig; expected_revision: number }) => api.put<AgentDraft>(`${BASE}/draft`, body),
   validate: () => api.post<AgentValidation>(`${BASE}/draft/validations`),
   getActive: () => api.get<AgentActive | null>(`${BASE}/active`),
