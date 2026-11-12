@@ -84,4 +84,34 @@ describe('ConfigTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Model' }));
     expect(screen.getByLabelText('Workflow JSON')).toBeInTheDocument();
   });
+
+  it('opens the Chatflow JSON tab and highlights the target node when a workflow issue is clicked', async () => {
+    const chatflowSeed: AgentConfig = {
+      ...SEED,
+      mode: 'chatflow',
+      workflow: {
+        entry: 'start',
+        nodes: [
+          { id: 'start', type: 'start', title: 'Bắt đầu' },
+          { id: 'classify', type: 'if_else', config: { labels: ['hoc_phi'] } },
+        ],
+        edges: [],
+      },
+    };
+    const validation: ValidationState = {
+      valid: false,
+      stale: false,
+      checkedAt: new Date().toISOString(),
+      issues: [{ path: 'workflow.nodes[1].config.labels[0]', code: 'workflow_unwired_label', message: 'Nhãn chưa nối' }],
+    };
+    render(<Harness initial={chatflowSeed} initialSection="model" mode="chatflow" validation={validation} />);
+
+    expect(screen.queryByLabelText('Workflow JSON')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Nhãn chưa nối/ }));
+
+    const editor = await screen.findByLabelText('Workflow JSON') as HTMLTextAreaElement;
+    await new Promise(r => setTimeout(r, 0));
+    expect(document.activeElement).toBe(editor);
+    expect(editor.value.slice(editor.selectionStart, editor.selectionEnd)).toContain('"labels"');
+  });
 });

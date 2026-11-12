@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { Path } from '../model/config';
 import { sectionsForMode, type AgentMode, type SectionId } from '../model/sections';
-import type { AgentConfig } from '../types';
+import type { AgentConfig, ChatflowWorkflow } from '../types';
 import { IssuesPanel, type ValidationState } from './issues-panel';
 import { JsonSection } from './json-section';
 import { LimitsSection } from './limits-section';
@@ -29,7 +29,14 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
   const props = { config, onChange, issues };
   return (
     <div className="space-y-4">
-      {validation && <IssuesPanel state={validation} onOpenSection={onSection} />}
+      {validation && (
+        <IssuesPanel
+          state={validation}
+          onOpenSection={onSection}
+          workflow={mode === 'chatflow' ? config.workflow as ChatflowWorkflow | undefined : undefined}
+          onOpenWorkflowIssue={() => { if (!jsonError) setChatflowTab('json'); }}
+        />
+      )}
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
         <SectionNav active={section} onSelect={onSection} issues={issues} sections={visibleSections} />
         <div className="max-w-3xl">
