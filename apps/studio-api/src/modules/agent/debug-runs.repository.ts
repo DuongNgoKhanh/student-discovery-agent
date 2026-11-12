@@ -5,9 +5,13 @@ import type { ProductExecutor } from '@/modules/experiences/experiences.reposito
 export type DebugRunRow = typeof agentDebugRuns.$inferSelect;
 export type NewDebugRun = typeof agentDebugRuns.$inferInsert;
 
-/** Expired rows are swept on every write, so there is no job to run. */
+/** Expired rows are swept on every write, so there is no job to run. The sweep is best-effort: it must not cost a finished run. */
 export async function insertDebugRun(db: ProductExecutor, row: NewDebugRun): Promise<void> {
-  await db.delete(agentDebugRuns).where(sql`${agentDebugRuns.expires_at} < now()`);
+  try {
+    await db.delete(agentDebugRuns).where(sql`${agentDebugRuns.expires_at} < now()`);
+  } catch (error) {
+    console.error('[agent] debug run sweep failed', { error: error instanceof Error ? error.name : 'Error' });
+  }
   await db.insert(agentDebugRuns).values(row);
 }
 

@@ -49,7 +49,7 @@ def call(purpose="agent.validate", target=TARGET, validator=STUB, payload=None, 
 def test_validation_result_is_returned_with_200():
     response = call()
     assert response.status_code == 200
-    assert response.json()["data"] == {"valid": False, "content_hash": "sha256:x", "persona_report": None,
+    assert response.json()["data"] == {"valid": False, "content_hash": "sha256:x", "persona_report": None, "personas_checked": True,
                                        "issues": [{"path": "greeting_text", "code": "missing", "message": "Thiếu"}]}
 
 

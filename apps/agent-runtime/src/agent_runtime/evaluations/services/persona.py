@@ -1,4 +1,5 @@
-"""Persona cases in stub mode (FR-WFL-15): every model node answers from ``llm_stubs``, so a run is deterministic.
+"""Persona cases in stub mode (FR-WFL-15): every model node answers from ``llm_stubs``, so the model never varies.
+Knowledge retrieval is not stubbed: a re-index can change a case's outcome, and an unreachable store is a 503.
 
 A case is a student type with the turns it expects. The graph runs through the same executor as a debug run; the
 model is never configured, so a model node without a stub falls back and the case fails (fail closed).
@@ -7,6 +8,7 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
+from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.schemas.workflow import PersonaCase, PersonaExpect
@@ -31,7 +33,7 @@ class CaseReport(ContractModel):
 
 
 class PersonaReport(ContractModel):
-    """Only what is decided by the snapshot: no run ids, times or tokens, so two runs compare equal."""
+    """Only what the snapshot and the knowledge it reads decide: no run ids, times or tokens."""
     cases: tuple[CaseReport, ...]
 
 
@@ -95,9 +97,15 @@ class PersonaRunner:
                 request["interaction"] = turn.input.interaction.model_dump(exclude_none=True)
             try:
                 result = self._debug.run(content, request)
-            except Exception as error:  # an engine error or a bad fake state is a failed case, never a pass
-                logger.error("persona case %s failed to run: %s", case.id, type(error).__name__)
-                mismatches.append(Mismatch(path=at, message="Lượt không chạy được (lỗi engine hoặc trạng thái giả lập)."))
+            except RuntimeSessionError as error:
+                if error.status >= 500:  # an outage is the platform's, not the case's: never report it as a failed case
+                    raise
+                logger.error("persona case %s step %d rejected: %s", case.id, step, error.code)
+                mismatches.append(Mismatch(path=at, message="Lượt bị từ chối: trạng thái giả lập, interaction hoặc llm_stubs không hợp lệ."))
+                break
+            except Exception as error:  # an engine error is a failed case, never a pass
+                logger.error("persona case %s step %d failed to run: %s", case.id, step, type(error).__name__)
+                mismatches.append(Mismatch(path=at, message=f"Lượt không chạy được ({type(error).__name__}); xem log runtime."))
                 break
             for run in result["node_runs"]:  # a wired ``error`` edge would otherwise hide a model node with no stub
                 if run["type"] in MODEL_NODE_TYPES and run["node_id"] not in turn.llm_stubs:

@@ -173,7 +173,8 @@ describe('POST /admin/agent/draft/debug-runs', () => {
 
   it('validates the request body: exactly one of message or interaction', async () => {
     setRuntimeCaller(vi.fn());
-    for (const bad of [{}, { message: 'a', interaction: { action: 'x' } }, { message: '' }, { nope: 1 }]) {
+    for (const bad of [{}, { message: 'a', interaction: { action: 'x' } }, { message: '' }, { nope: 1 },
+      { interaction: { action: '' } }, { interaction: { action: 'x', extra: 1 } }]) {
       expect((await dispatch(call('POST', '/admin/agent/draft/debug-runs', admin, bad))).status, JSON.stringify(bad)).toBe(422);
     }
   });
@@ -226,6 +227,15 @@ describe('streamed debug runs', () => {
     const res = await dispatch(request(admin));
     await res.text();
     expect((await dispatch(call('GET', '/admin/agent/debug-runs/dbg_eeeeeeeeeeeeeeeeeeeeeeee', admin))).status).toBe(404);
+  });
+
+  it('tells the client when a completed run could not be saved', async () => {
+    const frame = `event: completed\ndata: ${JSON.stringify({ event: 'completed', result: { run_id: 'nope' } })}\n\n`;
+    setRuntimeCaller(async () => sse([frame]));
+    const text = await (await dispatch(request(admin))).text();
+    expect(text).toContain(frame);
+    expect(text).toContain('event: run_not_saved');
+    expect(text).toContain('unreadable_result');
   });
 
   it('stores a run whose text contains U+2028 and U+2029', async () => {

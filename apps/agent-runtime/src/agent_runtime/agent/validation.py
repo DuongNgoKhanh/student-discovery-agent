@@ -75,7 +75,11 @@ class AgentValidationResult(ContractModel):
     valid: bool
     content_hash: str
     issues: tuple[Issue, ...]
-    persona_report: PersonaReport | None = None  # chatflow only; optional cases that fail are listed here, not in issues
+    # None unless a chatflow snapshot parsed, its graph is clean and the cases ran. A failing mandatory case is also an
+    # issue (persona_case_failed); a failing optional one is only listed here.
+    persona_report: PersonaReport | None = None
+    # False for a graph-only check (personas=False): `valid` then means "the graph is sound", not "ready to publish".
+    personas_checked: bool = True
 
 
 def _path(loc: Sequence[object]) -> str:
@@ -129,7 +133,8 @@ class AgentSnapshotValidator:
     def validate(self, content: object, personas: bool = True) -> AgentValidationResult:
         if not isinstance(content, dict):
             return AgentValidationResult(valid=False, content_hash="", issues=(
-                Issue(path="", code="type_error", message="Cấu hình phải là một JSON object."),))
+                Issue(path="", code="type_error", message="Cấu hình phải là một JSON object."),),
+                personas_checked=personas)
         content_hash = calculate_content_hash(content)
         try:
             snapshot = AgentSnapshotV1.model_validate(content)
@@ -137,7 +142,8 @@ class AgentSnapshotValidator:
             issues = self._merge(_param_issues(content, error), self._graph(content))
             if personas:
                 issues = self._merge(issues, self._insufficient(content))
-            return AgentValidationResult(valid=False, content_hash=content_hash, issues=tuple(issues))
+            return AgentValidationResult(valid=False, content_hash=content_hash, issues=tuple(issues),
+                                         personas_checked=personas)
         issues = self._merge(list(self._references(snapshot)), self._graph(content))
         broken = bool(issues)  # a broken graph makes running the cases meaningless
         if personas:  # a debug run only needs the graph: the cases are the Validate button's concern
@@ -149,7 +155,7 @@ class AgentSnapshotValidator:
             report = self._personas.run(snapshot, content)
             issues = self._merge(issues, self._failures(report))
         return AgentValidationResult(valid=not issues, content_hash=content_hash, issues=tuple(issues),
-                                     persona_report=report)
+                                     persona_report=report, personas_checked=personas)
 
     @staticmethod
     def _failures(report: PersonaReport) -> list[Finding]:

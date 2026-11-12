@@ -241,8 +241,10 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         from agent_runtime.evaluations.services.persona import PersonaRunner
         from agent_runtime.sessions.services.debug_runs import DebugRunService
         # Persona cases never reach a model (a node without a stub fails the case). Knowledge nodes still query the
-        # real knowledge base, so a re-index can change a case's outcome; stubbing retrieval is a follow-up.
-        personas = PersonaRunner(DebugRunService(models=lambda provider: UnconfiguredModel(), knowledge=knowledge))
+        # real knowledge base, so a re-index can change a case's outcome (stubbing retrieval is a follow-up), but an
+        # unreachable store is a 503 rather than a case that fails for a missing stub.
+        personas = PersonaRunner(DebugRunService(models=lambda provider: UnconfiguredModel(), knowledge=knowledge,
+                                                 strict_knowledge=True))
         agent_validation = AgentSnapshotValidator(knowledge, product, policy.environment, personas)
         from agent_runtime.evaluations.services.publish_gate import PublishGateService
         evaluations = PublishGateService()

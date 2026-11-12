@@ -318,7 +318,7 @@ components:
           nullable: true
           additionalProperties: false
           required: [cases]
-          description: "Kết quả chạy persona case ở chế độ stub; null khi không chạy (chế độ agent, đồ thị còn lỗi). Case không bắt buộc không đạt chỉ nằm ở đây, không chặn phát hành."
+          description: "Kết quả chạy persona case ở chế độ stub; null khi không chạy (chế độ agent, snapshot sai schema, đồ thị còn lỗi). Case bắt buộc không đạt vừa nằm ở đây vừa thành issue persona_case_failed và chặn phát hành; case không bắt buộc không đạt chỉ nằm ở đây."
           properties:
             cases:
               type: array

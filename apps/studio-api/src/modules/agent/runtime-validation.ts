@@ -19,6 +19,8 @@ const reportSchema = z.object({
   content_hash: z.string(),
   issues: z.array(z.object({ path: z.string(), code: z.string(), message: z.string() })),
   persona_report: personaReportSchema.nullish(),
+  // false: a graph-only check, so `valid` does not say the persona gate passed. Absent means the runtime predates it.
+  personas_checked: z.boolean().optional(),
 });
 export type AgentValidation = z.infer<typeof reportSchema>;
 export type AgentIssue = AgentValidation['issues'][number];

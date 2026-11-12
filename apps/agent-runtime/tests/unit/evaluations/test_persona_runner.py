@@ -97,3 +97,20 @@ def test_a_model_node_without_a_stub_fails_even_when_its_error_edge_is_wired():
     report = runner().run(AgentSnapshotV1.model_validate(content), content)
     assert not report.cases[0].passed
     assert report.cases[0].mismatches[0].path == "persona_cases[0].turns[0].llm_stubs"
+
+
+class _DownKnowledge:
+    def fields(self, kb_ids):
+        raise ConnectionError("postgresql://user:secret@db/x")
+
+
+def test_an_unreachable_knowledge_store_is_a_503_for_the_persona_gate_but_degrades_a_plain_run():
+    import pytest
+
+    from agent_runtime.sessions.errors import RuntimeSessionError
+
+    models = lambda provider: UnconfiguredModel()  # noqa: E731
+    assert DebugRunService(models, _DownKnowledge())._fields(["kb"]) == {}
+    with pytest.raises(RuntimeSessionError) as raised:
+        DebugRunService(models, _DownKnowledge(), strict_knowledge=True)._fields(["kb"])
+    assert raised.value.status == 503 and "secret" not in str(raised.value.details)

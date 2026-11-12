@@ -4,6 +4,7 @@ The run is the Admin's own: the request carries a draft and a made-up state, the
 is never stored here, so its node runs use the ``full`` redaction. The production trace path is not involved.
 """
 import json
+import logging
 import time
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
@@ -45,6 +46,8 @@ _BLOCK_TYPES = ["text", "markdown", "suggestions", "assessment_question", "asses
 
 Emit = Callable[[str, dict], None]
 StopCheck = Callable[[], bool]
+
+logger = logging.getLogger(__name__)
 
 
 class DebugInteraction(ContractModel):
@@ -133,8 +136,10 @@ def _iso(moment: datetime) -> str:
 
 class DebugRunService:
     def __init__(self, models: Callable[[str], Any], knowledge=None, *, clock: Callable[[], float] = time.monotonic,
-                 now: Callable[[], datetime] = lambda: datetime.now(UTC)):
+                 now: Callable[[], datetime] = lambda: datetime.now(UTC), strict_knowledge: bool = False):
         self.models, self.knowledge, self._clock, self._now = models, knowledge, clock, now
+        # strict: an unreachable knowledge store is a 503, not a silently emptier run (persona gate must not blame the stubs).
+        self._strict_knowledge = strict_knowledge
 
     def run(self, content: dict, request: dict, emit: Emit | None = None, should_stop: StopCheck | None = None) -> dict:
         return self.prepare(content, request)(emit, should_stop)
@@ -159,8 +164,11 @@ class DebugRunService:
             return {}
         try:
             return self.knowledge.fields(sorted(kb_ids))
-        except Exception:  # an unreachable knowledge store degrades the run, as in a real turn
-            return {}
+        except Exception as error:
+            if self._strict_knowledge:
+                logger.error("debug run: knowledge store unavailable (%s)", type(error).__name__)  # type only: no DB URL
+                raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}) from None
+            return {}  # an unreachable knowledge store degrades the run, as in a real turn
 
     def _knowledge(self, agent: AgentSnapshotV1):
         search = agent.tool("knowledge.search")
