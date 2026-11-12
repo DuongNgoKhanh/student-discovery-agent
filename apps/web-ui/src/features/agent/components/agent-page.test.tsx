@@ -10,7 +10,7 @@ const draft: AgentDraft = {
   content: { greeting_text: 'Chào', tools: [{ name: 'a', version: 1, params: {} }] },
   revision: 1, content_hash: 'h1', updated_at: '2026-01-01T00:00:00Z', updated_by: 'admin',
 };
-const save = vi.fn(async ({ content }: { content: Record<string, unknown> }) => ({
+const save = vi.fn(async ({ content }: { content: Record<string, unknown> }): Promise<AgentDraft> => ({
   ...draft, revision: 2, content_hash: 'h2',
   // jsonb returns keys in a different order than they were sent.
   content: { tools: [{ params: {}, version: 1, name: 'a' }], greeting_text: content.greeting_text },
@@ -147,5 +147,52 @@ describe('AgentPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Giả lập 409 khi phát hành' }));
     await waitFor(() => expect(screen.getByLabelText('Lời chào')).toHaveValue('Bản trên server'));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('edits workflow in Chatflow JSON tab, blocks save/tabs while invalid, and persists across reload', async () => {
+    const initialWorkflow = {
+      entry: 'start',
+      nodes: [{ id: 'start', type: 'start', title: 'Bắt đầu' }, { id: 'answer', type: 'answer', title: 'Trả lời', config: { text: 'Cũ' } }],
+      edges: [{ id: 'e1', source: 'start', source_handle: 'next', target: 'answer' }],
+    };
+    const chatflowDraft: AgentDraft = {
+      ...draft,
+      content: { ...draft.content, mode: 'chatflow', workflow: initialWorkflow },
+    };
+    draftQuery = { ...draftQuery, data: chatflowDraft };
+
+    const first = render(<AgentPage />);
+    fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
+    const editor = screen.getByLabelText('Workflow JSON') as HTMLTextAreaElement;
+    expect(JSON.parse(editor.value)).toEqual(initialWorkflow);
+
+    fireEvent.change(editor, { target: { value: '{ "entry": ' } });
+    expect(screen.getByRole('button', { name: 'Lưu nháp' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Kiểm tra' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('tab', { name: 'Phiên bản' }));
+    expect(screen.getByLabelText('Workflow JSON')).toBeInTheDocument();
+
+    const editedWorkflow = {
+      ...initialWorkflow,
+      nodes: [initialWorkflow.nodes[0], { id: 'answer', type: 'answer', title: 'Trả lời', config: { text: 'Mới' } }],
+    };
+    const savedDraft: AgentDraft = {
+      ...chatflowDraft,
+      revision: 2,
+      content_hash: 'h2',
+      content: { ...chatflowDraft.content, workflow: editedWorkflow },
+    };
+    save.mockResolvedValueOnce(savedDraft);
+
+    fireEvent.change(editor, { target: { value: JSON.stringify(editedWorkflow, null, 2) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect((save.mock.calls[0]?.[0]?.content as Record<string, unknown>).workflow).toEqual(editedWorkflow);
+
+    first.unmount();
+    draftQuery = { ...draftQuery, data: savedDraft };
+    render(<AgentPage />);
+    fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
+    expect(JSON.parse((screen.getByLabelText('Workflow JSON') as HTMLTextAreaElement).value)).toEqual(editedWorkflow);
   });
 });
