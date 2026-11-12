@@ -24,6 +24,23 @@ describe('validateWithRuntime', () => {
     expect(decodeJwt((init!.headers as Record<string, string>)['x-caller-context']!)).toMatchObject({ purpose: 'agent.validate' });
   });
 
+  it('asks the runtime to skip persona cases only when told to', async () => {
+    const data = { success: true, data: { valid: true, content_hash: 'sha256:a', issues: [] } };
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify(data), { status: 200 })));
+    await validateWithRuntime({ a: 1 }, ctx, { personas: false });
+    await validateWithRuntime({ a: 1 }, ctx);
+    const bodies = vi.mocked(fetch).mock.calls.map(([, init]) => JSON.parse(init!.body as string));
+    expect(bodies).toEqual([{ content: { a: 1 }, personas: false }, { content: { a: 1 } }]);
+  });
+
+  it('returns the persona report, and accepts a null one', async () => {
+    const report = { cases: [{ id: 'a', title: 'A', mandatory: true, passed: false, mismatches: [{ path: 'persona_cases[0].turns[0].expect.path', message: 'Bước 2' }] }] };
+    respond(200, { success: true, data: { valid: false, content_hash: 'sha256:a', issues: [], persona_report: report } });
+    expect((await validateWithRuntime({}, ctx)).persona_report).toEqual(report);
+    respond(200, { success: true, data: { valid: true, content_hash: 'sha256:a', issues: [], persona_report: null } });
+    expect((await validateWithRuntime({}, ctx)).persona_report).toBeNull();
+  });
+
   it.each([
     ['runtime error', () => respond(503, { success: false, error: { code: 'SYS_UNAVAILABLE' } })],
     ['malformed report', () => respond(200, { success: true, data: { valid: 'yes' } })],

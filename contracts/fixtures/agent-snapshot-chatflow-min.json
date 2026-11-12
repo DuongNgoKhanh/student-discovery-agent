@@ -23,6 +23,9 @@
   },
   "persona_cases": [
     {"id": "new_student", "title": "Hoc sinh moi vao", "mandatory": true,
-     "turns": [{"input": {"text": "xin chào"}, "expect": {"path": ["start", "in_test", "reply"]}}]}
+     "turns": [{"input": {"text": "xin chào"}, "expect": {"path": ["start", "in_test", "reply"]}}]},
+    {"id": "in_assessment", "title": "Hoc sinh dang lam bai", "mandatory": true,
+     "initial_state": {"conv": {"stage": "assessment"}},
+     "turns": [{"input": {"text": "tiep tuc"}, "expect": {"path": ["start", "in_test", "reply"], "conv": {"stage": "assessment"}}}]}
   ]
 }

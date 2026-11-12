@@ -82,6 +82,7 @@ paths:
         "403": {$ref: ../schemas/common.yaml#/components/responses/ChatError403}
         "404": {$ref: ../schemas/common.yaml#/components/responses/ChatError404}
         "422": {$ref: "#/components/responses/AgentUnprocessable"}
+        "429": {$ref: ../schemas/common.yaml#/components/responses/ChatError429}
         "503": {$ref: ../schemas/common.yaml#/components/responses/ChatError503}
   /admin/agent/debug-runs/{run_id}:
     get:
@@ -312,6 +313,31 @@ components:
         content_hash: {type: string}
         issues: {type: array, items: {$ref: "#/components/schemas/AgentIssue"}}
         draft_revision: {$ref: "#/components/schemas/Revision"}
+        persona_report:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [cases]
+          description: "Kết quả chạy persona case ở chế độ stub; null khi không chạy (chế độ agent, snapshot sai schema, đồ thị còn lỗi). Case bắt buộc không đạt vừa nằm ở đây vừa thành issue persona_case_failed và chặn phát hành; case không bắt buộc không đạt chỉ nằm ở đây."
+          properties:
+            cases:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [id, title, mandatory, passed, mismatches]
+                properties:
+                  id: {type: string}
+                  title: {type: string}
+                  mandatory: {type: boolean}
+                  passed: {type: boolean}
+                  mismatches:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [path, message]
+                      properties: {path: {type: string}, message: {type: string}}
     AgentPublishInput:
       type: object
       additionalProperties: false

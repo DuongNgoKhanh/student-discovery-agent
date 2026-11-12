@@ -26,10 +26,22 @@ MIN = load("agent-snapshot-chatflow-min.json")
 DEMO = load("agent-snapshot-demo.json")
 
 
+# What the graph validator and the persona gate add on top of the schema; tests/unit/workflow/test_graph_validator.py
+# and test_chatflow_validation.py own these, so the shape tests here look past them.
+GRAPH_LAYER = frozenset({
+    "workflow_cycle", "workflow_unreachable_node", "workflow_dead_end", "workflow_unwired_label",
+    "workflow_start_invalid", "workflow_edge_invalid", "workflow_unknown_handle", "workflow_duplicate_handle_edge",
+    "workflow_too_large", "workflow_unknown_variable", "workflow_assign_invalid", "workflow_tool_not_enabled",
+    "workflow_handoff_not_terminal", "workflow_budget_exceeds_ceiling", "workflow_type_mismatch",
+    "workflow_invalid_expression", "persona_cases_insufficient", "persona_case_stale"})
+
+
 def issues_of(content):
     # No tools in these fixtures, so the reference checks never touch the knowledge or experience ports.
     report = AgentSnapshotValidator(knowledge=None, experiences=None, environment="demo").validate(content)
-    return report, [(item.path, item.code) for item in report.issues]
+    schema = [item for item in report.issues if item.code not in GRAPH_LAYER]
+    return report.model_copy(update={"issues": tuple(schema), "valid": not schema}), [
+        (item.path, item.code) for item in schema]
 
 
 def with_workflow(**changes):

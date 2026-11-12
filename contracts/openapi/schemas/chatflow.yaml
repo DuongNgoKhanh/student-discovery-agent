@@ -91,15 +91,38 @@ components:
       additionalProperties: false
       required: [input]
       properties:
-        input: {type: object, additionalProperties: true, description: "{text} hoặc {interaction}."}
+        input:
+          type: object
+          additionalProperties: false
+          description: "Đúng một trong text hoặc interaction."
+          properties:
+            text: {type: string, minLength: 1, maxLength: 4000}
+            interaction:
+              type: object
+              additionalProperties: false
+              required: [action]
+              properties:
+                action: {type: string, minLength: 1}
+                outcome: {type: string, minLength: 1}
+                option_id: {type: string, minLength: 1}
+          oneOf:
+            - required: [text]
+            - required: [interaction]
         llm_stubs:
           type: object
           additionalProperties: true
           description: Output cố định cho từng node gọi model, khóa là node id.
         expect:
           type: object
-          additionalProperties: true
-          description: Kỳ vọng đường đi node, loại block, conv.* sau lượt, số proposal.
+          additionalProperties: false
+          description: "Kỳ vọng sau lượt. path khớp chính xác, đúng thứ tự; conv chỉ kiểm các khóa được liệt kê."
+          properties:
+            path: {type: array, items: {$ref: '#/components/schemas/ChatflowIdentifier'}}
+            blocks_present: {type: array, items: {type: string, enum: [text, markdown, suggestions, assessment_question, assessment_clarification, personality_card, knowledge_card]}}
+            blocks_absent: {type: array, items: {type: string, enum: [text, markdown, suggestions, assessment_question, assessment_clarification, personality_card, knowledge_card]}}
+            conv: {type: object, additionalProperties: true}
+            proposals: {type: integer, minimum: 0}
+            status: {type: string, enum: [completed, fallback]}
     ChatflowPersonaCase:
       type: object
       additionalProperties: false
@@ -108,7 +131,15 @@ components:
         id: {$ref: '#/components/schemas/ChatflowIdentifier'}
         title: {type: string, minLength: 1, maxLength: 100, pattern: '\S'}
         mandatory: {type: boolean, default: false}
-        initial_state: {type: object, additionalProperties: true, description: "Hồ sơ, result, conv.*, activity ban đầu."}
+        initial_state:
+          type: object
+          additionalProperties: false
+          description: "Trạng thái giả lập ban đầu; hồ sơ, result, activity giữ nguyên qua các lượt, conv.* chuyển tiếp từ lượt trước."
+          properties:
+            profile: {type: object, additionalProperties: true}
+            result: {type: object, nullable: true, additionalProperties: true}
+            conv: {type: object, additionalProperties: true}
+            activity: {type: object, nullable: true, additionalProperties: true}
         turns:
           type: array
           minItems: 1

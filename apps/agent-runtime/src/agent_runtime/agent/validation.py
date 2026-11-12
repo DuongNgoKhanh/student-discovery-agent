@@ -11,11 +11,13 @@ from agent_runtime.agent.catalog import (
     KnowledgeShowParams,
     StartAssessmentParams,
 )
+from agent_runtime.evaluations.services.persona import PersonaReport, PersonaRunner, stale_cases
 from agent_runtime.evaluations.services.validator import calculate_content_hash
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.ports import ProductReleaseSource
 from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+from agent_runtime.workflow.validator import Finding, knowledge_base_ids, validate_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,7 @@ _CUSTOM = {
     "workflow_not_allowed": "Chế độ agent không dùng workflow; đổi mode sang chatflow hoặc xóa workflow.",
     "workflow_node_type_unsupported": "Loại node này chưa được hỗ trợ trong chatflow.",
     "workflow_node_id_reserved": "Id node không được trùng không gian tên dành riêng (sys, conv, profile, result).",
+    "persona_input_invalid": "Mỗi lượt cần đúng một trong text hoặc interaction.",
     "workflow_variable_invalid": "Biến hội thoại không hợp lệ: kiểu, danh sách giá trị hoặc giá trị mặc định không khớp.",
 }
 
@@ -72,6 +75,11 @@ class AgentValidationResult(ContractModel):
     valid: bool
     content_hash: str
     issues: tuple[Issue, ...]
+    # None unless a chatflow snapshot parsed, its graph is clean and the cases ran. A failing mandatory case is also an
+    # issue (persona_case_failed); a failing optional one is only listed here.
+    persona_report: PersonaReport | None = None
+    # False for a graph-only check (personas=False): `valid` then means "the graph is sound", not "ready to publish".
+    personas_checked: bool = True
 
 
 def _path(loc: Sequence[object]) -> str:
@@ -117,21 +125,85 @@ def _param_issues(content: Mapping[str, object], error: ValidationError) -> list
 
 
 class AgentSnapshotValidator:
-    def __init__(self, knowledge: KnowledgeBases | None, experiences: ProductReleaseSource, environment: str):
+    def __init__(self, knowledge: KnowledgeBases | None, experiences: ProductReleaseSource, environment: str,
+                 personas: PersonaRunner | None = None):
         self._knowledge, self._experiences, self._environment = knowledge, experiences, environment
+        self._personas = personas
 
-    def validate(self, content: object) -> AgentValidationResult:
+    def validate(self, content: object, personas: bool = True) -> AgentValidationResult:
         if not isinstance(content, dict):
             return AgentValidationResult(valid=False, content_hash="", issues=(
-                Issue(path="", code="type_error", message="Cấu hình phải là một JSON object."),))
+                Issue(path="", code="type_error", message="Cấu hình phải là một JSON object."),),
+                personas_checked=personas)
         content_hash = calculate_content_hash(content)
         try:
             snapshot = AgentSnapshotV1.model_validate(content)
         except ValidationError as error:
-            issues = tuple(_param_issues(content, error))
-            return AgentValidationResult(valid=False, content_hash=content_hash, issues=issues)
-        issues = self._references(snapshot)
-        return AgentValidationResult(valid=not issues, content_hash=content_hash, issues=issues)
+            issues = self._merge(_param_issues(content, error), self._graph(content))
+            if personas:
+                issues = self._merge(issues, self._insufficient(content))
+            return AgentValidationResult(valid=False, content_hash=content_hash, issues=tuple(issues),
+                                         personas_checked=personas)
+        issues = self._merge(list(self._references(snapshot)), self._graph(content))
+        broken = bool(issues)  # a broken graph makes running the cases meaningless
+        if personas:  # a debug run only needs the graph: the cases are the Validate button's concern
+            issues = self._merge(issues, self._insufficient(content))
+            issues = self._merge(issues, [Finding(path, "persona_case_stale", message)
+                                          for path, message in stale_cases(snapshot)])
+        report = None
+        if personas and self._personas is not None and snapshot.mode == "chatflow" and not broken:
+            report = self._personas.run(snapshot, content)
+            issues = self._merge(issues, self._failures(report))
+        return AgentValidationResult(valid=not issues, content_hash=content_hash, issues=tuple(issues),
+                                     persona_report=report, personas_checked=personas)
+
+    @staticmethod
+    def _failures(report: PersonaReport) -> list[Finding]:
+        found = []
+        for case in report.cases:
+            if case.mandatory and not case.passed:
+                first = case.mismatches[0]
+                found.append(Finding(first.path, "persona_case_failed",
+                                     f"Persona case '{case.title}' không đạt: {first.message}"))
+        return found
+
+    @staticmethod
+    def _merge(issues: list[Issue], findings: Sequence[Finding]) -> list[Issue]:
+        """One issue per (path, code): what the schema layer already said, or an earlier finding, is not repeated."""
+        seen = {(item.path, item.code) for item in issues}
+        merged = list(issues)
+        for finding in findings:
+            if (finding.path, finding.code) not in seen:
+                seen.add((finding.path, finding.code))
+                merged.append(Issue(path=finding.path, code=finding.code, message=finding.message))
+        return merged
+
+    def _base_fields(self, kb_ids: Sequence[str]) -> Mapping[str, frozenset[str]]:
+        if self._knowledge is None:
+            raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "not_configured"})
+        try:
+            return self._knowledge.base_fields(kb_ids)
+        except Exception as error:
+            # Type name only: driver messages can carry the database URL.
+            logger.error("agent validation: knowledge database unavailable (%s)", type(error).__name__)
+            raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}) from None
+
+    def _graph(self, content: Mapping[str, object]) -> list[Finding]:
+        workflow = content.get("workflow")
+        if content.get("mode") != "chatflow" or not isinstance(workflow, dict):
+            return []
+        ids = knowledge_base_ids(workflow)
+        return validate_workflow(workflow, content, self._base_fields(ids) if ids else {})
+
+    @staticmethod
+    def _insufficient(content: Mapping[str, object]) -> list[Finding]:
+        if content.get("mode") != "chatflow":
+            return []
+        cases = content.get("persona_cases")
+        mandatory = (sum(1 for item in cases if isinstance(item, dict) and item.get("mandatory") is True)
+                     if isinstance(cases, list) else 0)
+        return [] if mandatory >= 2 else [Finding(
+            "persona_cases", "persona_cases_insufficient", "Chatflow cần ít nhất 2 persona case bắt buộc.")]
 
     def _references(self, snapshot: AgentSnapshotV1) -> tuple[Issue, ...]:
         issues: list[Issue] = []
@@ -152,14 +224,7 @@ class AgentSnapshotValidator:
         search = snapshot.tool("knowledge.search")
         if search:
             params = KnowledgeSearchParams.model_validate(search.params)
-            if self._knowledge is None:
-                raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "not_configured"})
-            try:
-                fields = self._knowledge.base_fields([params.knowledge_base_id])
-            except Exception as error:
-                # Type name only: driver messages can carry the database URL.
-                logger.error("agent validation: knowledge database unavailable (%s)", type(error).__name__)
-                raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}) from None
+            fields = self._base_fields([params.knowledge_base_id])
             at = f"tools[{index['knowledge.search']}].params"
             known = fields.get(params.knowledge_base_id)
             if known is None:

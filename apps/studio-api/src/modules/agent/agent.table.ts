@@ -47,3 +47,16 @@ export const auditEvents = productSchema.table('audit_events', {
   outcome: text('outcome').$type<'success' | 'rejected'>().notNull(),
   details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
 });
+
+/** `product.agent_debug_runs` - an Admin's own chatflow test runs, kept 24 hours; they never touch real student data. */
+export const agentDebugRuns = productSchema.table('agent_debug_runs', {
+  run_id: text('run_id').primaryKey(),
+  actor_id: text('actor_id').notNull(),
+  draft_revision: bigint('draft_revision', { mode: 'number' }).notNull(),
+  content_hash: text('content_hash').notNull(),
+  request: jsonb('request').$type<Record<string, unknown>>().notNull(),
+  result: jsonb('result').$type<Record<string, unknown>>().notNull(),
+  live_llm_calls: integer('live_llm_calls').notNull().default(0),
+  created_at: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  expires_at: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+});

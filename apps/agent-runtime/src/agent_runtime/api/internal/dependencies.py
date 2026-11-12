@@ -236,15 +236,22 @@ def build_runtime(settings: Settings) -> RuntimeContainer | None:
         knowledge = PgKnowledge(uow, build_embedding_ports(
             settings, timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS, max_retries=0),
             timeout_ms=settings.KNOWLEDGE_RETRIEVAL_TIMEOUT_MS)
+        from agent_runtime.agent.model import UnconfiguredModel
         from agent_runtime.agent.validation import AgentSnapshotValidator
-        agent_validation = AgentSnapshotValidator(knowledge, product, policy.environment)
+        from agent_runtime.evaluations.services.persona import PersonaRunner
+        from agent_runtime.sessions.services.debug_runs import DebugRunService
+        # Persona cases never reach a model (a node without a stub fails the case). Knowledge nodes still query the
+        # real knowledge base, so a re-index can change a case's outcome (stubbing retrieval is a follow-up), but an
+        # unreachable store is a 503 rather than a case that fails for a missing stub.
+        personas = PersonaRunner(DebugRunService(models=lambda provider: UnconfiguredModel(), knowledge=knowledge,
+                                                 strict_knowledge=True))
+        agent_validation = AgentSnapshotValidator(knowledge, product, policy.environment, personas)
         from agent_runtime.evaluations.services.publish_gate import PublishGateService
         evaluations = PublishGateService()
         responses = ResponseService(uow, trace_sink=trace_sink)
         models = functools.cache(build_model_port)
         turns = TurnService(store, handler, models=models, responses=responses,
                             knowledge=knowledge, trace_sink=trace_sink)
-        from agent_runtime.sessions.services.debug_runs import DebugRunService
         debug_runs = DebugRunService(models=models, knowledge=knowledge)
         return RuntimeContainer(policy=policy, verifier=verifier, service_verifier=service_verifier,
             conversations=conversations,
