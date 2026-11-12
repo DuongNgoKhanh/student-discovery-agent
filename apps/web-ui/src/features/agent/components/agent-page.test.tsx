@@ -42,9 +42,39 @@ vi.mock('@/features/knowledge', async original => ({
 beforeEach(() => {
   search = new URLSearchParams();
   draftQuery = { data: draft, error: null, isLoading: false, isError: false, isSuccess: true, status: 'success' };
+  save.mockClear();
+  validateMock.mockClear();
 });
 
 describe('AgentPage', () => {
+  it('switches to Chatflow and seeds a minimal workflow', async () => {
+    render(<AgentPage />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Chatflow' }));
+    expect(screen.getByRole('radio', { name: 'Chatflow' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Chatflow editor sẽ xuất hiện ở đây.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const sent = save.mock.calls[0]?.[0]?.content as Record<string, unknown>;
+    expect(sent.mode).toBe('chatflow');
+    expect(sent.workflow).toMatchObject({ entry: 'start' });
+  });
+
+  it('confirms before removing chatflow fields when switching back to Agent', async () => {
+    draftQuery = { ...draftQuery, data: { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: { entry: 'start', nodes: [], edges: [] }, persona_cases: [] } } };
+    render(<AgentPage />);
+    expect(screen.getByText('Chatflow editor sẽ xuất hiện ở đây.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Đổi chế độ tác giả?');
+    fireEvent.click(screen.getByRole('button', { name: 'Đổi chế độ' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Agent' })).toHaveAttribute('aria-checked', 'true'));
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const sent = save.mock.calls[0]?.[0]?.content as Record<string, unknown>;
+    expect(sent.mode).toBe('agent');
+    expect(sent.workflow).toBeUndefined();
+    expect(sent.persona_cases).toBeUndefined();
+  });
+
   it('keeps the editor and unsaved edits when a background refetch fails', () => {
     const view = render(<AgentPage />);
     fireEvent.change(screen.getByLabelText('Lời chào'), { target: { value: 'Đang sửa' } });

@@ -4,10 +4,10 @@ import { cn } from '@/lib/utils/cn';
 import { SECTIONS, sectionOf, type SectionId } from '../model/sections';
 import type { AgentIssue } from '../types';
 
-export function SectionNav({ active, onSelect, issues }: { active: SectionId; onSelect: (id: SectionId) => void; issues: AgentIssue[] }) {
+export function SectionNav({ active, onSelect, issues, sections = SECTIONS }: { active: SectionId; onSelect: (id: SectionId) => void; issues: AgentIssue[]; sections?: typeof SECTIONS }) {
   return (
     <nav aria-label="Nhóm cấu hình" className="flex flex-row gap-1 overflow-x-auto md:flex-col">
-      {SECTIONS.map(section => {
+      {sections.map(section => {
         const count = issues.filter(issue => sectionOf(issue.path) === section.id).length;
         return (
           <button key={section.id} type="button" aria-current={active === section.id ? 'page' : undefined} onClick={() => onSelect(section.id)}

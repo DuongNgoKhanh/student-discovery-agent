@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canonical, fieldId, getIn, parsePath, setIn } from './config';
-import { changedSections, sectionOf } from './sections';
+import { changedSections, sectionLabel, sectionOf, sectionsForMode } from './sections';
 import { bindKnowledge } from './tools';
 
 describe('config paths', () => {
@@ -28,10 +28,15 @@ describe('sections', () => {
     expect(sectionOf('tools[2].params.knowledge_base_id')).toBe('tools');
     expect(sectionOf('guardrails.refusal_text')).toBe('limits');
     expect(sectionOf('allowed_activity_profiles[0]')).toBe('json');
+    expect(sectionOf('workflow.nodes[0].config')).toBe('chatflow');
+    expect(sectionLabel('chatflow')).toBe('Chatflow');
+    expect(sectionsForMode('agent').some(s => s.id === 'chatflow')).toBe(false);
+    expect(sectionsForMode('chatflow').some(s => s.id === 'chatflow')).toBe(true);
     expect(sectionOf('')).toBe('json');
   });
   it('lists changed sections by top-level key', () => {
     expect(changedSections({ persona: { name: 'A' }, model: { ref: 'x' } }, { persona: { name: 'B' }, model: { ref: 'x' } })).toEqual(['persona']);
+    expect(changedSections({ workflow: { entry: 'a' } }, { workflow: { entry: 'b' } })).toEqual(['chatflow']);
   });
 });
 

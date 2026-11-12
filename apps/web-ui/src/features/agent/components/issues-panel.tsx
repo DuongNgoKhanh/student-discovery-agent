@@ -2,7 +2,7 @@
 
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { focusIssue } from '../model/config';
-import { SECTIONS, sectionOf, type SectionId } from '../model/sections';
+import { sectionLabel, sectionOf, type SectionId } from '../model/sections';
 import type { AgentIssue } from '../types';
 
 export interface ValidationState {
@@ -12,7 +12,7 @@ export interface ValidationState {
 }
 
 export function IssuesPanel({ state, onOpenSection }: { state: ValidationState; onOpenSection: (id: SectionId) => void }) {
-  const label = (path: string) => SECTIONS.find(s => s.id === sectionOf(path))?.label ?? 'JSON';
+  const label = (path: string) => sectionLabel(sectionOf(path));
   return (
     <section aria-label="Kết quả kiểm tra" className="rounded-lg border p-4 text-13">
       <p className="flex items-center gap-2 font-medium">
