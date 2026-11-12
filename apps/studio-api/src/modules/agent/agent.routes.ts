@@ -10,6 +10,7 @@ import { ProductError } from '@/http/errors';
 import { paginationSchema, publishSchema, releaseIdSchema, restoreSchema, saveDraftSchema } from '@/modules/agent/agent.schemas';
 import { verifyDeliveryRequest } from '@/modules/agent/delivery-auth';
 import { DEBUG_BODY, debugRunIdSchema, debugRunRequestSchema, readDebugRun, runDebugRun, streamDebugRun } from '@/modules/agent/debug-runs';
+import { getNodeTypeCatalog } from '@/modules/agent/node-types';
 import {
   activeDescriptor, getActiveAgent, getAgentRelease, listAgentAudit, listAgentReleases, publish, readDraft, restore, saveDraftContent, validateDraft,
 } from '@/modules/agent/agent.service';
@@ -47,6 +48,11 @@ export const handleReadDebugRun = withHandler<{ run: string }>(async (req, ctx, 
   const id = debugRunIdSchema.safeParse(route.params.run);
   if (!id.success) throw new ProductError(404, 'RES_NOT_FOUND', 'Debug run not found');
   return success(await readDebugRun(getProductDatabase(), id.data), ctx);
+});
+
+export const handleReadNodeTypes = withHandler(async (req, ctx) => {
+  await requireAdmin(req);
+  return success(await getNodeTypeCatalog()(ctx), ctx);
 });
 
 const queryOf = (req: Request) => Object.fromEntries(new URL(req.url).searchParams);
@@ -111,6 +117,7 @@ export function registerAgentRoutes(app: Hono): void {
   app.post(`${ADMIN}/draft/validations`, honoHandler(handleValidateDraft));
   app.post(`${ADMIN}/draft/debug-runs`, honoHandler(handleCreateDebugRun));
   app.get(`${ADMIN}/debug-runs/:run`, honoHandler(handleReadDebugRun));
+  app.get(`${ADMIN}/workflow/node-types`, honoHandler(handleReadNodeTypes));
   app.post(`${ADMIN}/releases`, honoHandler(handlePublish));
   app.get(`${ADMIN}/releases`, honoHandler(handleListReleases));
   app.get(`${ADMIN}/releases/:release`, honoHandler(handleReadRelease));
