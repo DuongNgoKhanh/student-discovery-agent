@@ -11,7 +11,7 @@ import { errorMessage } from '@/features/knowledge';
 import { ApiError } from '@/lib/api/errors';
 import { actionKey, agentKeys, useAgentRelease, useAgentReleases, usePublish } from '../hooks/use-agent';
 import { conflictMessage } from '../model/conflict';
-import { changedSections, SECTIONS } from '../model/sections';
+import { changedSections, sectionLabel } from '../model/sections';
 import type { AgentActive, AgentDraft, AgentIssue } from '../types';
 
 export interface PublishDialogProps {
@@ -76,7 +76,7 @@ export function PublishDialog({ open, onOpenChange, draft, active, onIssues, onC
             <ul className="mt-1 list-inside list-disc text-muted-foreground">
               {current.isError ? <li className="text-destructive">Không tải được v{active.version} để so sánh; vẫn có thể phát hành.</li>
                 : !current.data ? <li>Đang tải…</li>
-                : changed.length ? changed.map(id => <li key={id}>{SECTIONS.find(s => s.id === id)?.label}</li>)
+                : changed.length ? changed.map(id => <li key={id}>{sectionLabel(id)}</li>)
                 : <li>Không có thay đổi nội dung</li>}
             </ul>
           </div>

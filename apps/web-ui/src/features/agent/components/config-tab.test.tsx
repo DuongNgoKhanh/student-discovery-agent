@@ -14,15 +14,19 @@ vi.mock('@/features/knowledge', async original => ({
 
 const SEED: AgentConfig = { greeting_text: 'Chào', persona: { name: 'IHRD', system_prompt: 'x' }, model: { ref: 'gemini/x' }, extra_field: { keep: true } };
 
-function Harness({ validation = null, onConfig = () => {} }: { validation?: ValidationState | null; onConfig?: (c: AgentConfig) => void }) {
-  const [config, setConfig] = useState(SEED);
-  const [section, setSection] = useState<SectionId>('persona');
+function Harness({
+  validation = null, onConfig = () => {}, initial = SEED, initialSection = 'persona' as SectionId, mode = 'agent' as 'agent' | 'chatflow',
+}: {
+  validation?: ValidationState | null; onConfig?: (c: AgentConfig) => void; initial?: AgentConfig; initialSection?: SectionId; mode?: 'agent' | 'chatflow';
+}) {
+  const [config, setConfig] = useState(initial);
+  const [section, setSection] = useState<SectionId>(initialSection);
   const [jsonError, setJsonError] = useState<string | null>(null);
   const update = (next: AgentConfig) => { setConfig(next); onConfig(next); };
   return (
     <ConfigTab config={config} onChange={(path: Path, value) => update(setIn(config, path, value))} onReplace={update}
       section={section} onSection={id => { if (!jsonError) setSection(id); }} onJsonValidity={setJsonError}
-      validation={validation} onBindKb={() => {}} />
+      validation={validation} onBindKb={() => {}} mode={mode} />
   );
 }
 
@@ -52,5 +56,80 @@ describe('ConfigTab', () => {
     await new Promise(r => setTimeout(r, 0));
     expect(document.activeElement?.id).toBe('field-model.ref');
     expect(screen.getAllByText('Provider không hỗ trợ').length).toBeGreaterThan(1);
+  });
+
+  it('shares workflow state in the Chatflow JSON tab and blocks leaving while JSON is broken', () => {
+    const onConfig = vi.fn();
+    const chatflowSeed: AgentConfig = {
+      ...SEED,
+      mode: 'chatflow',
+      workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start', title: 'Bắt đầu' }], edges: [] },
+    };
+    render(<Harness initial={chatflowSeed} initialSection="chatflow" mode="chatflow" onConfig={onConfig} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
+    const editor = screen.getByLabelText('Workflow JSON') as HTMLTextAreaElement;
+    expect(editor.value).toContain('"entry": "start"');
+
+    const edited = { entry: 'start', nodes: [{ id: 'start', type: 'start', title: 'Khởi đầu mới' }], edges: [] };
+    fireEvent.change(editor, { target: { value: JSON.stringify(edited, null, 2) } });
+    expect(onConfig).toHaveBeenLastCalledWith(expect.objectContaining({ workflow: edited, extra_field: { keep: true } }));
+
+    fireEvent.change(editor, { target: { value: '{ "entry": ' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('JSON chưa hợp lệ');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Sơ đồ' }));
+    expect(screen.getByLabelText('Workflow JSON')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Model' }));
+    expect(screen.getByLabelText('Workflow JSON')).toBeInTheDocument();
+  });
+
+  it('opens the Chatflow JSON tab and highlights the target node when a workflow issue is clicked', async () => {
+    const chatflowSeed: AgentConfig = {
+      ...SEED,
+      mode: 'chatflow',
+      workflow: {
+        entry: 'start',
+        nodes: [
+          { id: 'start', type: 'start', title: 'Bắt đầu' },
+          { id: 'classify', type: 'if_else', config: { labels: ['hoc_phi'] } },
+        ],
+        edges: [],
+      },
+    };
+    const validation: ValidationState = {
+      valid: false,
+      stale: false,
+      checkedAt: new Date().toISOString(),
+      issues: [{ path: 'workflow.nodes[1].config.labels[0]', code: 'workflow_unwired_label', message: 'Nhãn chưa nối' }],
+    };
+    render(<Harness initial={chatflowSeed} initialSection="model" mode="chatflow" validation={validation} />);
+
+    expect(screen.queryByLabelText('Workflow JSON')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Nhãn chưa nối/ }));
+
+    const editor = await screen.findByLabelText('Workflow JSON') as HTMLTextAreaElement;
+    await new Promise(r => setTimeout(r, 0));
+    expect(document.activeElement).toBe(editor);
+    expect(editor.value.slice(editor.selectionStart, editor.selectionEnd)).toContain('"labels"');
+  });
+
+  it('resolves a stale report against the workflow it validated, not the edited one', () => {
+    const edited: AgentConfig = {
+      ...SEED,
+      mode: 'chatflow',
+      workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'answer', type: 'answer' }], edges: [] },
+    };
+    const validation: ValidationState = {
+      valid: false,
+      stale: true,
+      checkedAt: new Date().toISOString(),
+      issues: [{ path: 'workflow.nodes[1].config.labels', code: 'workflow_unwired_label', message: 'Nhãn chưa nối' }],
+      workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'classify', type: 'if_else' }] },
+    };
+    render(<Harness initial={edited} initialSection="chatflow" mode="chatflow" validation={validation} />);
+    expect(screen.getByText('node classify')).toBeInTheDocument();
+    expect(screen.queryByText('node answer')).not.toBeInTheDocument();
   });
 });

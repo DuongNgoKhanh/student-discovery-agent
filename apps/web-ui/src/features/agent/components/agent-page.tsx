@@ -7,15 +7,25 @@ import { ConfirmDialog, PageTitle, QueryState, errorMessage, knowledgeApi, useUn
 import { ApiError } from '@/lib/api/errors';
 import { canonical, setIn, type Path } from '../model/config';
 import { bindKnowledge, type ToolBinding } from '../model/tools';
-import type { SectionId } from '../model/sections';
+import { sectionsForMode, type AgentMode, type SectionId } from '../model/sections';
 import { agentApi } from '../api/agent';
 import { useAgentActive, useAgentDraft, useSaveDraft, useValidateDraft } from '../hooks/use-agent';
-import type { AgentConfig, AgentDraft } from '../types';
+import type { AgentConfig, AgentDraft, ChatflowWorkflow } from '../types';
 import { AgentStatusBar, type DraftState } from './agent-status-bar';
 import { ConfigTab } from './config-tab';
 import type { ValidationState } from './issues-panel';
 import { PublishDialog } from './publish-dialog';
 import { VersionsTab } from './versions-tab';
+import { ModeSwitch } from './mode-switch';
+
+const minimalChatflow = {
+  entry: 'start',
+  nodes: [
+    { id: 'start', type: 'start' as const, title: 'Bắt đầu', ui: { position: { x: 0, y: 0 } } },
+    { id: 'answer', type: 'answer' as const, title: 'Trả lời', config: { text: '' }, ui: { position: { x: 0, y: 160 } } },
+  ],
+  edges: [{ id: 'e_start_answer', source: 'start', source_handle: 'next', target: 'answer' }],
+};
 
 export function AgentPage() {
   const draft = useAgentDraft();
@@ -48,11 +58,17 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
   const [base, setBase] = useState(draft);           // last server copy we edited from
   const [config, setConfig] = useState<AgentConfig>(draft.content);
   const [jsonError, setJsonError] = useState<string | null>(null);
-  const [section, setSection] = useState<SectionId>(params.get('section') === 'tools' ? 'tools' : 'persona');
+  const [section, setSection] = useState<SectionId>(
+    params.get('section') === 'tools' ? 'tools' : draft.content.mode === 'chatflow' ? 'chatflow' : 'persona',
+  );
   const [tab, setTab] = useState<'config' | 'versions'>('config');
   const [validation, setValidation] = useState<ValidationState | null>(null);
   const [conflict, setConflict] = useState<AgentDraft | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const mode: AgentMode = config.mode === 'chatflow' ? 'chatflow' : 'agent';
+  const [pendingMode, setPendingMode] = useState<AgentMode | null>(null);
+  // The mode can also change outside the switch (loading the server copy, copying a version, the JSON section).
+  const shownSection = sectionsForMode(mode).some(s => s.id === section) ? section : mode === 'chatflow' ? 'chatflow' : 'persona';
 
   const dirty = canonical(config) !== canonical(base.content);
   // A report for another draft revision (raced save, reloaded copy) no longer describes what is on screen.
@@ -65,6 +81,26 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     setConfig(current => setIn(current, path, value));
     setValidation(v => (v ? { ...v, stale: true } : v));
   }, []);
+
+  const applyMode = (next: AgentMode) => {
+    setConfig(current => {
+      if (next === 'chatflow') return { ...current, mode: next, workflow: current.workflow ?? minimalChatflow };
+      const agentConfig = { ...current };
+      delete agentConfig.workflow;
+      delete agentConfig.persona_cases;
+      return { ...agentConfig, mode: next };
+    });
+    setSection(next === 'chatflow' ? 'chatflow' : 'persona');
+    setValidation(v => (v ? { ...v, stale: true } : v));
+  };
+
+  const hasChatflowData = config.workflow !== undefined || config.persona_cases !== undefined;
+
+  const requestMode = (next: AgentMode) => {
+    if (next === mode || jsonError) return;
+    if (dirty || (next === 'agent' && hasChatflowData)) setPendingMode(next);
+    else applyMode(next);
+  };
 
   const bindKb = useCallback(async (kb: string) => {
     try {
@@ -109,12 +145,30 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     } catch (error) { toast.error(errorMessage(error)); }
   };
 
+  const downloadLocalDraft = () => {
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'agent-draft.json';
+    // Some browsers drop the download for a detached link or a URL revoked in the same tick.
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    toast.success('Đã bắt đầu tải bản nháp local dạng JSON');
+  };
+
   const runValidation = async () => {
     if (jsonError) return;
-    if (!(await persist())) return;
+    const saved = await persist();
+    if (!saved) return;
     try {
       const report = await validate.mutateAsync();
-      setValidation({ issues: report.issues, valid: report.valid, checkedAt: new Date().toISOString(), stale: false, draftRevision: report.draft_revision });
+      setValidation({
+        issues: report.issues, valid: report.valid, checkedAt: new Date().toISOString(), stale: false,
+        draftRevision: report.draft_revision, workflow: saved.content.workflow as ChatflowWorkflow | undefined,
+      });
     } catch (error) { toast.error(errorMessage(error)); }
   };
 
@@ -131,11 +185,17 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
       <AgentStatusBar active={active.data} draftState={draftState} busy={save.isPending || validate.isPending || Boolean(jsonError)} canPublish={Boolean(active.data)}
         onSave={() => void persist()} onValidate={() => void runValidation()} onPublish={() => setPublishing(true)} />
 
+      <ModeSwitch mode={mode} onChange={requestMode} disabled={Boolean(jsonError)} />
+
       {conflict && (
         <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-3 text-13">
-          Bản nháp đã được sửa ở nơi khác (revision {conflict.revision}).
-          <button type="button" className="underline" onClick={() => { void navigator.clipboard.writeText(JSON.stringify(config, null, 2)); toast.success('Đã copy nội dung của bạn'); }}>Copy nội dung của tôi</button>
-          <button type="button" className="underline" onClick={() => { setBase(conflict); setConfig(conflict.content); setConflict(null); }}>Tải bản mới</button>
+          <span>
+            Bản nháp đã được sửa ở nơi khác (revision {conflict.revision}), bởi {conflict.updated_by} lúc {new Date(conflict.updated_at).toLocaleString('vi-VN')}.
+          </span>
+          {/* A broken JSON editor holds edits that `config` lacks and ignores outside updates: fix it before either action. */}
+          <button type="button" className="underline disabled:opacity-50" disabled={Boolean(jsonError)} onClick={downloadLocalDraft}>Tải bản của tôi dạng JSON</button>
+          <button type="button" className="underline disabled:opacity-50" disabled={Boolean(jsonError)} onClick={() => { setBase(conflict); setConfig(conflict.content); setConflict(null); }}>Tải bản mới</button>
+          {jsonError && <span className="text-muted-foreground">Sửa lỗi JSON trước khi tải.</span>}
         </div>
       )}
 
@@ -150,8 +210,8 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
 
       {tab === 'config' ? (
         <ConfigTab config={config} onChange={change} onReplace={next => { setConfig(next); setValidation(v => (v ? { ...v, stale: true } : v)); }}
-          section={section} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
-          validation={shownValidation} onBindKb={kb => void bindKb(kb)} />
+          section={shownSection} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
+          validation={shownValidation} onBindKb={kb => void bindKb(kb)} mode={mode} />
       ) : (
         <VersionsTab active={active.data ?? null} onCopyToDraft={content => { setConfig(content); setValidation(v => (v ? { ...v, stale: true } : v)); setTab('config'); }} />
       )}
@@ -159,11 +219,18 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
       {publishing && active.data && (
         <PublishDialog open={publishing} onOpenChange={setPublishing} draft={base} active={active.data}
           onConflict={() => void reloadDraft()}
-          onIssues={issues => { setValidation({ issues, valid: false, checkedAt: new Date().toISOString(), stale: false, draftRevision: base.revision }); setTab('config'); }} />
+          onIssues={issues => { setValidation({ issues, valid: false, checkedAt: new Date().toISOString(), stale: false, draftRevision: base.revision, workflow: base.content.workflow as ChatflowWorkflow | undefined }); setTab('config'); }} />
       )}
 
       <ConfirmDialog open={guard.open} onOpenChange={guard.onOpenChange} onConfirm={guard.onConfirm}
         title="Rời trang khi chưa lưu?" description="Các thay đổi chưa lưu sẽ mất." confirmLabel="Rời trang" destructive />
+      <ConfirmDialog open={pendingMode !== null} onOpenChange={open => { if (!open) setPendingMode(null); }}
+        onConfirm={() => { if (pendingMode) applyMode(pendingMode); setPendingMode(null); }}
+        title="Đổi chế độ tác giả?"
+        description={pendingMode === 'agent' && hasChatflowData
+          ? 'Chuyển về chế độ Agent sẽ xoá workflow và persona_cases khỏi bản nháp.'
+          : 'Các thay đổi chưa lưu vẫn được giữ trong bản nháp.'}
+        confirmLabel="Đổi chế độ" />
     </div>
   );
 }
