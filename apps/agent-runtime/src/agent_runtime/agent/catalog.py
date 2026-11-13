@@ -13,6 +13,7 @@ from pydantic_core import PydanticCustomError
 
 from agent_runtime.knowledge.schemas import OPERATORS, FieldName, MetadataCondition, MetadataField
 from agent_runtime.sessions.schemas.common import ContractModel, NonEmptyText, OpaqueId
+from agent_runtime.tools.kit import json_schema
 
 SUPPORTED_MODEL_PROVIDERS = frozenset({"gemini", "openai", "vllm", "openrouter"})  # adapters: infrastructure/llm/model_registry.py
 PROMPT_VARIABLES = frozenset({"display_name", "current_date"})
@@ -197,21 +198,3 @@ TOOL_DECLARATIONS: dict[tuple[str, int], ToolDeclaration] = {
                         "liệu gốc.", KnowledgeShowArguments),
     )
 }
-
-
-def json_schema(model: type[BaseModel]) -> dict:
-    """Provider-safe JSON schema: $refs inlined; title, default and additionalProperties dropped (Gemini rejects them)."""
-    raw = model.model_json_schema()
-    definitions = raw.pop("$defs", {})
-
-    def clean(node):
-        if isinstance(node, list):
-            return [clean(item) for item in node]
-        if not isinstance(node, dict):
-            return node
-        if "$ref" in node:
-            return clean(definitions[node["$ref"].rsplit("/", 1)[-1]])
-        return {key: clean(value) for key, value in node.items()
-                if key not in {"title", "default", "additionalProperties"}}
-
-    return clean(raw)

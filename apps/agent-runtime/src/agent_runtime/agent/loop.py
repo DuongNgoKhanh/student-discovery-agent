@@ -37,6 +37,7 @@ from agent_runtime.sessions.schemas.activity import MarkdownBlock, SuggestionsBl
 from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.services.blocks import markdown_to_text
+from agent_runtime.tools.kit import Handoff
 
 Fallback = UnavailableReason | Literal["max_tool_steps", "empty_reply", "deadline", "workflow_budget",
                                        "workflow_node_error"]
@@ -61,13 +62,6 @@ class ToolExecutor(Protocol):
     """Runs a validated call against server state; the returned mapping is shown to the model."""
 
     def execute(self, name: str, arguments: ContractModel) -> Mapping[str, Any]: ...
-
-
-@dataclass(frozen=True)
-class Handoff:
-    name: str
-    arguments: ContractModel
-    result: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
