@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildAgentParams } from '@/modules/knowledge/agent-params';
+import {
+  buildAgentParams, MAX_AUTO_FILTER_FIELDS, MAX_DISPLAY_FIELDS, MAX_DISPLAY_LABEL,
+} from '@/modules/knowledge/agent-params';
 
 const fixture = JSON.parse(readFileSync(
   resolve(__dirname, '../../../../../contracts/fixtures/knowledge-agent-params.json'), 'utf8',
@@ -35,5 +37,19 @@ describe('buildAgentParams', () => {
     const params = buildAgentParams('kb', []);
     expect(params['knowledge.show'].display).toEqual([]);
     expect(params.warnings).toEqual(['KB chưa có field nào: knowledge.show cần ít nhất 1 field.']);
+  });
+});
+
+describe('limits mirror the runtime tool catalog', () => {
+  const catalog = JSON.parse(
+    readFileSync(resolve(__dirname, '../../../../../contracts/fixtures/agent-tool-catalog.json'), 'utf8'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSON Schema is walked by path below
+  ) as { tools: Array<{ name: string; params_schema: any }> };
+  const schema = (name: string) => catalog.tools.find(t => t.name === name)!.params_schema;
+
+  it('matches knowledge.show and knowledge.search params', () => {
+    expect(MAX_DISPLAY_FIELDS).toBe(schema('knowledge.show').properties.display.maxItems);
+    expect(MAX_DISPLAY_LABEL).toBe(schema('knowledge.show').properties.display.items.properties.label.maxLength);
+    expect(MAX_AUTO_FILTER_FIELDS).toBe(schema('knowledge.search').properties.auto_filter_fields.maxItems);
   });
 });
