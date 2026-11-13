@@ -6,8 +6,7 @@ from dataclasses import replace
 from time import monotonic_ns
 from typing import Literal
 
-from agent_runtime.agent.catalog import NO_CONTEXT, KnowledgeSearchParams, KnowledgeShowParams, ToolContext
-from agent_runtime.agent.knowledge_tools import KnowledgePort, KnowledgeTools
+from agent_runtime.agent.knowledge_tools import KnowledgePort
 from agent_runtime.agent.loop import TextDelta, ToolCallStarted
 from agent_runtime.agent.model import ModelPort, UnconfiguredModel
 from agent_runtime.infrastructure.auth.caller import VerifiedCaller
@@ -18,12 +17,20 @@ from agent_runtime.sessions.schemas.responses import TurnResponse
 from agent_runtime.sessions.schemas.turn import ConversationTurnInput, MessageTurnInput
 from agent_runtime.sessions.schemas.turn_execution import TurnDraft
 from agent_runtime.sessions.schemas.workflow import Workflow
-from agent_runtime.sessions.services.chatflow_turns import plan_from_run, run_interaction_turn, run_message_turn
-from agent_runtime.sessions.services.message_turns import MessageSnapshot, SnapshotToolExecutor
+from agent_runtime.sessions.services.chatflow_turns import (
+    knowledge_base_ids_of,
+    plan_from_run,
+    post_handler,
+    run_interaction_turn,
+    run_message_turn,
+)
+from agent_runtime.sessions.services.message_turns import MessageSnapshot
 from agent_runtime.sessions.services.responses import ResponseService
 from agent_runtime.sessions.services.turn_handlers import TurnHandler
 from agent_runtime.sessions.services.turn_store import Begun, TurnCancelled, TurnStore
 from agent_runtime.sessions.trace import describe_metadata, emit_trace
+from agent_runtime.tools.kit import TurnWorld
+from agent_runtime.tools.toolbox import Toolbox, open_turn
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.executor import WorkflowRun
 from agent_runtime.workflow.ports import ProfilePort
@@ -138,27 +145,10 @@ class TurnService:
             logger.warning("knowledge fields unavailable: %s", type(error).__name__)
             return {}
 
-    def _knowledge(self, agent: AgentSnapshotV1) -> tuple[ToolContext, KnowledgeTools | None]:
-        """Fields are read once per turn, outside any session transaction; search and show share one KnowledgeTools."""
-        search = agent.tool("knowledge.search")
-        if search is None:
-            return NO_CONTEXT, None
-        params = KnowledgeSearchParams.model_validate(search.params)
-        show = agent.tool("knowledge.show")
-        fields = self._read_fields(params.knowledge_base_id)
-        show_params = KnowledgeShowParams.model_validate(show.params) if show else None
-        tools = KnowledgeTools(self.knowledge, params, show_params, fields.get(params.knowledge_base_id, ()),
-                               allowed_domains=agent.links.allowed_domains)
-        return ToolContext(knowledge_fields=fields), tools
-
-    def _workflow_fields(self, agent: AgentSnapshotV1, known: dict) -> dict:
-        """Metadata fields of every KB a chatflow node reads; read once per turn, outside any transaction."""
-        if agent.workflow is None:
-            return {}
-        wanted = {node.config["knowledge_base_id"] for node in agent.workflow.nodes
-                  if node.type == "knowledge_retrieval" and isinstance(node.config.get("knowledge_base_id"), str)}
+    def _fields(self, agent: AgentSnapshotV1) -> dict:
+        """Metadata fields of every knowledge base this turn may read: once, outside any session transaction."""
         merged: dict = {}
-        for kb_id in wanted - set(known):
+        for kb_id in sorted(knowledge_base_ids_of(agent)):
             merged.update(self._read_fields(kb_id))
         return merged
 
@@ -174,7 +164,7 @@ class TurnService:
         return emit
 
     def _observe(self, observed: dict, run: WorkflowRun, used: Budget, workflow: Workflow, snapshot: MessageSnapshot,
-                 response_id: str, knowledge: KnowledgeTools | None, *, activity_conflict: bool = False) -> None:
+                 response_id: str, toolbox: Toolbox, *, activity_conflict: bool = False) -> None:
         observed.update(agent_steps=run.agent_steps, input_tokens=run.usage.input_tokens,
                         output_tokens=run.usage.output_tokens, fallback=run.fallback is not None,
                         fallback_reason=run.fallback)
@@ -188,7 +178,7 @@ class TurnService:
                 activity_conflict=activity_conflict)
         except Exception as error:
             logger.warning("workflow trace dropped: %s", type(error).__name__)
-        searches = (*(knowledge.trace() if knowledge is not None else ()), *run.knowledge)[:8]
+        searches = (*toolbox.trace(), *run.knowledge)[:8]
         if searches:
             observed["knowledge"] = searches
 
@@ -205,14 +195,13 @@ class TurnService:
             observed["provider"] = agent.model.provider
         model = self.models(agent.model.provider) if agent.model else UnconfiguredModel()
         deadline = self._clock() + agent.limits.turn_timeout_ms / 1000  # field reads count against the turn budget
-        tool_context, knowledge = self._knowledge(agent)
-        executor = SnapshotToolExecutor(snapshot, knowledge)
+        fields = self._fields(agent)
+        toolbox = open_turn(TurnWorld(snapshot, self.knowledge, fields))
         run, used, workflow = run_message_turn(
-            snapshot, request, model=model, executor=executor, tool_context=tool_context,
-            knowledge_port=self.knowledge, knowledge_fields=self._workflow_fields(agent, tool_context.knowledge_fields),
+            snapshot, request, model=model, toolbox=toolbox, knowledge_port=self.knowledge, knowledge_fields=fields,
             profile=self.profile, emit=self._emitter(on_event),
             should_stop=self._should_stop(caller, begun.response.id), deadline=deadline, clock=self._clock)
-        self._observe(observed, run, used, workflow, snapshot, begun.response.id, knowledge)
+        self._observe(observed, run, used, workflow, snapshot, begun.response.id, toolbox)
         if run.status == "cancelled":
             raise TurnCancelled()
         plan = plan_from_run(snapshot, run, request, handler=self.handler, persistence=self.store.persistence)
@@ -231,13 +220,14 @@ class TurnService:
             observed["provider"] = agent.model.provider
         model = self.models(agent.model.provider) if agent.model else UnconfiguredModel()
         deadline = self._clock() + agent.limits.turn_timeout_ms / 1000
-        tool_context, knowledge = self._knowledge(agent)
+        fields = self._fields(agent)
+        toolbox = open_turn(TurnWorld(post_handler(chat, draft), self.knowledge, fields))
         run, used, workflow = run_interaction_turn(
-            chat, begun.request, draft, model=model, tool_context=tool_context, knowledge_port=self.knowledge,
-            knowledge=knowledge, profile=self.profile, emit=self._emitter(on_event),
+            chat, begun.request, draft, model=model, toolbox=toolbox, knowledge_port=self.knowledge,
+            profile=self.profile, emit=self._emitter(on_event),
             should_stop=self._should_stop(caller, begun.response.id), deadline=deadline, clock=self._clock,
-            knowledge_fields=self._workflow_fields(agent, tool_context.knowledge_fields))
-        self._observe(observed, run, used, workflow, chat, begun.response.id, knowledge,
+            knowledge_fields=fields)
+        self._observe(observed, run, used, workflow, chat, begun.response.id, toolbox,
                       activity_conflict=run.handoff is not None)
         if run.status == "cancelled":
             raise TurnCancelled()

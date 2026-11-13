@@ -70,6 +70,37 @@ def test_filterable_fields_shape_the_description_and_the_arguments_schema():
         assert "filter" not in definition.parameters["properties"]
 
 
+def offered_search(auto_filter_fields):
+    """knowledge.search as offered when the binding filters on ``auto_filter_fields`` (moved from test_catalog)."""
+    from tests.unit.workflow.helpers import DEMO
+    tools = [{**item, "params": {**item["params"], "auto_filter_fields": auto_filter_fields}}
+             if item["name"] == "knowledge.search" else item for item in DEMO["tools"]]
+    view = SimpleNamespace(agent=demo_agent(tools=tools), activity=None, result_card=None)
+    fields = {kb_id(): (MetadataField(id="f1", name="houses", type="string_list", filterable=True),
+                        MetadataField(id="f2", name="province", type="string", filterable=True))}
+    (definition,) = Toolbox(TurnWorld(view, knowledge_fields=fields)).offer({"knowledge.search"})
+    return definition
+
+
+def test_search_filter_schema_names_only_auto_filter_fields_and_their_operators():
+    schema = offered_search(["houses"]).parameters
+    condition = schema["properties"]["filter"]["properties"]["conditions"]["items"]["properties"]
+    assert condition["name"]["enum"] == ["houses"]
+    assert condition["comparison_operator"]["enum"] == ["contains", "empty", "not contains", "not empty"]
+    assert schema["required"] == ["query"]
+
+
+def test_search_without_auto_filter_fields_offers_no_filter():
+    assert set(offered_search([]).parameters["properties"]) == {"query"}
+
+
+def test_search_description_lists_field_types_and_operators():
+    text = offered_search(["houses", "major"]).description
+    assert "houses (string_list: contains, empty, not contains, not empty)" in text
+    assert text.endswith("; major.")  # not in the knowledge base yet: listed without a type
+    assert "Lọc được theo" not in offered_search([]).description
+
+
 class Ports:
     def __init__(self, fields):
         self.fields = fields

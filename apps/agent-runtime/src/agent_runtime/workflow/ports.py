@@ -1,15 +1,17 @@
 """Everything a node may call. Nothing here touches the database."""
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from agent_runtime.agent.catalog import NO_CONTEXT, KnowledgeShowParams, ToolContext
+from agent_runtime.agent.catalog import KnowledgeShowParams
 from agent_runtime.agent.knowledge_tools import KnowledgePort
-from agent_runtime.agent.loop import ToolExecutor
 from agent_runtime.agent.model import ChatMessage, ModelPort, UnconfiguredModel
 from agent_runtime.agent.prompt import AgentContext
 from agent_runtime.knowledge.schemas import MetadataField
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+
+if TYPE_CHECKING:
+    from agent_runtime.tools.toolbox import Toolbox
 
 
 class ProfilePort(Protocol):
@@ -35,8 +37,7 @@ class Ports:
     agent: AgentSnapshotV1
     model: ModelPort = UnconfiguredModel()
     model_for: Callable[[str], ModelPort] | None = None  # per node id; debug runs stub model nodes here
-    tools: ToolExecutor | None = None
-    tool_context: ToolContext = NO_CONTEXT
+    tools: "Toolbox | None" = None
     knowledge: KnowledgePort | None = None
     knowledge_fields: Mapping[str, tuple[MetadataField, ...]] = field(default_factory=dict)
     show_params: KnowledgeShowParams | None = None

@@ -10,18 +10,18 @@ from agent_runtime.sessions.services.message_turns import (
     EXPLAIN_REQUEST_TEXT,
     MessagePlan,
     MessageSnapshot,
-    SnapshotToolExecutor,
     agent_context,
     chat_history,
     explain_fallback,
     interaction_summary,
-    plan_handoff,
 )
+from agent_runtime.tools.toolbox import settle
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.executor import WorkflowRun, run_workflow
 from agent_runtime.workflow.implicit import implicit_workflow
 from agent_runtime.workflow.ports import NullProfilePort, Ports, ProfilePort
 from agent_runtime.workflow.scope import Scope
+from agent_runtime.workflow.validator import knowledge_base_ids
 
 _OUTCOMES = {"set_name": "name_set", "submit_answer": "answer_recorded", "confirm_answer": "answer_confirmed",
              "edit_answer": "answer_edited"}
@@ -34,6 +34,21 @@ def interaction_outcome(request, draft) -> str:
     return _OUTCOMES.get(request.action, "none")
 
 
+def knowledge_base_ids_of(agent) -> set[str]:
+    """Every knowledge base a turn of this agent may read: the knowledge.search binding's and the graph's nodes'."""
+    search = agent.tool("knowledge.search")
+    ids = {search.params["knowledge_base_id"]} if search and isinstance(search.params.get("knowledge_base_id"),
+                                                                        str) else set()
+    if agent.workflow is not None:
+        ids.update(knowledge_base_ids(agent.workflow.model_dump(mode="json")))
+    return ids
+
+
+def post_handler(chat: MessageSnapshot, draft: TurnDraft) -> MessageSnapshot:
+    """The snapshot an interaction's graph sees: the state after the fixed handler ran."""
+    return replace(chat, activity=chat.activity.model_copy(update={"state": draft.next_state}))
+
+
 def _result_of(snapshot: MessageSnapshot) -> dict | None:
     card = snapshot.result_card
     if card is None or snapshot.current_result is None:
@@ -43,7 +58,7 @@ def _result_of(snapshot: MessageSnapshot) -> dict | None:
 
 
 def _execute(snapshot: MessageSnapshot, *, query: str, interaction: str | None, outcome: str, explain: bool,
-             result: dict | None, user_text: str, model, executor, tool_context, knowledge_port,
+             result: dict | None, user_text: str, model, toolbox, knowledge_port,
              profile: ProfilePort | None, emit, should_stop, deadline, clock,
              knowledge_fields: dict | None, reply_required: bool = True) -> tuple[WorkflowRun, Budget, Workflow]:
     """``mode = agent`` runs the implicit start -> agent -> answer graph, keeping the agent's own fallbacks.
@@ -63,8 +78,8 @@ def _execute(snapshot: MessageSnapshot, *, query: str, interaction: str | None, 
     scope = Scope(sys=sys_values, conv=snapshot.parent.conv_vars, profile=profile.snapshot(), result=result,
                   variables=workflow.variables)
     show = agent.tool("knowledge.show")
-    ports = Ports(agent=agent, model=model, tools=executor, tool_context=tool_context, knowledge=knowledge_port,
-                  knowledge_fields={**tool_context.knowledge_fields, **(knowledge_fields or {})},
+    ports = Ports(agent=agent, model=model, tools=toolbox, knowledge=knowledge_port,
+                  knowledge_fields=dict(knowledge_fields or {}),
                   show_params=KnowledgeShowParams.model_validate(show.params) if show else None, profile=profile,
                   agent_context=agent_context(snapshot, explain=explain), history=chat_history(snapshot.history),
                   user_text=user_text)
@@ -74,8 +89,8 @@ def _execute(snapshot: MessageSnapshot, *, query: str, interaction: str | None, 
     return run, budget, workflow
 
 
-def run_message_turn(snapshot: MessageSnapshot, request: MessageTurnInput, *, model, executor, tool_context,
-                     knowledge_port, knowledge_fields: dict | None = None, profile: ProfilePort | None = None,
+def run_message_turn(snapshot: MessageSnapshot, request: MessageTurnInput, *, model, toolbox, knowledge_port,
+                     knowledge_fields: dict | None = None, profile: ProfilePort | None = None,
                      emit=None, should_stop=None, deadline=None,
                      clock) -> tuple[WorkflowRun, Budget, Workflow]:
     explain = request.explain is not None
@@ -83,16 +98,16 @@ def run_message_turn(snapshot: MessageSnapshot, request: MessageTurnInput, *, mo
                     interaction="explain_result" if explain else None,
                     outcome="explain_requested" if explain else "none", explain=explain, result=_result_of(snapshot),
                     user_text=EXPLAIN_REQUEST_TEXT if explain else request.content.text, model=model,
-                    executor=executor, tool_context=tool_context, knowledge_port=knowledge_port, profile=profile,
+                    toolbox=toolbox, knowledge_port=knowledge_port, profile=profile,
                     emit=emit, should_stop=should_stop, deadline=deadline, clock=clock,
                     knowledge_fields=knowledge_fields)
 
 
-def run_interaction_turn(chat: MessageSnapshot, request, draft: TurnDraft, *, model, tool_context, knowledge_port,
-                         knowledge, profile: ProfilePort | None = None, emit=None, should_stop=None, deadline=None,
+def run_interaction_turn(chat: MessageSnapshot, request, draft: TurnDraft, *, model, toolbox, knowledge_port,
+                         profile: ProfilePort | None = None, emit=None, should_stop=None, deadline=None,
                          clock, knowledge_fields: dict | None = None) -> tuple[WorkflowRun, Budget, Workflow]:
     """The graph sees the state after the fixed handler ran; the handler's own blocks are never its business."""
-    post = replace(chat, activity=chat.activity.model_copy(update={"state": draft.next_state}))
+    post = post_handler(chat, draft)
     result = _result_of(chat)
     if draft.completion is not None:
         result = {"house_id": draft.completion.card.house.house_id,
@@ -103,8 +118,7 @@ def run_interaction_turn(chat: MessageSnapshot, request, draft: TurnDraft, *, mo
                                   option_id=getattr(getattr(request, "payload", None), "option_id", None))
     return _execute(post, query="", interaction=request.action, outcome=interaction_outcome(request, draft),
                     explain=False, result=result, user_text=summary, model=model,
-                    executor=SnapshotToolExecutor(post, knowledge), tool_context=tool_context,
-                    knowledge_port=knowledge_port, profile=profile, emit=emit, should_stop=should_stop,
+                    toolbox=toolbox, knowledge_port=knowledge_port, profile=profile, emit=emit, should_stop=should_stop,
                     deadline=deadline, clock=clock, knowledge_fields=knowledge_fields,
                     reply_required=False)  # the handler's own block is the reply
 
@@ -115,6 +129,6 @@ def plan_from_run(snapshot: MessageSnapshot, run: WorkflowRun, request: MessageT
     if request.explain is not None and run.fallback is not None:
         plan = MessagePlan((explain_fallback(snapshot.result_card, snapshot.activity.state.display_name),))
     else:
-        plan = plan_handoff(snapshot, run.handoff, run.blocks, request, handler=handler, persistence=persistence)
+        plan = settle(snapshot, run.handoff, run.blocks, request, handler=handler, persistence=persistence)
     # mode = agent has no conversation variables: its plan never writes them.
     return replace(plan, conv_vars=None if snapshot.agent.mode == "agent" else run.conv)

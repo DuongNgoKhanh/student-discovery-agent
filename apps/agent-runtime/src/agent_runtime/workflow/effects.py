@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from agent_runtime.agent.loop import Handoff
+from agent_runtime.tools.kit import Handoff
 
 
 @dataclass(frozen=True)

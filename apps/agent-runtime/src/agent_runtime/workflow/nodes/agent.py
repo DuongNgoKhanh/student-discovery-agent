@@ -54,15 +54,11 @@ def run(ctx: NodeContext, config: AgentConfig) -> NodeResult:
     if live and ctx.streaming:
         ctx.state.streamed.add(ctx.node.id)
     calls_before = ctx.budget.llm_calls
-    cards_of = getattr(ports.tools, "cards", lambda: ())
-    # The executor's cards are per turn (the last knowledge.show's): an earlier agent node's are not this node's.
-    cards_before = cards_of()
     try:
         turn = run_agent_turn(_view(ports.agent, config), ctx.model, ports.tools,
                               ports.agent_context or AgentContext(today=date.today()), ports.history,
                               ports.user_text, new_id=ctx.new_id, on_event=forward if ctx.streaming else None,
-                              should_stop=ctx.should_stop, deadline=ctx.budget.deadline, clock=ctx.budget.clock,
-                              tool_context=ports.tool_context)
+                              should_stop=ctx.should_stop, deadline=ctx.budget.deadline, clock=ctx.budget.clock)
     except BudgetExceeded:
         # The turn budget stopped the loop mid-step: every model call it made so far was one agent step.
         ctx.state.agent_steps += ctx.budget.llm_calls - calls_before
@@ -73,8 +69,7 @@ def run(ctx: NodeContext, config: AgentConfig) -> NodeResult:
     if turn.fallback is not None:
         raise NodeError("model_unavailable" if turn.fallback in _UNAVAILABLE else "invalid_output",
                         cause=turn.fallback)
-    cards = cards_of()
-    blocks = with_cards(turn.blocks, () if cards is cards_before else cards)
+    blocks = with_cards(turn.blocks, turn.cards)
     output = {"text": _text_of(blocks), "handoff": turn.handoff.name if turn.handoff else None}
     if turn.handoff is not None:
         ctx.state.handoff = turn.handoff

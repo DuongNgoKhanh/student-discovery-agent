@@ -6,6 +6,7 @@ from typing import Any, Literal
 from pydantic import ValidationError
 
 from agent_runtime.agent.model import ToolDefinition
+from agent_runtime.sessions.services.message_turns import MessagePlan
 from agent_runtime.tools.kit import (
     Answered,
     Call,
@@ -17,6 +18,7 @@ from agent_runtime.tools.kit import (
     RefPorts,
     Refused,
     Replied,
+    Settle,
     Tool,
     ToolError,
     TurnWorld,
@@ -128,3 +130,14 @@ def check(agent: Any, ports: RefPorts, declared: Declared = TOOLS) -> tuple[Ref,
         issues.extend(Ref(f"tools[{index}].params.{ref.path}", ref.code, ref.message)
                       for ref in tool.refs(params, ports, agent))
     return tuple(issues)
+
+
+def settle(snapshot: Any, handoff: Handoff | None, blocks: tuple, request: Any, *, handler: Any, persistence: Any,
+           declared: Declared = TOOLS) -> MessagePlan:
+    """The activity change a handoff asks for, rendered after the agent's own blocks; outside any transaction."""
+    if handoff is None:
+        return MessagePlan(blocks)
+    binding = snapshot.agent.tool(handoff.name)
+    tool = declared[(binding.name, binding.version)]
+    return tool.settle(Settle(handoff, tool.params.model_validate(binding.params), snapshot, blocks, request,
+                              handler, persistence))
