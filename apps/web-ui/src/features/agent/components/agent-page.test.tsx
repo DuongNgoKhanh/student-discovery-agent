@@ -125,7 +125,7 @@ describe('AgentPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('revision 3');
     expect(screen.getByRole('alert')).toHaveTextContent('bởi admin');
-    expect(screen.getByRole('alert')).toHaveTextContent('19:00:00');
+    expect(screen.getByRole('alert')).toHaveTextContent(new Date(server.updated_at).toLocaleString('vi-VN'));
     expect(screen.getByLabelText('Lời chào')).toHaveValue('Của tôi');
     const createObjectURL = vi.fn(() => 'blob:agent-draft');
     const revokeObjectURL = vi.fn();
