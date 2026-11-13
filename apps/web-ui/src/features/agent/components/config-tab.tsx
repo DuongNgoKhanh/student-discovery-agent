@@ -33,7 +33,7 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
         <IssuesPanel
           state={validation}
           onOpenSection={onSection}
-          workflow={mode === 'chatflow' ? config.workflow as ChatflowWorkflow | undefined : undefined}
+          workflow={mode === 'chatflow' ? validation.workflow ?? config.workflow as ChatflowWorkflow | undefined : undefined}
           onOpenWorkflowIssue={() => { if (!jsonError) setChatflowTab('json'); }}
         />
       )}

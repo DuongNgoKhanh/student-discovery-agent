@@ -16,6 +16,8 @@ export interface ValidationState {
   issues: AgentIssue[]; valid: boolean; checkedAt: string; stale: boolean;
   /** Draft revision the report was computed for; a different current revision marks it stale. */
   draftRevision?: number;
+  /** Workflow the report was computed for; issue paths index into it, not into the edited copy. */
+  workflow?: ChatflowWorkflow;
 }
 
 type IndexedIssue = { issue: AgentIssue; index: number };

@@ -114,4 +114,22 @@ describe('ConfigTab', () => {
     expect(document.activeElement).toBe(editor);
     expect(editor.value.slice(editor.selectionStart, editor.selectionEnd)).toContain('"labels"');
   });
+
+  it('resolves a stale report against the workflow it validated, not the edited one', () => {
+    const edited: AgentConfig = {
+      ...SEED,
+      mode: 'chatflow',
+      workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'answer', type: 'answer' }], edges: [] },
+    };
+    const validation: ValidationState = {
+      valid: false,
+      stale: true,
+      checkedAt: new Date().toISOString(),
+      issues: [{ path: 'workflow.nodes[1].config.labels', code: 'workflow_unwired_label', message: 'Nhãn chưa nối' }],
+      workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'classify', type: 'if_else' }] },
+    };
+    render(<Harness initial={edited} initialSection="chatflow" mode="chatflow" validation={validation} />);
+    expect(screen.getByText('node classify')).toBeInTheDocument();
+    expect(screen.queryByText('node answer')).not.toBeInTheDocument();
+  });
 });

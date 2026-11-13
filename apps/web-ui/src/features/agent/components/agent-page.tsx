@@ -10,7 +10,7 @@ import { bindKnowledge, type ToolBinding } from '../model/tools';
 import { sectionsForMode, type AgentMode, type SectionId } from '../model/sections';
 import { agentApi } from '../api/agent';
 import { useAgentActive, useAgentDraft, useSaveDraft, useValidateDraft } from '../hooks/use-agent';
-import type { AgentConfig, AgentDraft } from '../types';
+import type { AgentConfig, AgentDraft, ChatflowWorkflow } from '../types';
 import { AgentStatusBar, type DraftState } from './agent-status-bar';
 import { ConfigTab } from './config-tab';
 import type { ValidationState } from './issues-panel';
@@ -161,10 +161,14 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
 
   const runValidation = async () => {
     if (jsonError) return;
-    if (!(await persist())) return;
+    const saved = await persist();
+    if (!saved) return;
     try {
       const report = await validate.mutateAsync();
-      setValidation({ issues: report.issues, valid: report.valid, checkedAt: new Date().toISOString(), stale: false, draftRevision: report.draft_revision });
+      setValidation({
+        issues: report.issues, valid: report.valid, checkedAt: new Date().toISOString(), stale: false,
+        draftRevision: report.draft_revision, workflow: saved.content.workflow as ChatflowWorkflow | undefined,
+      });
     } catch (error) { toast.error(errorMessage(error)); }
   };
 
@@ -215,7 +219,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
       {publishing && active.data && (
         <PublishDialog open={publishing} onOpenChange={setPublishing} draft={base} active={active.data}
           onConflict={() => void reloadDraft()}
-          onIssues={issues => { setValidation({ issues, valid: false, checkedAt: new Date().toISOString(), stale: false, draftRevision: base.revision }); setTab('config'); }} />
+          onIssues={issues => { setValidation({ issues, valid: false, checkedAt: new Date().toISOString(), stale: false, draftRevision: base.revision, workflow: base.content.workflow as ChatflowWorkflow | undefined }); setTab('config'); }} />
       )}
 
       <ConfirmDialog open={guard.open} onOpenChange={guard.onOpenChange} onConfirm={guard.onConfirm}
