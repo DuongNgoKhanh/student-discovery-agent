@@ -82,6 +82,7 @@ class KnowledgeTools:
                  new_id: Callable[[], str] = lambda: uuid4().hex, clock: Callable[[], float] = time.monotonic):
         self._port, self._search, self._show = port, search, show
         self._types = {item.name: item.type for item in fields}
+        self.fields = fields  # this base's metadata fields; describe/schema read them before any search
         self._domains, self._new_id, self._clock = allowed_domains, new_id, clock
         self._records: dict[str, Record] = {}
         self._cards: tuple[KnowledgeCardBlock, ...] = ()

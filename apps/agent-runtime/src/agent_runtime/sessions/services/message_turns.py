@@ -180,7 +180,7 @@ class SnapshotToolExecutor:
         return {"error": "unsupported_tool"}
 
 
-def _text(content: str) -> TextBlock:
+def plain_text(content: str) -> TextBlock:
     return TextBlock(block_id=uuid4().hex, type="text", schema_version=1, content=content)
 
 
@@ -198,7 +198,7 @@ def check_explain(snapshot: MessageSnapshot, explain: ExplainResult) -> None:
 
 def explain_fallback(card: Mapping[str, Any], display_name: str | None) -> TextBlock:
     """Card-only explanation when the model is unavailable: the student always gets one."""
-    return _text(EXPLAIN_FALLBACK.format(house=card["house"]["name"], name=display_name or "bạn",
+    return plain_text(EXPLAIN_FALLBACK.format(house=card["house"]["name"], name=display_name or "bạn",
                                          strengths=", ".join(card["strengths"]),
                                          tendencies=", ".join(card["tendencies"]),
                                          career_groups=", ".join(card["career_groups"]), quote=card["quote"]))
@@ -226,7 +226,7 @@ def plan_handoff(snapshot: MessageSnapshot, handoff: Handoff | None, blocks: tup
         chosen = next(item for item in binding.experiences if item.experience_id == handoff.arguments.experience_id)
         release = persistence.resolve_experience(snapshot.parent, chosen.experience_id, chosen.algorithm_profile)
         ask = render_placeholders(agent.templates.ask_name, {"display_name": "bạn"})
-        return MessagePlan((*blocks, _text(ask)),
+        return MessagePlan((*blocks, plain_text(ask)),
                            start=StartPlan(release, chosen.experience_id, chosen.algorithm_profile))
     if handoff.name == "assessment.set_name":
         interaction = SetNameInteraction(expected_revision=request.expected_revision,
@@ -239,5 +239,5 @@ def plan_handoff(snapshot: MessageSnapshot, handoff: Handoff | None, blocks: tup
     if handoff.name == "assessment.propose_answer":
         label = next(option.label for option in activity.state.current_question.options
                      if option.id == handoff.arguments.option_id)
-        return MessagePlan((*blocks, _text(PROPOSAL_TEXT.format(label=label)), shown))
+        return MessagePlan((*blocks, plain_text(PROPOSAL_TEXT.format(label=label)), shown))
     return MessagePlan((*blocks, shown))

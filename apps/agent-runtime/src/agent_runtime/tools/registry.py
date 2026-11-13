@@ -1,7 +1,8 @@
 """Every tool the runtime declares, keyed by (name, version): a release pins both (QT-06)."""
+from agent_runtime.tools import assessment, knowledge, ui
 from agent_runtime.tools.kit import Tool
 
-_GROUPS: tuple[tuple[Tool, ...], ...] = ()
+_GROUPS: tuple[tuple[Tool, ...], ...] = (assessment.TOOLS, ui.TOOLS, knowledge.TOOLS)
 
 TOOLS: dict[tuple[str, int], Tool] = {}
 for _group in _GROUPS:
