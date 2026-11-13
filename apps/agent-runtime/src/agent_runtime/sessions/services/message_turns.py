@@ -133,6 +133,6 @@ def check_explain(snapshot: MessageSnapshot, explain: ExplainResult) -> None:
 def explain_fallback(card: Mapping[str, Any], display_name: str | None) -> TextBlock:
     """Card-only explanation when the model is unavailable: the student always gets one."""
     return plain_text(EXPLAIN_FALLBACK.format(house=card["house"]["name"], name=display_name or "bạn",
-                                         strengths=", ".join(card["strengths"]),
-                                         tendencies=", ".join(card["tendencies"]),
-                                         career_groups=", ".join(card["career_groups"]), quote=card["quote"]))
+                                              strengths=", ".join(card["strengths"]),
+                                              tendencies=", ".join(card["tendencies"]),
+                                              career_groups=", ".join(card["career_groups"]), quote=card["quote"]))

@@ -1,7 +1,7 @@
 """Validate an agent config exactly as the runtime will load it, plus the references it makes."""
 import logging
-from collections.abc import Mapping, Sequence
-from typing import Protocol
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, Protocol
 
 from pydantic import ValidationError
 
@@ -118,7 +118,8 @@ def _param_issues(content: Mapping[str, object], error: ValidationError) -> list
 class _RefPorts:
     """What the tool modules' reference checks read; one base_fields read per knowledge base."""
 
-    def __init__(self, experiences: ProductReleaseSource, environment: str, base_fields):
+    def __init__(self, experiences: ProductReleaseSource, environment: str,
+                 base_fields: Callable[[list[str]], Mapping[str, Any]]):
         self._experiences, self._environment, self._base_fields = experiences, environment, base_fields
         self._fields: dict[str, frozenset[str] | None] = {}
 

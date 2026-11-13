@@ -165,6 +165,16 @@ def test_cards_of_the_last_show_come_back_on_the_turn():
     assert result.cards == (card,)
 
 
+def test_a_later_show_that_renders_no_cards_clears_the_earlier_cards():
+    from agent_runtime.tools.kit import Answered
+    outcomes = iter([Answered({"shown": 1}, blocks=(object(),)), Answered({"shown": 0}, blocks=())])
+    model = FakeModel(ModelReply(text="", tool_calls=(call("knowledge.show", {"refs": ["k1"]}),)),
+                      ModelReply(text="", tool_calls=(call("knowledge.show", {"refs": ["k2"]}, "c2"),)),
+                      ModelReply(text="Xong"))
+    result, _ = turn(model, {"knowledge.show": lambda _call: next(outcomes)})
+    assert result.cards == ()
+
+
 def test_events_stream_text_and_announce_tool_calls():
     events = []
     model = FakeModel(ModelReply(text="", tool_calls=(call("result.explain", {}),)), ModelReply(text="Xong rồi"))

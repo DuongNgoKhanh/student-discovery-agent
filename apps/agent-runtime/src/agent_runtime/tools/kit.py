@@ -41,7 +41,7 @@ class Handoff:
 @dataclass(frozen=True)
 class Answered:
     result: Mapping[str, Any]
-    blocks: "tuple[TypedBlock, ...]" = ()  # server-built blocks of this call, e.g. knowledge cards
+    blocks: "tuple[TypedBlock, ...] | None" = None  # None: this call renders no blocks; (): it rendered none (clears earlier ones)
     effects: tuple[Any, ...] = ()  # workflow.effects.Effect values; no tool emits one yet
 
 

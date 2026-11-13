@@ -29,7 +29,7 @@ def run(ctx: NodeContext, config: ToolConfig) -> NodeResult:
                            via="node")
     if isinstance(outcome, Refused):
         raise NodeError("invalid_output" if outcome.invalid_arguments else "tool_error")
-    if isinstance(outcome, HandedOff):
+    if isinstance(outcome, HandedOff):  # outcome.effects are not applied yet: no tool emits one; wiring comes with the effect-commit work
         ctx.state.handoff = outcome.handoff
         return NodeResult("success", dict(outcome.handoff.result), effects=(ActivityChange(outcome.handoff),),
                           reason={"tool": config.tool})

@@ -146,13 +146,15 @@ def run_agent_turn(snapshot: AgentSnapshotV1, model: ModelPort, toolbox: "Toolbo
         for call in reply.tool_calls:
             outcome = toolbox.call(call.name, call.arguments, offered=names, announce=announce)
             if isinstance(outcome, HandedOff):
-                handoff = outcome.handoff
+                handoff = outcome.handoff  # outcome.effects are not applied yet (no tool emits one; wired with effect-commit)
                 break  # later calls in the same reply are dropped: the server owns what happens next
             if isinstance(outcome, Replied):
                 suggestions = outcome.arguments
                 result = {"shown": True}
             elif isinstance(outcome, Answered):
-                cards = outcome.blocks or cards
+                if outcome.blocks is not None:  # a call that rendered nothing leaves the turn's cards alone
+                    cards = outcome.blocks
+                # outcome.effects are not applied yet: no tool emits one; wiring comes with the effect-commit work
                 result = dict(outcome.result)
             else:  # Refused: a rejected call is an ordinary tool error; the model sees it and may recover
                 result = dict(outcome.error)

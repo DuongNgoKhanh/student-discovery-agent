@@ -24,7 +24,7 @@ Tool kết thúc lượt của model khi thành công; server tự dựng khối
 _Avoid_: action tool, terminal tool
 
 **Reply tool**:
-Tool không thực thi gì, chỉ góp thêm phần hiển thị vào câu trả lời của model, ví dụ `ui.suggest_replies`. Không dùng được trong chatflow.
+Tool không thực thi gì, chỉ góp thêm phần hiển thị vào câu trả lời của model, ví dụ `ui.suggest_replies`. Không gọi được từ tool node của chatflow.
 _Avoid_: UI tool
 
 **Handoff**:

@@ -51,11 +51,15 @@ _KEEP = {("if_else", "matched"), ("intent_classifier", "label"), ("knowledge_ret
          ("profile_propose", "fields"), ("profile_propose", "proposal_id")}
 # Values a model or a tool result could also put under these keys: kept only when they are what the engine wrote.
 _ERROR_TYPES = frozenset({"", *get_args(ErrorType)})
+
+
 @cache
 def _handoffs() -> frozenset[str]:
     from agent_runtime.tools.registry import TOOLS  # lazy: the tool groups import sessions, which imports this
 
     return frozenset(tool.name for tool in TOOLS.values() if tool.kind == "handoff")
+
+
 _REASON_KEYS = {"label", "steps", "handoff", "assigned", "tool", "fields", "degraded"}
 _SAFE_SYS = {"sys.interaction_outcome", "sys.turn_index", "sys.activity_status"}
 

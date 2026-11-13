@@ -69,6 +69,7 @@ def run(ctx: NodeContext, config: AgentConfig) -> NodeResult:
     if turn.fallback is not None:
         raise NodeError("model_unavailable" if turn.fallback in _UNAVAILABLE else "invalid_output",
                         cause=turn.fallback)
+    # Tool effects (Answered/HandedOff.effects) are not applied yet: no tool emits one; wiring comes with the effect-commit work.
     blocks = with_cards(turn.blocks, turn.cards)
     output = {"text": _text_of(blocks), "handoff": turn.handoff.name if turn.handoff else None}
     if turn.handoff is not None:
