@@ -20,3 +20,11 @@ def test_every_entry_point_imports_first_without_a_cycle(first):
 def test_tool_modules_never_import_the_workflow_engine():
     offenders = [path.name for path in TOOLS_DIR.glob("*.py") if "agent_runtime.workflow" in path.read_text("utf-8")]
     assert offenders == []
+
+
+@pytest.mark.parametrize("module", ["agent_runtime.sessions.schemas.release", "agent_runtime.workflow.trace",
+                                    "agent_runtime.workflow.validator"])
+def test_registry_is_looked_up_lazily(module):
+    code = (f"import sys, {module}; "
+            "assert 'agent_runtime.tools.registry' not in sys.modules, 'imported the registry at module level'")
+    subprocess.run([sys.executable, "-c", code], check=True)

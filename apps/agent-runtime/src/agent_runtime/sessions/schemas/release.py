@@ -8,7 +8,6 @@ from agent_runtime.agent.catalog import (
     PLACEHOLDER,
     PROMPT_VARIABLES,
     SUPPORTED_MODEL_PROVIDERS,
-    TOOL_DECLARATIONS,
     StartAssessmentParams,
 )
 from agent_runtime.agent.model import ModelSettings, worst_case_ms
@@ -98,11 +97,13 @@ class AgentToolBinding(ContractModel):
 
     @model_validator(mode="after")
     def declared(self) -> "AgentToolBinding":
-        declaration = TOOL_DECLARATIONS.get((self.name, self.version))
-        if declaration is None:
+        from agent_runtime.tools.registry import find  # lazy: tool modules import this schema module
+
+        tool = find(self.name, self.version)
+        if tool is None:
             raise PydanticCustomError("tool_not_declared", "tool is not declared in the runtime catalog")
         try:
-            declaration.params_model.model_validate(self.params)
+            tool.params.model_validate(self.params)
         except ValidationError as error:
             problems = "; ".join(f"{'.'.join(map(str, item['loc'])) or '<root>'}: {item['msg']}"
                                  for item in error.errors())

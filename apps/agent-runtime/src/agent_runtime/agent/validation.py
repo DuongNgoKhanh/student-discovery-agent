@@ -5,25 +5,17 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
-from agent_runtime.agent.catalog import (
-    TOOL_DECLARATIONS,
-    KnowledgeSearchParams,
-    KnowledgeShowParams,
-    StartAssessmentParams,
-)
 from agent_runtime.evaluations.services.persona import PersonaReport, PersonaRunner, stale_cases
 from agent_runtime.evaluations.services.validator import calculate_content_hash
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.ports import ProductReleaseSource
 from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+from agent_runtime.tools.registry import find
+from agent_runtime.tools.toolbox import check
 from agent_runtime.workflow.validator import Finding, knowledge_base_ids, validate_workflow
 
 logger = logging.getLogger(__name__)
-
-# Card fields read record metadata by name (agent/knowledge_tools.py `_card`). Besides the knowledge base's own
-# fields only `source_url` is a meaningful built-in; `title` is not in metadata, so displaying it would be empty.
-_BUILTIN_DISPLAY_FIELDS = frozenset({"source_url"})
 
 _MESSAGES = {
     "missing": "Thiếu trường bắt buộc.",
@@ -111,17 +103,40 @@ def _param_issues(content: Mapping[str, object], error: ValidationError) -> list
         loc = item["loc"]
         if len(loc) == 2 and loc[0] == "tools" and isinstance(tools, list) and isinstance(loc[1], int):
             binding = tools[loc[1]] if loc[1] < len(tools) else None
-            declaration = (TOOL_DECLARATIONS.get((binding.get("name"), binding.get("version")))
-                           if isinstance(binding, dict) and isinstance(binding.get("name"), str) else None)
-            if declaration is not None:
+            tool = find(binding.get("name"), binding.get("version")) if isinstance(binding, dict) else None
+            if tool is not None:
                 try:
-                    declaration.params_model.model_validate(binding.get("params", {}))
+                    tool.params.model_validate(binding.get("params", {}))
                 except ValidationError as params_error:
                     base = f"tools[{loc[1]}].params"
                     issues.extend(_issue(e, base) for e in params_error.errors())
                     continue
         issues.append(_issue(item))
     return issues
+
+
+class _RefPorts:
+    """What the tool modules' reference checks read; one base_fields read per knowledge base."""
+
+    def __init__(self, experiences: ProductReleaseSource, environment: str, base_fields):
+        self._experiences, self._environment, self._base_fields = experiences, environment, base_fields
+        self._fields: dict[str, frozenset[str] | None] = {}
+
+    def experience_exists(self, experience_id: str, algorithm_profile: str | None) -> bool:
+        try:
+            self._experiences.resolve_active_experience(self._environment, experience_id, algorithm_profile)
+        except RuntimeSessionError as error:
+            if error.status >= 500:
+                # Release source outage: the experience may well exist, so this is not a config issue.
+                raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}) from None
+            return False
+        return True
+
+    def kb_fields(self, kb_id: str) -> frozenset[str] | None:
+        if kb_id not in self._fields:
+            known = self._base_fields([kb_id]).get(kb_id)
+            self._fields[kb_id] = None if known is None else frozenset(known)
+        return self._fields[kb_id]
 
 
 class AgentSnapshotValidator:
@@ -206,40 +221,5 @@ class AgentSnapshotValidator:
             "persona_cases", "persona_cases_insufficient", "Chatflow cần ít nhất 2 persona case bắt buộc.")]
 
     def _references(self, snapshot: AgentSnapshotV1) -> tuple[Issue, ...]:
-        issues: list[Issue] = []
-        index = {binding.name: i for i, binding in enumerate(snapshot.tools)}
-        start = snapshot.tool("assessment.start")
-        if start:
-            for k, item in enumerate(StartAssessmentParams.model_validate(start.params).experiences):
-                try:
-                    self._experiences.resolve_active_experience(self._environment, item.experience_id,
-                                                                item.algorithm_profile)
-                except RuntimeSessionError as error:
-                    if error.status >= 500:
-                        # Release source outage: the experience may well exist, so this is not a config issue.
-                        raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}) from None
-                    issues.append(Issue(path=f"tools[{index['assessment.start']}].params.experiences[{k}].experience_id",
-                                        code="experience_not_configured",
-                                        message=f"Bài khám phá '{item.experience_id}' chưa được cấu hình."))
-        search = snapshot.tool("knowledge.search")
-        if search:
-            params = KnowledgeSearchParams.model_validate(search.params)
-            fields = self._base_fields([params.knowledge_base_id])
-            at = f"tools[{index['knowledge.search']}].params"
-            known = fields.get(params.knowledge_base_id)
-            if known is None:
-                issues.append(Issue(path=f"{at}.knowledge_base_id", code="knowledge_base_not_found",
-                                    message=f"Không tìm thấy knowledge base '{params.knowledge_base_id}'."))
-            else:
-                for k, name in enumerate(params.auto_filter_fields):
-                    if name not in known:
-                        issues.append(Issue(path=f"{at}.auto_filter_fields[{k}]", code="field_not_found",
-                                            message=f"Knowledge base không có trường '{name}'."))
-                show = snapshot.tool("knowledge.show")
-                if show:
-                    for k, item in enumerate(KnowledgeShowParams.model_validate(show.params).display):
-                        if item.field not in known and item.field not in _BUILTIN_DISPLAY_FIELDS:
-                            issues.append(Issue(path=f"tools[{index['knowledge.show']}].params.display[{k}].field",
-                                                code="field_not_found",
-                                                message=f"Knowledge base không có trường '{item.field}'."))
-        return tuple(issues)
+        ports = _RefPorts(self._experiences, self._environment, self._base_fields)
+        return tuple(Issue(path=ref.path, code=ref.code, message=ref.message) for ref in check(snapshot, ports))

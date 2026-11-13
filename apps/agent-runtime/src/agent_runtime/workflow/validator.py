@@ -11,7 +11,6 @@ from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
-from agent_runtime.agent.catalog import TOOL_DECLARATIONS
 from agent_runtime.sessions.schemas.workflow import NODE_TYPES, RESERVED_NODE_IDS, value_fits
 from agent_runtime.workflow import registry
 from agent_runtime.workflow.budget import HARD_CEILING
@@ -463,9 +462,10 @@ class _Check:
             self.add(f"{base}.value", "workflow_assign_invalid", f"Giá trị không khớp biến kiểu {kind}.")
 
     def _is_handoff(self, name: str) -> bool:
-        version = self.enabled.get(name)
-        declaration = TOOL_DECLARATIONS.get((name, version)) if isinstance(version, int) else None
-        return bool(declaration and declaration.handoff)
+        from agent_runtime.tools.registry import find  # lazy, as in workflow/trace.py
+
+        tool = find(name, self.enabled.get(name))
+        return bool(tool and tool.kind == "handoff")
 
     def _terminal(self, node_id: str, index: int, handle: str) -> None:
         for _edge, source, edge_handle, target in self.good:
