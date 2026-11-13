@@ -5,10 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from agent_runtime.agent.catalog import TOOL_DECLARATIONS, json_schema
 from agent_runtime.agent.output import link_allowed, sanitize_markdown
 from agent_runtime.agent.prompt import AgentContext, system_messages
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+from agent_runtime.tools.kit import json_schema
+from agent_runtime.tools.registry import TOOLS
 
 ROOT = Path(__file__).resolve().parents[5]
 DEMO = json.loads((ROOT / "contracts/fixtures/agent-snapshot-demo.json").read_text(encoding="utf-8"))
@@ -85,8 +86,8 @@ def test_argument_schemas_are_provider_safe():
             for value in node:
                 yield from keys(value)
 
-    for declaration in TOOL_DECLARATIONS.values():
-        schema = json_schema(declaration.arguments_model)
+    for tool in TOOLS.values():
+        schema = json_schema(tool.arguments)
         assert schema["type"] == "object"
         assert not {"$ref", "$defs", "title", "additionalProperties", "default"} & set(keys(schema))
 

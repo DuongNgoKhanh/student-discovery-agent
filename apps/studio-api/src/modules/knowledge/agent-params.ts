@@ -1,4 +1,4 @@
-/** Limits mirror agent_runtime.agent.catalog (KnowledgeShowParams / KnowledgeSearchParams). */
+/** Limits mirror the runtime tool catalog (contracts/fixtures/agent-tool-catalog.json); agent-params.test.ts checks them. */
 export const MAX_DISPLAY_FIELDS = 8;
 export const MAX_AUTO_FILTER_FIELDS = 10;
 export const MAX_DISPLAY_LABEL = 60;

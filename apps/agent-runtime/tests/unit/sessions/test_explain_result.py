@@ -4,19 +4,19 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent_runtime.agent.loop import AgentTurn
 from agent_runtime.agent.model import UserMessage
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.activity import StoredInteraction, TextBlock
 from agent_runtime.sessions.schemas.history import MessageView
 from agent_runtime.sessions.schemas.turn import ExplainResult
+from agent_runtime.sessions.services.chatflow_turns import plan_from_run
 from agent_runtime.sessions.services.message_turns import (
     EXPLAIN_REQUEST_TEXT,
     chat_history,
     check_explain,
     explain_fallback,
-    plan_message_turn,
 )
+from agent_runtime.workflow.executor import WorkflowRun
 
 CARD = {"house": {"house_id": "house_s", "name": "Người Chữa Lành"}, "strengths": ["Lắng nghe", "Giao tiếp"],
         "tendencies": ["Giúp đỡ người khác"], "career_groups": ["Tâm lý học", "Điều dưỡng"],
@@ -34,7 +34,8 @@ def explained_view(result_id="res1", result_revision=1):
 
 def snapshot(*, status="completed", current=("res1", 1), history=()):
     activity = SimpleNamespace(id="act1", state=SimpleNamespace(status=status, display_name="Minh"))
-    return SimpleNamespace(activity=activity, current_result=current, history=history, result_card=CARD)
+    return SimpleNamespace(activity=activity, current_result=current, history=history, result_card=CARD,
+                           agent=SimpleNamespace(mode="agent"))
 
 
 def test_check_accepts_the_current_unexplained_result():
@@ -66,7 +67,7 @@ def test_fallback_is_built_from_the_card():
 def test_explain_turn_that_fell_back_gets_the_card_template():
     request = SimpleNamespace(explain=EXPLAIN)
     busy = TextBlock(block_id="b1", type="text", schema_version=1, content="Mình đang bận")
-    plan = plan_message_turn(snapshot(), AgentTurn((busy,), fallback="deadline"), request,
-                             handler=None, persistence=None)
+    run = WorkflowRun("fallback", (), (busy,), (), {}, fallback="deadline")
+    plan = plan_from_run(snapshot(), run, request, handler=None, persistence=None)
     (block,) = plan.blocks
     assert "**Người Chữa Lành**" in block.content

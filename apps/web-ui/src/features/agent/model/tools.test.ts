@@ -1,27 +1,21 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import fixture from '../../../generated/agent-tool-catalog.json';
 import { bindKnowledge, TOOL_CATALOG } from './tools';
 
-// Mirrors agent-runtime TOOL_DECLARATIONS; test_tool_catalog_fixture.py checks the runtime side of the same file.
-const fixture = JSON.parse(
-  readFileSync(
-    resolve(__dirname, '../../../../../../contracts/fixtures/agent-tool-catalog.json'),
-    'utf8',
-  ),
-) as {
-  tools: Array<{ name: string; version: number; has_params: boolean }>;
-};
-
 describe('TOOL_CATALOG', () => {
-  it('lists exactly the tools the runtime declares', () => {
-    expect(
-      TOOL_CATALOG.map((t) => ({
-        name: t.name,
-        version: t.version,
-        has_params: t.params !== 'none',
-      })),
-    ).toEqual(fixture.tools);
+  it('is the runtime catalog fixture, in order', () => {
+    expect(TOOL_CATALOG.map(t => [t.name, t.version, t.label])).toEqual(
+      fixture.tools.map(t => [t.name, t.version, t.label]),
+    );
+  });
+
+  it('maps each tool to the params editor the runtime names', () => {
+    expect(Object.fromEntries(TOOL_CATALOG.map(t => [t.name, t.params]))).toMatchObject({
+      'assessment.start': 'json',
+      'result.explain': 'none',
+      'knowledge.search': 'knowledge.search',
+      'knowledge.show': 'knowledge.show',
+    });
   });
 });
 

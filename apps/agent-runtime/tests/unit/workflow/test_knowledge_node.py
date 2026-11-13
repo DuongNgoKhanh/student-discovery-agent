@@ -1,7 +1,7 @@
 import pytest
 
-from agent_runtime.agent.catalog import KnowledgeShowParams
 from agent_runtime.knowledge.schemas import KnowledgeUnavailable, MetadataField, Record, RetrievalResult
+from agent_runtime.tools.knowledge import KnowledgeShowParams
 from agent_runtime.workflow.effects import KbRefsUsed
 from agent_runtime.workflow.nodes.base import NodeError, RunState
 from tests.unit.workflow.helpers import run_node, scope_for, workflow

@@ -2,10 +2,9 @@ from typing import Annotated, Any
 
 from pydantic import Field, StringConstraints, ValidationError
 
-from agent_runtime.agent.catalog import KnowledgeSearchArguments, KnowledgeSearchParams
-from agent_runtime.agent.knowledge_tools import KnowledgeTools
 from agent_runtime.knowledge.schemas import Condition, FieldName, MetadataCondition
 from agent_runtime.sessions.schemas.common import ContractModel, OpaqueId
+from agent_runtime.tools.knowledge import KnowledgeSearchArguments, KnowledgeSearchParams, KnowledgeTools
 from agent_runtime.workflow.effects import KbRefsUsed
 from agent_runtime.workflow.expressions import PATH
 from agent_runtime.workflow.nodes.base import NodeContext, NodeError, NodeResult, NodeSpec

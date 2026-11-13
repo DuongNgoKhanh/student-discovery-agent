@@ -8,7 +8,8 @@ from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.events import NodeFinished
 from agent_runtime.workflow.executor import NodeRecord, WorkflowRun, run_workflow
 from agent_runtime.workflow.trace import Redaction, build_trace
-from tests.unit.workflow.helpers import ids, ports_for, scope_for, workflow
+from tests.helpers.toolbox import scripted_toolbox
+from tests.unit.workflow.helpers import agent, ids, ports_for, scope_for, workflow
 
 SENTINEL = "XQ-7731 em tên Lan 0900123456"
 FLOW = workflow(
@@ -183,17 +184,15 @@ def test_a_model_cannot_spoof_the_llm_nodes_error_type():
 
 
 def test_a_tool_result_cannot_smuggle_student_text_under_handoff_or_error_type():
-    class Tools:
-        def execute(self, name, arguments):
-            return {"status": "started", "handoff": SENTINEL, "error_type": SENTINEL}
-
+    tools = scripted_toolbox(agent(), {"assessment.start": {"status": "started", "handoff": SENTINEL,
+                                                            "error_type": SENTINEL}})[0]
     flow = workflow(
         [{"id": "start", "type": "start"},
          {"id": "t", "type": "tool", "config": {"tool": "assessment.start",
                                                 "arguments": {"experience_id": "logical-experience"}}},
          {"id": "reply", "type": "answer", "config": {"text": "ok"}}],
         [("start", "next", "t"), ("t", "success", "reply")])
-    run, text = traced("production", flow, tools=Tools())
+    run, text = traced("production", flow, tools=tools)
     assert run.records[1].handle == "success" and run.records[1].output["handoff"] == SENTINEL
     assert SENTINEL not in text and "XQ-7731" not in text
     item = json.loads(text)["node_runs"][1]

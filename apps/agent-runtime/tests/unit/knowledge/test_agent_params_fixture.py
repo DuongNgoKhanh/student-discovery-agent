@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from agent_runtime.agent.catalog import KnowledgeSearchParams, KnowledgeShowParams
+from agent_runtime.tools.knowledge import KnowledgeSearchParams, KnowledgeShowParams
 
 FIXTURE = Path(__file__).resolve().parents[5] / "contracts" / "fixtures" / "knowledge-agent-params.json"
 

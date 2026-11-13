@@ -7,11 +7,11 @@ few system values excepted). ``full`` keeps everything and is
 only for the Admin's own debug run.
 """
 from collections.abc import Mapping
+from functools import cache
 from typing import Annotated, Any, Literal, get_args
 
 from pydantic import Field
 
-from agent_runtime.agent.catalog import TOOL_DECLARATIONS
 from agent_runtime.sessions.schemas.common import ContractModel, JsonSafeInt
 from agent_runtime.sessions.schemas.workflow import ConvVariable
 from agent_runtime.workflow import registry
@@ -51,7 +51,15 @@ _KEEP = {("if_else", "matched"), ("intent_classifier", "label"), ("knowledge_ret
          ("profile_propose", "fields"), ("profile_propose", "proposal_id")}
 # Values a model or a tool result could also put under these keys: kept only when they are what the engine wrote.
 _ERROR_TYPES = frozenset({"", *get_args(ErrorType)})
-_HANDOFFS = frozenset(declaration.name for declaration in TOOL_DECLARATIONS.values() if declaration.handoff)
+
+
+@cache
+def _handoffs() -> frozenset[str]:
+    from agent_runtime.tools.registry import TOOLS  # lazy: the tool groups import sessions, which imports this
+
+    return frozenset(tool.name for tool in TOOLS.values() if tool.kind == "handoff")
+
+
 _REASON_KEYS = {"label", "steps", "handoff", "assigned", "tool", "fields", "degraded"}
 _SAFE_SYS = {"sys.interaction_outcome", "sys.turn_index", "sys.activity_status"}
 
@@ -125,7 +133,7 @@ def _kept(node_type: str, key: Any, value: Any) -> bool:
     if key == "error_type":
         return isinstance(value, str) and value in _ERROR_TYPES
     if key == "handoff" and node_type == "agent":
-        return value is None or (isinstance(value, str) and value in _HANDOFFS)
+        return value is None or (isinstance(value, str) and value in _handoffs())
     return False
 
 

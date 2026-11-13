@@ -5,9 +5,10 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Literal
 
-from agent_runtime.agent.catalog import KnowledgeSearchParams, render_placeholders
 from agent_runtime.agent.model import SystemMessage
+from agent_runtime.agent.placeholders import render_placeholders
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+from agent_runtime.tools.knowledge import KnowledgeSearchParams
 
 AssessmentPhase = Literal["not_started", "collecting_name", "in_progress", "completed"]
 

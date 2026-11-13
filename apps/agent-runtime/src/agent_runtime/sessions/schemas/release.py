@@ -4,14 +4,8 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, Field, StringConstraints, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
-from agent_runtime.agent.catalog import (
-    PLACEHOLDER,
-    PROMPT_VARIABLES,
-    SUPPORTED_MODEL_PROVIDERS,
-    TOOL_DECLARATIONS,
-    StartAssessmentParams,
-)
 from agent_runtime.agent.model import ModelSettings, worst_case_ms
+from agent_runtime.agent.placeholders import PLACEHOLDER, PROMPT_VARIABLES, SUPPORTED_MODEL_PROVIDERS
 
 from .common import ContentHash, ContractModel, JsonObject, NonEmptyText, OpaqueId
 from .workflow import PersonaCase, Workflow
@@ -98,11 +92,13 @@ class AgentToolBinding(ContractModel):
 
     @model_validator(mode="after")
     def declared(self) -> "AgentToolBinding":
-        declaration = TOOL_DECLARATIONS.get((self.name, self.version))
-        if declaration is None:
+        from agent_runtime.tools.registry import find  # lazy: tool modules import this schema module
+
+        tool = find(self.name, self.version)
+        if tool is None:
             raise PydanticCustomError("tool_not_declared", "tool is not declared in the runtime catalog")
         try:
-            declaration.params_model.model_validate(self.params)
+            tool.params.model_validate(self.params)
         except ValidationError as error:
             problems = "; ".join(f"{'.'.join(map(str, item['loc'])) or '<root>'}: {item['msg']}"
                                  for item in error.errors())
@@ -155,6 +151,7 @@ class AgentSnapshotV1(ContractModel):
 
     @model_validator(mode="after")
     def consistent(self) -> "AgentSnapshotV1":
+        from agent_runtime.tools.assessment import StartAssessmentParams  # lazy: tool modules import this schema
         # Whole-snapshot rules have no location of their own; ctx "field" names the one the admin should fix.
         if self.mode == "chatflow" and self.workflow is None:
             raise PydanticCustomError("workflow_required", "chatflow mode requires a workflow",

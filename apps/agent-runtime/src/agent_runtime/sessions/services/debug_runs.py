@@ -14,22 +14,19 @@ from uuid import uuid4
 
 from pydantic import Field, ValidationError, model_validator
 
-from agent_runtime.agent.catalog import (
-    NO_CONTEXT,
-    KnowledgeSearchParams,
-    KnowledgeShowParams,
-    ToolContext,
-)
-from agent_runtime.agent.knowledge_tools import KnowledgeTools
 from agent_runtime.agent.loop import TextDelta
 from agent_runtime.agent.model import ModelReply, ModelUnavailable, UnconfiguredModel
 from agent_runtime.agent.prompt import AgentContext
 from agent_runtime.sessions.errors import RuntimeSessionError
 from agent_runtime.sessions.schemas.common import ContractModel, JsonObject
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+from agent_runtime.sessions.services.chatflow_turns import knowledge_base_ids_of
 
-# The tool checks and the button-press summary are shared with real turns so a debug run behaves like one.
-from agent_runtime.sessions.services.message_turns import SnapshotToolExecutor, interaction_summary
+# The button-press summary is shared with real turns so a debug run behaves like one.
+from agent_runtime.sessions.services.message_turns import interaction_summary
+from agent_runtime.tools.kit import TurnWorld
+from agent_runtime.tools.knowledge import KnowledgeShowParams
+from agent_runtime.tools.toolbox import open_turn
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.effects import ActivityChange, AssignConv, KbRefsUsed, ProfileProposal
 from agent_runtime.workflow.events import NodeFinished, NodeStarted
@@ -170,17 +167,6 @@ class DebugRunService:
                 raise RuntimeSessionError(503, "SERVICE_UNAVAILABLE", {"kind": "dependency_down"}) from None
             return {}  # an unreachable knowledge store degrades the run, as in a real turn
 
-    def _knowledge(self, agent: AgentSnapshotV1):
-        search = agent.tool("knowledge.search")
-        if search is None:
-            return NO_CONTEXT, None
-        params = KnowledgeSearchParams.model_validate(search.params)
-        show = agent.tool("knowledge.show")
-        fields = self._fields([params.knowledge_base_id])
-        tools = KnowledgeTools(self.knowledge, params, KnowledgeShowParams.model_validate(show.params) if show else None,
-                               fields.get(params.knowledge_base_id, ()), allowed_domains=agent.links.allowed_domains)
-        return ToolContext(knowledge_fields=fields), tools
-
     def _execute(self, agent: AgentSnapshotV1, request: DebugRequest, view, emit: Emit | None,
                  should_stop: StopCheck | None) -> dict:
         created = self._now()
@@ -202,15 +188,12 @@ class DebugRunService:
                            "activity_status": activity.state.status if activity else None},
                       conv=request.state.conv, profile=request.state.profile, result=request.state.result,
                       variables=workflow.variables)
-        tool_context, knowledge_tools = self._knowledge(agent)
-        wanted = {node.config["knowledge_base_id"] for node in workflow.nodes
-                  if node.type == "knowledge_retrieval" and isinstance(node.config.get("knowledge_base_id"), str)}
-        fields = {**self._fields(wanted - set(tool_context.knowledge_fields)), **tool_context.knowledge_fields}
+        fields = self._fields(knowledge_base_ids_of(agent))
         state_view = SimpleNamespace(agent=agent, activity=activity, result_card=request.state.result)
         show = agent.tool("knowledge.show")
         ports = Ports(agent=agent, model=base,
                       model_for=lambda node_id: StubModel(stubs[node_id]) if node_id in stubs else base,
-                      tools=SnapshotToolExecutor(state_view, knowledge_tools), tool_context=tool_context,
+                      tools=open_turn(TurnWorld(state_view, self.knowledge, fields)),
                       knowledge=self.knowledge, knowledge_fields=fields,
                       show_params=KnowledgeShowParams.model_validate(show.params) if show else None,
                       profile=NullProfilePort(),

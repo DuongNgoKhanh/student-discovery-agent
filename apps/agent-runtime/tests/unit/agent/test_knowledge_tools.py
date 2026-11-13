@@ -2,16 +2,18 @@
 import itertools
 
 import pytest
+from pydantic import ValidationError
 
-from agent_runtime.agent.catalog import (
+from agent_runtime.knowledge.filters import FilterError
+from agent_runtime.knowledge.schemas import KnowledgeUnavailable, MetadataField, Record, RetrievalResult
+from agent_runtime.tools.knowledge import (
     KnowledgeSearchArguments,
     KnowledgeSearchParams,
     KnowledgeShowArguments,
     KnowledgeShowParams,
+    KnowledgeTools,
+    format_value,
 )
-from agent_runtime.agent.knowledge_tools import KnowledgeTools, format_value
-from agent_runtime.knowledge.filters import FilterError
-from agent_runtime.knowledge.schemas import KnowledgeUnavailable, MetadataField, Record, RetrievalResult
 
 SEARCH = KnowledgeSearchParams.model_validate({
     "knowledge_base_id": "kb1", "auto_filter_fields": ["houses"],
@@ -177,3 +179,8 @@ def test_show_without_a_show_declaration_is_unavailable():
     tools = make(Port(RetrievalResult(records=(A1,))), show=None)
     ask(tools)
     assert tools.show(KnowledgeShowArguments(refs=("k1",))) == {"error": "knowledge_unavailable"}
+
+
+def test_search_params_reject_duplicate_filter_fields():
+    with pytest.raises(ValidationError):
+        KnowledgeSearchParams.model_validate({"knowledge_base_id": "kb", "auto_filter_fields": ["houses", "houses"]})

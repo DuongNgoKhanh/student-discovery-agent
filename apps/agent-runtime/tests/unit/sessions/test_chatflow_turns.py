@@ -2,19 +2,21 @@ from dataclasses import make_dataclass
 from datetime import date
 from types import SimpleNamespace
 
-from agent_runtime.agent.catalog import NO_CONTEXT, ToolContext
 from agent_runtime.agent.model import FakeModel, ModelReply, ModelUnavailable
 from agent_runtime.knowledge.schemas import MetadataField, Record, RetrievalResult
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.services import chatflow_turns
 from agent_runtime.sessions.services.chatflow_turns import (
     interaction_outcome,
+    knowledge_base_ids_of,
     plan_from_run,
+    post_handler,
     run_interaction_turn,
     run_message_turn,
 )
 from agent_runtime.sessions.services.message_turns import EXPLAIN_FALLBACK, EXPLAIN_REQUEST_TEXT
 from agent_runtime.workflow.executor import WorkflowRun
+from tests.helpers.toolbox import scripted_toolbox
 from tests.unit.workflow.helpers import MIN
 from tests.unit.workflow.helpers import agent as demo_agent
 
@@ -50,8 +52,8 @@ def test_scope_exposes_the_system_namespace_for_a_message(monkeypatch):
     history = (SimpleNamespace(role="user", text="chào", interaction=None),
                SimpleNamespace(role="assistant", blocks=()))
     # turn_index is the stored count of student messages, not the (possibly shorter) history window's.
-    run_message_turn(snapshot(demo_agent(), history, user_turns=31), message("học phí"), model=None, executor=None,
-                     tool_context=NO_CONTEXT, knowledge_port=None, clock=lambda: 0.0)
+    run_message_turn(snapshot(demo_agent(), history, user_turns=31), message("học phí"), model=None, toolbox=None,
+                     knowledge_port=None, clock=lambda: 0.0)
     scope, ports = seen[0]
     assert scope.get("sys.query") == "học phí" and scope.get("sys.interaction_outcome") == "none"
     assert scope.get("sys.client_blocks") == ["text", "markdown"] and scope.get("sys.turn_index") == 31
@@ -64,7 +66,7 @@ def test_scope_of_an_explain_request_has_no_query_and_exposes_the_result(monkeyp
     activity = SimpleNamespace(state=SimpleNamespace(status="completed", display_name="Minh"))
     request = SimpleNamespace(explain=SimpleNamespace(), content=None)
     run_message_turn(snapshot(demo_agent(), activity=activity, result_card=CARD, current_result=("r1", 3)), request,
-                     model=None, executor=None, tool_context=NO_CONTEXT, knowledge_port=None, clock=lambda: 0.0)
+                     model=None, toolbox=None, knowledge_port=None, clock=lambda: 0.0)
     scope, ports = seen[0]
     assert (scope.get("sys.query"), scope.get("sys.interaction"), scope.get("sys.interaction_outcome")) == (
         "", "explain_result", "explain_requested")
@@ -114,11 +116,13 @@ def test_the_graph_of_an_interaction_sees_the_post_handler_state_and_no_student_
     seen = captured_scope(monkeypatch)
     after = SimpleNamespace(status="in_progress", display_name="Ngân", current_question=None)
     run_interaction_turn(chat_snapshot(), request("set_name"), draft(next_state=after), model=None,
-                         tool_context=NO_CONTEXT, knowledge_port=None, knowledge=None, clock=lambda: 0.0)
+                         toolbox=None, knowledge_port=None, clock=lambda: 0.0)
     scope, ports = seen[0]
     assert (scope.get("sys.interaction"), scope.get("sys.interaction_outcome")) == ("set_name", "name_set")
     assert scope.get("sys.activity_status") == "in_progress" and scope.get("sys.query") == ""
-    assert ports.user_text == "[Học sinh nhập tên: Ngân]" and ports.tools.snapshot.activity.state is after
+    assert ports.user_text == "[Học sinh nhập tên: Ngân]"
+    # the caller opens the turn's Toolbox over this same post-handler view
+    assert post_handler(chat_snapshot(), draft(next_state=after)).activity.state is after
     assert scope.get("conv.stage") == "assessment"  # read from the conversation's stored variables
 
 
@@ -128,8 +132,8 @@ def test_a_completing_interaction_exposes_the_new_result_to_the_graph(monkeypatc
                                                       career_groups=("Y tế",)), result_revision=1)
     done = SimpleNamespace(status="completed", display_name="Ngân")
     run_interaction_turn(chat_snapshot(result_card=CARD, current_result=("r0", 4)), request("submit_answer"),
-                         draft(completion=completion, next_state=done), model=None, tool_context=NO_CONTEXT,
-                         knowledge_port=None, knowledge=None, clock=lambda: 0.0)
+                         draft(completion=completion, next_state=done), model=None, toolbox=None,
+                         knowledge_port=None, clock=lambda: 0.0)
     scope, _ = seen[0]
     assert scope.get("sys.interaction_outcome") == "assessment_completed"
     assert (scope.get("result.house_id"), scope.get("result.career_groups"), scope.get("result.revision")) == (
@@ -137,8 +141,8 @@ def test_a_completing_interaction_exposes_the_new_result_to_the_graph(monkeypatc
 
 
 def run_agent_mode(model):
-    run, _, _ = run_message_turn(snapshot(demo_agent()), message("chào"), model=model, executor=None,
-                                 tool_context=NO_CONTEXT, knowledge_port=None, clock=lambda: 0.0)
+    run, _, _ = run_message_turn(snapshot(demo_agent()), message("chào"), model=model,
+                                 toolbox=scripted_toolbox(demo_agent())[0], knowledge_port=None, clock=lambda: 0.0)
     return run
 
 
@@ -216,39 +220,39 @@ def turn_service(port):
     return TurnService(store, handler=None, responses=object(), knowledge=port)
 
 
-def test_workflow_fields_reads_only_the_kbs_a_node_uses_that_are_not_already_known():
+def test_a_turn_reads_the_search_kb_and_every_retrieval_node_kb_once():
+    search = [{"name": "knowledge.search", "version": 1, "params": {"knowledge_base_id": "kb1"}}]
+    assert knowledge_base_ids_of(kb_agent("kb2")) == {"kb2"}
+    assert knowledge_base_ids_of(kb_agent("kb2", tools=search)) == {"kb1", "kb2"}
+    assert knowledge_base_ids_of(kb_agent("kb1", tools=search)) == {"kb1"}
+    assert knowledge_base_ids_of(chatflow_agent()) == set()
     port = FieldsPort()
-    service = turn_service(port)
-    assert service._workflow_fields(kb_agent("kb2"), {}) == {"kb2": KB_FIELDS["kb2"]}
-    assert service._workflow_fields(kb_agent("kb2"), {"kb2": ()}) == {}
-    assert service._workflow_fields(demo_agent(), {}) == {} and port.read == ["kb2"]
+    assert turn_service(port)._fields(kb_agent("kb2", tools=search)) == KB_FIELDS and port.read == ["kb1", "kb2"]
 
 
-def test_run_message_turn_merges_the_workflow_fields_so_a_filter_variable_resolves():
+def test_run_message_turn_passes_the_turns_fields_so_a_filter_variable_resolves():
     show = {"display": [{"field": "tuition", "label": "Học phí"}]}
     agent = kb_agent("kb2", filter_from_vars={"tuition": "conv.budget"},
                      variables=[{"name": "budget", "type": "number", "default": 9000000}],
                      tools=[{"name": "knowledge.search", "version": 1, "params": {"knowledge_base_id": "kb1"}},
                             {"name": "knowledge.show", "version": 1, "params": show}])
     port = FieldsPort()
-    ctx = ToolContext(knowledge_fields={"kb1": KB_FIELDS["kb1"]})  # known KBs come from the agent tool context
-    merged = turn_service(port)._workflow_fields(agent, ctx.knowledge_fields)
-    run, _, _ = run_message_turn(snapshot(agent), message("học phí"), model=None, executor=None, tool_context=ctx,
-                                 knowledge_port=port, knowledge_fields=merged, clock=lambda: 0.0)
+    run, _, _ = run_message_turn(snapshot(agent), message("học phí"), model=None, toolbox=None,
+                                 knowledge_port=port, knowledge_fields=dict(KB_FIELDS), clock=lambda: 0.0)
     assert run.path == ("start", "kb", "reply") and run.records[1].handle == "found"
     assert [(c.name, c.comparison_operator, c.value) for c in port.requests[0].metadata_condition.conditions] == [
         ("tuition", "=", 9000000)]
     assert [block.type for block in run.blocks] == ["markdown", "knowledge_card"]
-    # without the merged fields kb2 is unreadable, so the filter cannot be checked
-    bare, _, _ = run_message_turn(snapshot(agent), message("học phí"), model=None, executor=None, tool_context=ctx,
-                                  knowledge_port=port, clock=lambda: 0.0)
+    # without kb2's fields the filter cannot be checked
+    bare, _, _ = run_message_turn(snapshot(agent), message("học phí"), model=None, toolbox=None,
+                                  knowledge_port=port, knowledge_fields={"kb1": KB_FIELDS["kb1"]}, clock=lambda: 0.0)
     assert bare.records[1].handle == "error"
 
 
 def test_run_message_turn_returns_the_budget_it_used_and_the_workflow_that_ran():
     agent = demo_agent()
     run, used, workflow = run_message_turn(snapshot(agent), message("chào"), model=FakeModel(ModelReply(text="Chào!")),
-                                           executor=None, tool_context=NO_CONTEXT, knowledge_port=None,
+                                           toolbox=scripted_toolbox(agent)[0], knowledge_port=None,
                                            clock=lambda: 0.0)
     assert (used.nodes, used.llm_calls) == (len(run.path), 1)
     assert [node.id for node in workflow.nodes] == ["start", "agent", "answer"]
@@ -261,9 +265,9 @@ def test_only_a_message_turn_requires_the_graph_to_produce_a_reply(monkeypatch):
         required.append(kwargs["reply_required"])
         return WorkflowRun("completed", (), (), (), scope.conv_values())
     monkeypatch.setattr(chatflow_turns, "run_workflow", capture)
-    run_message_turn(snapshot(chatflow_agent()), message("chào"), model=None, executor=None,
-                     tool_context=NO_CONTEXT, knowledge_port=None, clock=lambda: 0.0)
+    run_message_turn(snapshot(chatflow_agent()), message("chào"), model=None, toolbox=None,
+                     knowledge_port=None, clock=lambda: 0.0)
     after = SimpleNamespace(status="in_progress", display_name="Ngân", current_question=None)
     run_interaction_turn(chat_snapshot(), request("set_name"), draft(next_state=after), model=None,
-                         tool_context=NO_CONTEXT, knowledge_port=None, knowledge=None, clock=lambda: 0.0)
+                         toolbox=None, knowledge_port=None, clock=lambda: 0.0)
     assert required == [True, False]  # a handled interaction already has the handler's block as its reply

@@ -4,10 +4,10 @@ from typing import Annotated
 
 from pydantic import Field
 
-from agent_runtime.agent.knowledge_tools import with_cards
 from agent_runtime.agent.loop import ToolCallStarted, run_agent_turn
 from agent_runtime.agent.prompt import AgentContext
 from agent_runtime.sessions.schemas.common import ContractModel
+from agent_runtime.tools.knowledge import with_cards
 from agent_runtime.workflow.budget import BudgetExceeded
 from agent_runtime.workflow.effects import ActivityChange
 from agent_runtime.workflow.nodes.base import NodeCancelled, NodeContext, NodeError, NodeResult, NodeSpec
@@ -54,15 +54,11 @@ def run(ctx: NodeContext, config: AgentConfig) -> NodeResult:
     if live and ctx.streaming:
         ctx.state.streamed.add(ctx.node.id)
     calls_before = ctx.budget.llm_calls
-    cards_of = getattr(ports.tools, "cards", lambda: ())
-    # The executor's cards are per turn (the last knowledge.show's): an earlier agent node's are not this node's.
-    cards_before = cards_of()
     try:
         turn = run_agent_turn(_view(ports.agent, config), ctx.model, ports.tools,
                               ports.agent_context or AgentContext(today=date.today()), ports.history,
                               ports.user_text, new_id=ctx.new_id, on_event=forward if ctx.streaming else None,
-                              should_stop=ctx.should_stop, deadline=ctx.budget.deadline, clock=ctx.budget.clock,
-                              tool_context=ports.tool_context)
+                              should_stop=ctx.should_stop, deadline=ctx.budget.deadline, clock=ctx.budget.clock)
     except BudgetExceeded:
         # The turn budget stopped the loop mid-step: every model call it made so far was one agent step.
         ctx.state.agent_steps += ctx.budget.llm_calls - calls_before
@@ -73,8 +69,8 @@ def run(ctx: NodeContext, config: AgentConfig) -> NodeResult:
     if turn.fallback is not None:
         raise NodeError("model_unavailable" if turn.fallback in _UNAVAILABLE else "invalid_output",
                         cause=turn.fallback)
-    cards = cards_of()
-    blocks = with_cards(turn.blocks, () if cards is cards_before else cards)
+    # Tool effects (Answered/HandedOff.effects) are not applied yet: no tool emits one; wiring comes with the effect-commit work.
+    blocks = with_cards(turn.blocks, turn.cards)
     output = {"text": _text_of(blocks), "handoff": turn.handoff.name if turn.handoff else None}
     if turn.handoff is not None:
         ctx.state.handoff = turn.handoff
