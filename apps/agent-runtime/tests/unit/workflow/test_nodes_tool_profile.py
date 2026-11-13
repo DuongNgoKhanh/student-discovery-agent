@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from agent_runtime.agent.model import FakeModel, ModelReply
+from agent_runtime.tools.kit import Refused
 from agent_runtime.workflow.effects import ActivityChange, ProfileProposal
 from agent_runtime.workflow.nodes.base import NodeError, RunState
 from tests.helpers.toolbox import scripted_toolbox
@@ -34,6 +35,18 @@ def test_a_tool_error_result_goes_to_the_error_handle():
         run_node(tool_node("assessment.start", {"experience_id": "x"}),
                  tools=scripted_toolbox(agent(), {"assessment.start": {"error": "assessment_in_progress"}})[0])
     assert error.value.error_type == "tool_error"
+
+
+def test_a_handoff_ends_the_turn_for_every_later_node_sharing_its_toolbox():
+    """One Toolbox serves the whole turn; the validator keeps valid graphs from reaching a node after a handoff."""
+    tools, calls = scripted_toolbox(agent(), {"assessment.start": {"status": "started"}})
+    _, handed, _, _ = run_node(tool_node("assessment.start", {"experience_id": "logical-experience"}), tools=tools)
+    assert isinstance(handed.effects[0], ActivityChange)
+    with pytest.raises(NodeError) as error:
+        run_node(tool_node("result.explain"), tools=tools)
+    assert error.value.error_type == "tool_error"
+    assert tools.call("result.explain", {}, via="node") == Refused({"error": "turn_ended"})
+    assert [name for name, _ in calls] == ["assessment.start"]  # the later query never ran
 
 
 class Profile:
