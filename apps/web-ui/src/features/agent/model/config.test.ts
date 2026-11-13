@@ -32,6 +32,9 @@ describe('sections', () => {
     expect(sectionLabel('chatflow')).toBe('Chatflow');
     expect(sectionsForMode('agent').some(s => s.id === 'chatflow')).toBe(false);
     expect(sectionsForMode('chatflow').some(s => s.id === 'chatflow')).toBe(true);
+    // persona_cases lives in the JSON section, so chatflow mode must keep it reachable.
+    expect(sectionOf('persona_cases')).toBe('json');
+    expect(sectionsForMode('chatflow').some(s => s.id === 'json')).toBe(true);
     expect(sectionOf('')).toBe('json');
   });
   it('lists changed sections by top-level key', () => {

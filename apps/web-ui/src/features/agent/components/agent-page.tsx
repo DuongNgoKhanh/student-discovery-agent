@@ -7,7 +7,7 @@ import { ConfirmDialog, PageTitle, QueryState, errorMessage, knowledgeApi, useUn
 import { ApiError } from '@/lib/api/errors';
 import { canonical, setIn, type Path } from '../model/config';
 import { bindKnowledge, type ToolBinding } from '../model/tools';
-import { type AgentMode, type SectionId } from '../model/sections';
+import { sectionsForMode, type AgentMode, type SectionId } from '../model/sections';
 import { agentApi } from '../api/agent';
 import { useAgentActive, useAgentDraft, useSaveDraft, useValidateDraft } from '../hooks/use-agent';
 import type { AgentConfig, AgentDraft } from '../types';
@@ -67,6 +67,8 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
   const [publishing, setPublishing] = useState(false);
   const mode: AgentMode = config.mode === 'chatflow' ? 'chatflow' : 'agent';
   const [pendingMode, setPendingMode] = useState<AgentMode | null>(null);
+  // The mode can also change outside the switch (loading the server copy, copying a version, the JSON section).
+  const shownSection = sectionsForMode(mode).some(s => s.id === section) ? section : mode === 'chatflow' ? 'chatflow' : 'persona';
 
   const dirty = canonical(config) !== canonical(base.content);
   // A report for another draft revision (raced save, reloaded copy) no longer describes what is on screen.
@@ -199,7 +201,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
 
       {tab === 'config' ? (
         <ConfigTab config={config} onChange={change} onReplace={next => { setConfig(next); setValidation(v => (v ? { ...v, stale: true } : v)); }}
-          section={section} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
+          section={shownSection} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
           validation={shownValidation} onBindKb={kb => void bindKb(kb)} mode={mode} />
       ) : (
         <VersionsTab active={active.data ?? null} onCopyToDraft={content => { setConfig(content); setValidation(v => (v ? { ...v, stale: true } : v)); setTab('config'); }} />

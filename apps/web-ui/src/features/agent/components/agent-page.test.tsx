@@ -144,6 +144,29 @@ describe('AgentPage', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('shows a section of the new mode when the loaded server copy changes the mode', async () => {
+    const chatflowDraft: AgentDraft = { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: { entry: 'start', nodes: [], edges: [] } } };
+    draftQuery = { ...draftQuery, data: chatflowDraft };
+    save.mockRejectedValueOnce(new ApiError({ code: 'CONFLICT_REVISION', message: 'x', httpStatus: 409, details: { current: { ...server, content: { ...server.content, mode: 'agent' } } } }));
+    render(<AgentPage />);
+    expect(screen.getByText('Chatflow editor sẽ xuất hiện ở đây.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
+    fireEvent.change(screen.getByLabelText('Workflow JSON'), { target: { value: JSON.stringify({ entry: 'start', nodes: [] }) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: 'Tải bản mới' }));
+    expect(screen.getByRole('radio', { name: 'Agent' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByLabelText('Workflow JSON')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Lời chào')).toHaveValue('Bản trên server');
+  });
+
+  it('keeps the whole-config JSON section, where persona_cases is edited, in Chatflow mode', () => {
+    draftQuery = { ...draftQuery, data: { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: { entry: 'start', nodes: [], edges: [] } } } };
+    render(<AgentPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    expect(screen.getByLabelText('Cấu hình JSON')).toBeInTheDocument();
+  });
+
   it('shows the banner instead of overwriting unsaved edits when publish hits a 409', async () => {
     vi.mocked(agentApi.getDraft).mockResolvedValue(server);
     render(<AgentPage />);

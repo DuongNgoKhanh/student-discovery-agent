@@ -19,7 +19,8 @@ export const SECTIONS = AGENT_SECTIONS;
 export const ALL_SECTIONS: { id: SectionId; label: string }[] = [CHATFLOW_SECTION, ...AGENT_SECTIONS];
 
 export function sectionsForMode(mode: AgentMode): { id: SectionId; label: string }[] {
-  return mode === 'chatflow' ? [CHATFLOW_SECTION, ...AGENT_SECTIONS.filter(section => section.id !== 'json')] : AGENT_SECTIONS;
+  // Chatflow keeps the whole-config JSON section: it is the only editor for persona_cases, which chatflow validation requires.
+  return mode === 'chatflow' ? ALL_SECTIONS : AGENT_SECTIONS;
 }
 
 export function sectionLabel(id: SectionId): string {
