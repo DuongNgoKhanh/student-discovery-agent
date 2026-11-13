@@ -143,6 +143,17 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     } catch (error) { toast.error(errorMessage(error)); }
   };
 
+  const downloadLocalDraft = () => {
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'agent-draft.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('Đã tải bản nháp local dạng JSON');
+  };
+
   const runValidation = async () => {
     if (jsonError) return;
     if (!(await persist())) return;
@@ -169,8 +180,10 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
 
       {conflict && (
         <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-warning-foreground/30 bg-warning-subtle px-4 py-3 text-13">
-          Bản nháp đã được sửa ở nơi khác (revision {conflict.revision}).
-          <button type="button" className="underline" onClick={() => { void navigator.clipboard.writeText(JSON.stringify(config, null, 2)); toast.success('Đã copy nội dung của bạn'); }}>Copy nội dung của tôi</button>
+          <span>
+            Bản nháp đã được sửa ở nơi khác (revision {conflict.revision}), bởi {conflict.updated_by} lúc {new Date(conflict.updated_at).toLocaleString('vi-VN')}.
+          </span>
+          <button type="button" className="underline" onClick={downloadLocalDraft}>Tải bản của tôi dạng JSON</button>
           <button type="button" className="underline" onClick={() => { setBase(conflict); setConfig(conflict.content); setConflict(null); }}>Tải bản mới</button>
         </div>
       )}
