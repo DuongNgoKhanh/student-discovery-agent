@@ -3,12 +3,12 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from agent_runtime.agent.knowledge_tools import KnowledgeTools
 from agent_runtime.agent.loop import Handoff
 from agent_runtime.agent.model import ModelPort
 from agent_runtime.sessions.schemas.activity import TypedBlock
 from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.sessions.schemas.workflow import WorkflowNode
+from agent_runtime.tools.knowledge import KnowledgeTools
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.effects import Effect
 from agent_runtime.workflow.scope import Scope

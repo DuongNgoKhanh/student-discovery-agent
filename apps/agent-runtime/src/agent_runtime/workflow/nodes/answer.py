@@ -2,10 +2,10 @@ from typing import Annotated, Literal
 
 from pydantic import Field, StringConstraints, model_validator
 
-from agent_runtime.agent.catalog import KnowledgeShowArguments
 from agent_runtime.agent.loop import TextDelta, text_block
 from agent_runtime.sessions.schemas.activity import SuggestionsBlock, TypedBlock
 from agent_runtime.sessions.schemas.common import ContractModel
+from agent_runtime.tools.knowledge import KnowledgeShowArguments
 from agent_runtime.workflow.nodes.base import NodeContext, NodeResult, NodeSpec
 from agent_runtime.workflow.registry import register
 from agent_runtime.workflow.templates import render

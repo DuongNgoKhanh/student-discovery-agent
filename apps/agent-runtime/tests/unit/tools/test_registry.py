@@ -1,4 +1,3 @@
-from agent_runtime.agent.catalog import TOOL_DECLARATIONS
 from agent_runtime.tools.registry import TOOLS, find
 
 ORDER = ["assessment.start", "assessment.set_name", "assessment.current_question", "assessment.propose_answer",
@@ -7,14 +6,11 @@ ORDER = ["assessment.start", "assessment.set_name", "assessment.current_question
 
 def test_registry_declares_the_catalog_s_tools_in_order():
     assert [name for name, _ in TOOLS] == ORDER
-    assert set(TOOLS) == set(TOOL_DECLARATIONS)  # removed with catalog.py in Task 5
 
 
-def test_kinds_match_the_old_handoff_flags():
-    for key, declaration in TOOL_DECLARATIONS.items():
-        tool = TOOLS[key]
-        assert (tool.kind == "handoff") == declaration.handoff
-        assert tool.params is declaration.params_model and tool.arguments is declaration.arguments_model
+def test_handoff_tools_are_exactly_the_assessment_flow():
+    assert {name for (name, _), tool in TOOLS.items() if tool.kind == "handoff"} == {
+        "assessment.start", "assessment.set_name", "assessment.current_question", "assessment.propose_answer"}
     assert TOOLS[("ui.suggest_replies", 1)].kind == "reply"
 
 

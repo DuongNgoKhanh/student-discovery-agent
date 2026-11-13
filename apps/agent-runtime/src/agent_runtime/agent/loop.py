@@ -12,7 +12,6 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from agent_runtime.agent.catalog import SuggestRepliesArguments
 from agent_runtime.agent.model import (
     AssistantMessage,
     ChatMessage,
@@ -35,6 +34,7 @@ from agent_runtime.sessions.schemas.activity import (
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.services.blocks import markdown_to_text
 from agent_runtime.tools.kit import Answered, HandedOff, Handoff, Replied
+from agent_runtime.tools.ui import SuggestRepliesArguments
 
 if TYPE_CHECKING:
     from agent_runtime.tools.toolbox import Toolbox

@@ -14,7 +14,6 @@ from uuid import uuid4
 
 from pydantic import Field, ValidationError, model_validator
 
-from agent_runtime.agent.catalog import KnowledgeShowParams
 from agent_runtime.agent.loop import TextDelta
 from agent_runtime.agent.model import ModelReply, ModelUnavailable, UnconfiguredModel
 from agent_runtime.agent.prompt import AgentContext
@@ -26,6 +25,7 @@ from agent_runtime.sessions.services.chatflow_turns import knowledge_base_ids_of
 # The button-press summary is shared with real turns so a debug run behaves like one.
 from agent_runtime.sessions.services.message_turns import interaction_summary
 from agent_runtime.tools.kit import TurnWorld
+from agent_runtime.tools.knowledge import KnowledgeShowParams
 from agent_runtime.tools.toolbox import open_turn
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.effects import ActivityChange, AssignConv, KbRefsUsed, ProfileProposal

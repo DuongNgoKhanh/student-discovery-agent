@@ -33,7 +33,7 @@ _MESSAGES = {
 
 
 _GENERIC = "Giá trị không hợp lệ."
-# Codes raised by the schema layer as PydanticCustomError (release.py, catalog.py); their English text stays there.
+# Codes raised by the schema layer as PydanticCustomError (release.py, the tool modules); their English text stays there.
 _CUSTOM = {
     "unsupported_provider": "Nhà cung cấp mô hình không được hỗ trợ.",
     "tool_not_declared": "Công cụ này chưa được runtime khai báo.",

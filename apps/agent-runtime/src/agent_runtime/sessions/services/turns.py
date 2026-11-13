@@ -6,7 +6,6 @@ from dataclasses import replace
 from time import monotonic_ns
 from typing import Literal
 
-from agent_runtime.agent.knowledge_tools import KnowledgePort
 from agent_runtime.agent.loop import TextDelta, ToolCallStarted
 from agent_runtime.agent.model import ModelPort, UnconfiguredModel
 from agent_runtime.infrastructure.auth.caller import VerifiedCaller
@@ -30,6 +29,7 @@ from agent_runtime.sessions.services.turn_handlers import TurnHandler
 from agent_runtime.sessions.services.turn_store import Begun, TurnCancelled, TurnStore
 from agent_runtime.sessions.trace import describe_metadata, emit_trace
 from agent_runtime.tools.kit import TurnWorld
+from agent_runtime.tools.knowledge import KnowledgePort
 from agent_runtime.tools.toolbox import Toolbox, open_turn
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.executor import WorkflowRun

@@ -4,10 +4,10 @@ from typing import Annotated
 
 from pydantic import Field
 
-from agent_runtime.agent.knowledge_tools import with_cards
 from agent_runtime.agent.loop import ToolCallStarted, run_agent_turn
 from agent_runtime.agent.prompt import AgentContext
 from agent_runtime.sessions.schemas.common import ContractModel
+from agent_runtime.tools.knowledge import with_cards
 from agent_runtime.workflow.budget import BudgetExceeded
 from agent_runtime.workflow.effects import ActivityChange
 from agent_runtime.workflow.nodes.base import NodeCancelled, NodeContext, NodeError, NodeResult, NodeSpec

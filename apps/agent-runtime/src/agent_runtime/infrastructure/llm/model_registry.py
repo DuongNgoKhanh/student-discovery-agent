@@ -9,7 +9,7 @@ from agent_runtime.infrastructure.llm.openrouter_model import OpenRouterChatMode
 from agent_runtime.infrastructure.llm.vllm_model import VllmChatModel
 
 # provider -> (adapter, settings field holding its API key, settings field holding its base URL or None);
-# keys must match catalog.SUPPORTED_MODEL_PROVIDERS.
+# keys must match agent.placeholders.SUPPORTED_MODEL_PROVIDERS.
 MODEL_PROVIDERS: dict[str, tuple[type[AgnoChatModel], str, str | None]] = {
     "gemini": (GeminiChatModel, "GOOGLE_API_KEY", None),
     "openai": (OpenAIChatModel, "OPENAI_API_KEY", None),

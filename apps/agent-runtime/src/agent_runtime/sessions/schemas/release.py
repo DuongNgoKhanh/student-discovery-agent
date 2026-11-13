@@ -4,13 +4,8 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, Field, StringConstraints, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
-from agent_runtime.agent.catalog import (
-    PLACEHOLDER,
-    PROMPT_VARIABLES,
-    SUPPORTED_MODEL_PROVIDERS,
-    StartAssessmentParams,
-)
 from agent_runtime.agent.model import ModelSettings, worst_case_ms
+from agent_runtime.agent.placeholders import PLACEHOLDER, PROMPT_VARIABLES, SUPPORTED_MODEL_PROVIDERS
 
 from .common import ContentHash, ContractModel, JsonObject, NonEmptyText, OpaqueId
 from .workflow import PersonaCase, Workflow
@@ -156,6 +151,7 @@ class AgentSnapshotV1(ContractModel):
 
     @model_validator(mode="after")
     def consistent(self) -> "AgentSnapshotV1":
+        from agent_runtime.tools.assessment import StartAssessmentParams  # lazy: tool modules import this schema
         # Whole-snapshot rules have no location of their own; ctx "field" names the one the admin should fix.
         if self.mode == "chatflow" and self.workflow is None:
             raise PydanticCustomError("workflow_required", "chatflow mode requires a workflow",

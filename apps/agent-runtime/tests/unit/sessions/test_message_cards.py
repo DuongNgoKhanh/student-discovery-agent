@@ -4,7 +4,6 @@ from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
-from agent_runtime.agent.knowledge_tools import with_cards
 from agent_runtime.agent.loop import run_agent_turn
 from agent_runtime.agent.model import FakeModel, ModelReply, ModelUnavailable, ToolCall
 from agent_runtime.agent.prompt import AgentContext
@@ -12,6 +11,7 @@ from agent_runtime.sessions.schemas.activity import KnowledgeCardBlock, Suggesti
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 from agent_runtime.sessions.services.turns import TurnService
 from agent_runtime.tools.kit import Answered
+from agent_runtime.tools.knowledge import with_cards
 from tests.helpers.toolbox import scripted_toolbox
 
 ROOT = Path(__file__).resolve().parents[5]

@@ -4,9 +4,9 @@ from typing import Annotated, Any, Literal
 
 from pydantic import Field, StringConstraints, model_validator
 
-from agent_runtime.agent.catalog import render_placeholders
 from agent_runtime.agent.loop import TextDelta, text_block
 from agent_runtime.agent.model import SystemMessage, UserMessage
+from agent_runtime.agent.placeholders import render_placeholders
 from agent_runtime.sessions.schemas.common import ContractModel
 from agent_runtime.workflow.nodes.base import NodeContext, NodeError, NodeResult, NodeSpec
 from agent_runtime.workflow.nodes.json_check import check_schema

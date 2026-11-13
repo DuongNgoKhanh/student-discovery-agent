@@ -28,3 +28,9 @@ def test_registry_is_looked_up_lazily(module):
     code = (f"import sys, {module}; "
             "assert 'agent_runtime.tools.registry' not in sys.modules, 'imported the registry at module level'")
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_the_old_catalog_modules_are_gone():
+    import importlib.util
+    assert importlib.util.find_spec("agent_runtime.agent.catalog") is None
+    assert importlib.util.find_spec("agent_runtime.agent.knowledge_tools") is None

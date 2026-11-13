@@ -1,16 +1,14 @@
 """Assessment tools: start the personality assessment, save the name, show or answer the current question, read
 the result. A handoff tool never authors assessment content: its ``settle`` renders the next server block."""
 from collections.abc import Iterator
-from typing import Any
+from typing import Annotated, Any
 
-from agent_runtime.agent.catalog import (
-    ProposeAnswerArguments,
-    SetNameArguments,
-    StartArguments,
-    StartAssessmentParams,
-    render_placeholders,
-)
+from pydantic import Field, StringConstraints, model_validator
+from pydantic_core import PydanticCustomError
+
+from agent_runtime.agent.placeholders import render_placeholders
 from agent_runtime.sessions.errors import RuntimeSessionError
+from agent_runtime.sessions.schemas.common import ContractModel, NonEmptyText, OpaqueId
 from agent_runtime.sessions.schemas.turn import SetNameInteraction
 from agent_runtime.sessions.schemas.turn_execution import TurnDraft, TurnSnapshot
 from agent_runtime.sessions.services.message_turns import PROPOSAL_TEXT, MessagePlan, StartPlan, phase, plain_text
@@ -19,6 +17,35 @@ from agent_runtime.sessions.services.turn_response import activity_block
 from agent_runtime.tools.kit import Call, Ref, RefPorts, Settle, Tool, ToolError
 
 OPEN_STATES = {"collecting_name", "in_progress"}
+
+
+class StartExperience(ContractModel):
+    experience_id: OpaqueId
+    algorithm_profile: NonEmptyText
+    label: Annotated[str, StringConstraints(min_length=1, max_length=60, pattern=r"\S")]
+
+
+class StartAssessmentParams(ContractModel):
+    experiences: Annotated[tuple[StartExperience, ...], Field(min_length=1)]
+
+    @model_validator(mode="after")
+    def unique_experiences(self) -> "StartAssessmentParams":
+        if len({item.experience_id for item in self.experiences}) != len(self.experiences):
+            raise PydanticCustomError("duplicate_items", "experience_id must be unique", {"field": "experiences"})
+        return self
+
+
+# Arguments the model fills; validated before any tool runs.
+class StartArguments(ContractModel):
+    experience_id: OpaqueId
+
+
+class SetNameArguments(ContractModel):
+    display_name: Annotated[str, StringConstraints(min_length=1, max_length=50, pattern=r"\S")]
+
+
+class ProposeAnswerArguments(ContractModel):
+    option_id: OpaqueId
 
 
 def _start(call: Call) -> dict[str, Any]:

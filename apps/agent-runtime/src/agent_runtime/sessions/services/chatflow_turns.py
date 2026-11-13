@@ -2,7 +2,6 @@
 from dataclasses import replace
 from typing import Any
 
-from agent_runtime.agent.catalog import KnowledgeShowParams
 from agent_runtime.sessions.schemas.turn import MessageTurnInput
 from agent_runtime.sessions.schemas.turn_execution import TurnDraft
 from agent_runtime.sessions.schemas.workflow import Workflow
@@ -15,6 +14,7 @@ from agent_runtime.sessions.services.message_turns import (
     explain_fallback,
     interaction_summary,
 )
+from agent_runtime.tools.knowledge import KnowledgeShowParams
 from agent_runtime.tools.toolbox import settle
 from agent_runtime.workflow.budget import Budget
 from agent_runtime.workflow.executor import WorkflowRun, run_workflow

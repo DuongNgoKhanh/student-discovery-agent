@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from agent_runtime.knowledge.schemas import MetadataField
 from agent_runtime.sessions.schemas.common import ContractModel
 
-if TYPE_CHECKING:  # sessions.schemas.activity imports release, which imports agent.catalog, which imports this module
+if TYPE_CHECKING:  # activity imports release; release lazily imports the tool modules, which import this one
     from agent_runtime.sessions.schemas.activity import TypedBlock
     from agent_runtime.sessions.schemas.release import AgentSnapshotV1
 

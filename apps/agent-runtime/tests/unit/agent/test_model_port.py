@@ -3,7 +3,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent_runtime.agent.catalog import SUPPORTED_MODEL_PROVIDERS
 from agent_runtime.agent.model import (
     FakeModel,
     ModelReply,
@@ -12,6 +11,7 @@ from agent_runtime.agent.model import (
     UnconfiguredModel,
     UserMessage,
 )
+from agent_runtime.agent.placeholders import SUPPORTED_MODEL_PROVIDERS
 from agent_runtime.infrastructure.llm.gemini_model import GeminiChatModel
 from agent_runtime.infrastructure.llm.model_registry import MODEL_PROVIDERS, build_model_port
 from agent_runtime.infrastructure.llm.openai_model import OpenAIChatModel

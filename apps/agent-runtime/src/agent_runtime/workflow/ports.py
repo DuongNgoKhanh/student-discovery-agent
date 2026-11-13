@@ -3,12 +3,11 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
-from agent_runtime.agent.catalog import KnowledgeShowParams
-from agent_runtime.agent.knowledge_tools import KnowledgePort
 from agent_runtime.agent.model import ChatMessage, ModelPort, UnconfiguredModel
 from agent_runtime.agent.prompt import AgentContext
 from agent_runtime.knowledge.schemas import MetadataField
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+from agent_runtime.tools.knowledge import KnowledgePort, KnowledgeShowParams
 
 if TYPE_CHECKING:
     from agent_runtime.tools.toolbox import Toolbox

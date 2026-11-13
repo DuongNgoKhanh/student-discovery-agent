@@ -4,11 +4,11 @@ import json
 from datetime import date
 from pathlib import Path
 
-from agent_runtime.agent.catalog import ProposeAnswerArguments, SetNameArguments
 from agent_runtime.agent.loop import TextDelta, ToolCallStarted, run_agent_turn
 from agent_runtime.agent.model import FakeModel, ModelReply, ModelUnavailable, ToolCall, ToolResultMessage, UserMessage
 from agent_runtime.agent.prompt import AgentContext
 from agent_runtime.sessions.schemas.release import AgentSnapshotV1
+from agent_runtime.tools.assessment import ProposeAnswerArguments, SetNameArguments
 from tests.helpers.toolbox import scripted_toolbox
 
 ROOT = Path(__file__).resolve().parents[5]
