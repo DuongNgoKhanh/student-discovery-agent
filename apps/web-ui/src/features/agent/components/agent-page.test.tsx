@@ -127,21 +127,47 @@ describe('AgentPage', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('bởi admin');
     expect(screen.getByRole('alert')).toHaveTextContent(new Date(server.updated_at).toLocaleString('vi-VN'));
     expect(screen.getByLabelText('Lời chào')).toHaveValue('Của tôi');
-    const createObjectURL = vi.fn(() => 'blob:agent-draft');
+    const createObjectURL = vi.fn<(blob: Blob) => string>(() => 'blob:agent-draft');
     const revokeObjectURL = vi.fn();
     Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
     Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
-    fireEvent.click(screen.getByRole('button', { name: 'Tải bản của tôi dạng JSON' }));
-    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
-    expect(click).toHaveBeenCalled();
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:agent-draft');
-    Reflect.deleteProperty(URL, 'createObjectURL');
-    Reflect.deleteProperty(URL, 'revokeObjectURL');
-    click.mockRestore();
+    let clicked: { download: string; attached: boolean } | null = null;
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      clicked = { download: this.download, attached: this.isConnected };
+    });
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Tải bản của tôi dạng JSON' }));
+      expect(clicked).toEqual({ download: 'agent-draft.json', attached: true });
+      const blob = createObjectURL.mock.calls[0]?.[0] as Blob;
+      // jsdom's Blob has no text().
+      const text = await new Promise<string>(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsText(blob);
+      });
+      expect(JSON.parse(text)).toMatchObject({ greeting_text: 'Của tôi' });
+      await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:agent-draft'));
+    } finally {
+      Reflect.deleteProperty(URL, 'createObjectURL');
+      Reflect.deleteProperty(URL, 'revokeObjectURL');
+      click.mockRestore();
+    }
     fireEvent.click(screen.getByRole('button', { name: 'Tải bản mới' }));
     expect(screen.getByLabelText('Lời chào')).toHaveValue('Bản trên server');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('turns the conflict actions off while the JSON editor is broken', async () => {
+    save.mockRejectedValueOnce(new ApiError({ code: 'CONFLICT_REVISION', message: 'x', httpStatus: 409, details: { current: server } }));
+    render(<AgentPage />);
+    fireEvent.change(screen.getByLabelText('Lời chào'), { target: { value: 'Của tôi' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: 'JSON' }));
+    fireEvent.change(screen.getByLabelText('Cấu hình JSON'), { target: { value: '{ "greeting_text": ' } });
+    expect(screen.getByRole('button', { name: 'Tải bản của tôi dạng JSON' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Tải bản mới' })).toBeDisabled();
+    expect(screen.getByText('Sửa lỗi JSON trước khi tải.')).toBeInTheDocument();
   });
 
   it('shows a section of the new mode when the loaded server copy changes the mode', async () => {

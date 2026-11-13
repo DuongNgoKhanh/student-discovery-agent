@@ -151,9 +151,12 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     const link = document.createElement('a');
     link.href = url;
     link.download = 'agent-draft.json';
+    // Some browsers drop the download for a detached link or a URL revoked in the same tick.
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
-    toast.success('Đã tải bản nháp local dạng JSON');
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    toast.success('Đã bắt đầu tải bản nháp local dạng JSON');
   };
 
   const runValidation = async () => {
@@ -185,8 +188,10 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
           <span>
             Bản nháp đã được sửa ở nơi khác (revision {conflict.revision}), bởi {conflict.updated_by} lúc {new Date(conflict.updated_at).toLocaleString('vi-VN')}.
           </span>
-          <button type="button" className="underline" onClick={downloadLocalDraft}>Tải bản của tôi dạng JSON</button>
-          <button type="button" className="underline" onClick={() => { setBase(conflict); setConfig(conflict.content); setConflict(null); }}>Tải bản mới</button>
+          {/* A broken JSON editor holds edits that `config` lacks and ignores outside updates: fix it before either action. */}
+          <button type="button" className="underline disabled:opacity-50" disabled={Boolean(jsonError)} onClick={downloadLocalDraft}>Tải bản của tôi dạng JSON</button>
+          <button type="button" className="underline disabled:opacity-50" disabled={Boolean(jsonError)} onClick={() => { setBase(conflict); setConfig(conflict.content); setConflict(null); }}>Tải bản mới</button>
+          {jsonError && <span className="text-muted-foreground">Sửa lỗi JSON trước khi tải.</span>}
         </div>
       )}
 
