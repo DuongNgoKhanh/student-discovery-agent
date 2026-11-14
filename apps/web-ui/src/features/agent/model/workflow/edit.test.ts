@@ -117,6 +117,13 @@ describe('deleteNode', () => {
     expect(wf.edges).toHaveLength(2);
   });
 
+  it('refuses to delete the entry node', () => {
+    const wf = makeBaseWorkflow();
+    expect(() => deleteNode(wf, 'start')).toThrowError(
+      expect.objectContaining({ code: 'ENTRY_NODE' }),
+    );
+  });
+
   it('returns the original workflow reference when node does not exist', () => {
     const wf = makeBaseWorkflow();
     expect(deleteNode(wf, 'missing')).toBe(wf);

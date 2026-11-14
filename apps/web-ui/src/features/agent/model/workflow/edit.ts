@@ -12,6 +12,7 @@ export type WorkflowEditErrorCode =
   | 'INVALID_ID'
   | 'RESERVED_ID'
   | 'DUPLICATE_ID'
+  | 'ENTRY_NODE'
   | 'NODE_NOT_FOUND'
   | 'INVALID_TARGET'
   | 'INVALID_POSITION'
@@ -105,8 +106,15 @@ export function addNode(workflow: ChatflowWorkflow, node: ChatflowNode): Chatflo
   };
 }
 
-/** Immutably removes a node and all edges connected to it as source or target. */
+/**
+ * Immutably removes a node and all edges connected to it as source or target.
+ * The `entry` node cannot be deleted: the runtime requires exactly one start node as entry.
+ */
 export function deleteNode(workflow: ChatflowWorkflow, nodeId: string): ChatflowWorkflow {
+  if (nodeId === workflow.entry) {
+    throw new WorkflowEditError('ENTRY_NODE', `Entry node "${nodeId}" cannot be deleted`);
+  }
+
   const nextNodes = workflow.nodes.filter((node) => node.id !== nodeId);
   const currentEdges = workflow.edges ?? [];
   const nextEdges = currentEdges.filter(
