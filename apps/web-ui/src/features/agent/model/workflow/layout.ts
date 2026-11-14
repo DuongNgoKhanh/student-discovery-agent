@@ -11,7 +11,7 @@ export interface WorkflowLayoutOptions {
   layerGap?: number;
   nodeGap?: number;
   origin?: WorkflowPosition;
-  /** Optional ordered outgoing handle names per node ID (e.g. from catalog static + from_config). */
+  /** Ordered outgoing handle names per node ID, from the node-type catalog (`WorkflowHandleSpec`). Unlisted handles sort after listed ones, by edge order. */
   handleOrderByNode?: Record<string, readonly string[]>;
 }
 
@@ -49,7 +49,9 @@ function boxesOverlap(
 /**
  * Computes deterministic `{ x, y }` positions for all workflow nodes.
  * - Nodes with a finite `ui.position` keep their existing position.
- * - Reachable nodes from `entry` are layered by longest path and ordered within each layer by handle order.
+ * - Reachable nodes from `entry` are layered by longest path (nodes in a pre-existing cycle are placed
+ *   after their earliest-processed parents). Within a layer, nodes are ordered by their parent's order,
+ *   then by `handleOrderByNode` rank, then by edge order.
  * - Unreachable nodes are placed in an extra layer after the deepest reachable layer.
  * - Auto-laid-out nodes are shifted if needed so they never overlap fixed nodes or each other.
  * Throws `RangeError` for non-finite options, non-positive node sizes, or negative gaps.
