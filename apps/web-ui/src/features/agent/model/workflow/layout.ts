@@ -52,6 +52,7 @@ function boxesOverlap(
  * - Reachable nodes from `entry` are layered by longest path and ordered within each layer by handle order.
  * - Unreachable nodes are placed in an extra layer after the deepest reachable layer.
  * - Auto-laid-out nodes are shifted if needed so they never overlap fixed nodes or each other.
+ * Throws `RangeError` for non-finite options, non-positive node sizes, or negative gaps.
  */
 export function computeWorkflowLayout(
   workflow: Pick<ChatflowWorkflow, 'entry' | 'nodes' | 'edges'>,
@@ -66,6 +67,19 @@ export function computeWorkflowLayout(
   const nodeGap = options.nodeGap ?? DEFAULT_NODE_GAP;
   const origin = options.origin ?? DEFAULT_ORIGIN;
   const handleOrderByNode = options.handleOrderByNode;
+
+  // The overlap search below steps by nodeHeight + nodeGap; a zero or NaN step would never end.
+  if (
+    ![nodeWidth, nodeHeight, layerGap, nodeGap, origin.x, origin.y].every(Number.isFinite) ||
+    nodeWidth <= 0 ||
+    nodeHeight <= 0 ||
+    layerGap < 0 ||
+    nodeGap < 0
+  ) {
+    throw new RangeError(
+      'Layout options must be finite, with positive node sizes and non-negative gaps',
+    );
+  }
 
   const nodeIndexById = new Map<string, number>();
   nodes.forEach((node, index) => {
@@ -121,7 +135,7 @@ export function computeWorkflowLayout(
         if (reachable.has(edge.source)) deg += 1;
       }
       inDegree.set(id, deg);
-      layerById.set(id, id === workflow.entry ? 0 : 0);
+      layerById.set(id, 0);
     }
 
     const ready: string[] = [];

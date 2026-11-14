@@ -13,6 +13,24 @@ describe('computeWorkflowLayout', () => {
     expect(computeWorkflowLayout({ entry: 'start', nodes: [], edges: [] })).toEqual({});
   });
 
+  it('rejects options that would stall the overlap search or produce NaN positions', () => {
+    const workflow: ChatflowWorkflow = {
+      entry: 'start',
+      nodes: [
+        { id: 'start', type: 'start', ui: { position: { x: 40, y: 40 } } },
+        { id: 'a', type: 'answer' },
+      ],
+    };
+    for (const options of [
+      { nodeGap: -120 },
+      { nodeHeight: 0 },
+      { nodeWidth: Number.NaN },
+      { origin: { x: Number.POSITIVE_INFINITY, y: 0 } },
+    ]) {
+      expect(() => computeWorkflowLayout(workflow, options)).toThrowError(RangeError);
+    }
+  });
+
   it('layers reachable nodes by longest path from entry (AT #5)', () => {
     const workflow: ChatflowWorkflow = {
       entry: 'start',
