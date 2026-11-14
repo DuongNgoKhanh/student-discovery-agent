@@ -1,10 +1,12 @@
 import type { ChatflowEdge, ChatflowNode, ChatflowWorkflow } from '../../types';
 import { wouldCreateCycle } from './graph';
 
+// Client-side pre-checks; keep in sync with the runtime source of truth in
+// apps/agent-runtime/src/agent_runtime/sessions/schemas/workflow.py and workflow/validator.py.
 export const MAX_WORKFLOW_NODES = 50;
 export const MAX_WORKFLOW_EDGES = 100;
 export const CHATFLOW_IDENTIFIER_RE = /^[a-z][a-z0-9_]{0,39}$/;
-export const RESERVED_NODE_IDS = new Set(['sys', 'conv', 'profile', 'result']);
+export const RESERVED_NODE_IDS: ReadonlySet<string> = new Set(['sys', 'conv', 'profile', 'result']);
 
 export type WorkflowEditErrorCode =
   | 'MAX_NODES'
@@ -44,7 +46,11 @@ function sanitizePrefix(raw: string | undefined, fallback: string): string {
   return normalized;
 }
 
-function nextUniqueId(existing: Set<string>, prefix: string, reserved?: Set<string>): string {
+function nextUniqueId(
+  existing: ReadonlySet<string>,
+  prefix: string,
+  reserved?: ReadonlySet<string>,
+): string {
   for (let index = 1; ; index += 1) {
     const suffix = `_${index}`;
     const maxBaseLength = 40 - suffix.length;
