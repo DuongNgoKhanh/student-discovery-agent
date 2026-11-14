@@ -32,7 +32,7 @@ function makeBaseWorkflow(): ChatflowWorkflow {
 }
 
 describe('generateNodeId & generateEdgeId', () => {
-  it('generates valid unique node IDs avoiding collisions and reserved IDs', () => {
+  it('generates valid unique node IDs avoiding collisions', () => {
     const wf: ChatflowWorkflow = {
       entry: 'start',
       nodes: [
@@ -86,23 +86,37 @@ describe('addNode', () => {
   it('rejects invalid, reserved, and duplicate node IDs', () => {
     const wf = makeBaseWorkflow();
 
-    for (const badId of ['', 'Upper', '1node', 'has-dash', 'a'.repeat(41)]) {
-      expect(() => addNode(wf, { id: badId, type: 'llm' })).toThrowError(WorkflowEditError);
+    for (const badId of ['', 'Upper', '1node', 'has-dash', 'Sys', 'a'.repeat(41)]) {
+      expect(() => addNode(wf, { id: badId, type: 'llm' })).toThrowError(
+        expect.objectContaining({ name: 'WorkflowEditError', code: 'INVALID_ID' }),
+      );
     }
     for (const reserved of ['sys', 'conv', 'profile', 'result']) {
-      expect(() => addNode(wf, { id: reserved, type: 'llm' })).toThrowError(/reserved/i);
+      expect(() => addNode(wf, { id: reserved, type: 'llm' })).toThrowError(
+        expect.objectContaining({ code: 'RESERVED_ID' }),
+      );
     }
-    expect(() => addNode(wf, { id: 'start', type: 'llm' })).toThrowError(/Duplicate/i);
+    expect(() => addNode(wf, { id: 'start', type: 'llm' })).toThrowError(
+      expect.objectContaining({ code: 'DUPLICATE_ID' }),
+    );
   });
 
-  it('enforces maximum of 50 nodes', () => {
-    const nodes: ChatflowNode[] = Array.from({ length: MAX_WORKFLOW_NODES }, (_, i) => ({
+  it('accepts a node id of exactly 40 characters', () => {
+    const id = 'a'.repeat(40);
+    expect(addNode(makeBaseWorkflow(), { id, type: 'llm' }).nodes.at(-1)?.id).toBe(id);
+  });
+
+  it('allows the 50th node and rejects the 51st', () => {
+    const nodes: ChatflowNode[] = Array.from({ length: MAX_WORKFLOW_NODES - 1 }, (_, i) => ({
       id: `n_${i}`,
       type: 'llm',
     }));
-    const wf: ChatflowWorkflow = { entry: 'n_0', nodes };
+    const full = addNode({ entry: 'n_0', nodes }, { id: 'n_49', type: 'llm' });
 
-    expect(() => addNode(wf, { id: 'n_50', type: 'llm' })).toThrowError(/50/);
+    expect(full.nodes).toHaveLength(MAX_WORKFLOW_NODES);
+    expect(() => addNode(full, { id: 'n_50', type: 'llm' })).toThrowError(
+      expect.objectContaining({ code: 'MAX_NODES' }),
+    );
   });
 });
 
@@ -182,6 +196,14 @@ describe('updateNode', () => {
     expect(next.nodes.find((n) => n.id === 'branch')?.title).toBe('Updated Branch');
     expect(wf.nodes.find((n) => n.id === 'branch')?.title).toBe('Branch');
   });
+
+  it('ignores an id smuggled into the patch at runtime', () => {
+    const wf = makeBaseWorkflow();
+    const next = updateNode(wf, 'branch', { id: 'renamed', title: 'X' } as Parameters<
+      typeof updateNode
+    >[2]);
+    expect(next.nodes.map((n) => n.id)).toEqual(wf.nodes.map((n) => n.id));
+  });
 });
 
 describe('addEdge, removeEdge, setHandleEdge', () => {
@@ -211,25 +233,26 @@ describe('addEdge, removeEdge, setHandleEdge', () => {
     ).toThrowError(/already has an outgoing edge/i);
   });
 
-  it('rejects self-loops, cycles, missing nodes, and duplicate edge IDs', () => {
+  it('rejects self-loops, cycles, missing nodes, bad identifiers, and duplicate edge IDs', () => {
     const wf = makeBaseWorkflow();
-    expect(() =>
-      addEdge(wf, { source: 'answer_yes', source_handle: 'next', target: 'answer_yes' }),
-    ).toThrowError(/cycle/i);
-    expect(() =>
-      addEdge(wf, { source: 'answer_yes', source_handle: 'next', target: 'branch' }),
-    ).toThrowError(/cycle/i);
-    expect(() =>
-      addEdge(wf, { source: 'missing', source_handle: 'next', target: 'answer_no' }),
-    ).toThrowError(/does not exist/i);
-    expect(() =>
-      addEdge(wf, {
-        id: 'e_true',
-        source: 'branch',
-        source_handle: 'false',
-        target: 'answer_no',
-      }),
-    ).toThrowError(/Duplicate edge id/i);
+    const cases: Array<[Parameters<typeof addEdge>[1], string]> = [
+      [{ source: 'answer_yes', source_handle: 'next', target: 'answer_yes' }, 'CYCLE_DETECTED'],
+      [{ source: 'answer_yes', source_handle: 'next', target: 'branch' }, 'CYCLE_DETECTED'],
+      [{ source: 'missing', source_handle: 'next', target: 'answer_no' }, 'NODE_NOT_FOUND'],
+      [{ source: 'branch', source_handle: 'false', target: 'missing' }, 'NODE_NOT_FOUND'],
+      [{ source: 'branch', source_handle: 'Bad', target: 'answer_no' }, 'INVALID_ID'],
+      [
+        { id: 'Bad-Id', source: 'branch', source_handle: 'false', target: 'answer_no' },
+        'INVALID_ID',
+      ],
+      [
+        { id: 'e_true', source: 'branch', source_handle: 'false', target: 'answer_no' },
+        'DUPLICATE_ID',
+      ],
+    ];
+    for (const [input, code] of cases) {
+      expect(() => addEdge(wf, input)).toThrowError(expect.objectContaining({ code }));
+    }
   });
 
   it('rejects edges into a start node, even from an unconnected node', () => {
@@ -239,22 +262,29 @@ describe('addEdge, removeEdge, setHandleEdge', () => {
     ).toThrowError(expect.objectContaining({ code: 'INVALID_TARGET' }));
   });
 
-  it('enforces maximum of 100 edges', () => {
+  it('allows the 100th edge and rejects the 101st', () => {
     const nodes: ChatflowNode[] = [
       { id: 'n_0', type: 'if_else' },
       { id: 'n_1', type: 'answer' },
+      { id: 'n_2', type: 'answer' },
     ];
-    const edges = Array.from({ length: MAX_WORKFLOW_EDGES }, (_, i) => ({
+    const edges = Array.from({ length: MAX_WORKFLOW_EDGES - 1 }, (_, i) => ({
       id: `e_${i}`,
       source: 'n_0',
       source_handle: `h_${i}`,
       target: 'n_1',
     }));
     const wf: ChatflowWorkflow = { entry: 'n_0', nodes, edges };
+    const full = addEdge(wf, { source: 'n_0', source_handle: 'h_99', target: 'n_1' });
 
+    expect(full.edges).toHaveLength(MAX_WORKFLOW_EDGES);
     expect(() =>
-      addEdge(wf, { source: 'n_0', source_handle: 'h_100', target: 'n_1' }),
-    ).toThrowError(/100/);
+      addEdge(full, { source: 'n_0', source_handle: 'h_100', target: 'n_1' }),
+    ).toThrowError(expect.objectContaining({ code: 'MAX_EDGES' }));
+    // Retargeting at the cap removes the old edge first, so it must still succeed.
+    const retargeted = setHandleEdge(full, 'n_0', 'h_0', 'n_2');
+    expect(retargeted.edges).toHaveLength(MAX_WORKFLOW_EDGES);
+    expect(retargeted.edges?.[0]).toMatchObject({ id: 'e_0', target: 'n_2' });
   });
 
   it('removes an edge by id and supports setHandleEdge replace/clear', () => {
