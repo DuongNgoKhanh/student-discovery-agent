@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { errorMessage } from '@/features/knowledge';
 import type { Path } from '../model/config';
 import { sectionsForMode, type AgentMode, type SectionId } from '../model/sections';
-import type { AgentConfig, ChatflowWorkflow } from '../types';
+import { agentApi } from '../api/agent';
+import type { AgentConfig, ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { IssuesPanel, type ValidationState } from './issues-panel';
 import { JsonSection } from './json-section';
 import { LimitsSection } from './limits-section';
@@ -13,6 +15,8 @@ import { SectionNav } from './section-nav';
 import { TemplatesSection } from './templates-section';
 import { ToolsSection } from './tools-section';
 import { WorkflowJsonTab } from './workflow-json-tab';
+import { NodeForm } from './node-form';
+import { WorkflowCanvas } from './workflow-canvas';
 
 type ChatflowTab = 'canvas' | 'json';
 
@@ -22,10 +26,29 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
   validation: ValidationState | null; onBindKb: (kb: string) => void; mode?: AgentMode;
 }) {
   const [chatflowTab, setChatflowTab] = useState<ChatflowTab>('canvas');
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<NodeTypeCatalog | undefined>();
+  const [catalogError, setCatalogError] = useState<unknown>(null);
   const handleJsonValidity = (error: string | null) => { setJsonError(error); onJsonValidity(error); };
   const visibleSections = sectionsForMode(mode ?? 'agent');
   const issues = validation?.issues ?? [];
+  const workflow = config.workflow as ChatflowWorkflow | undefined;
+  const workflowIssues = validation?.stale ? [] : issues;
+  useEffect(() => {
+    if (mode !== 'chatflow' || typeof agentApi.getNodeTypes !== 'function') return;
+    let active = true;
+    setCatalogError(null);
+    void agentApi.getNodeTypes().then(next => {
+      if (active) setCatalog(next);
+    }).catch(error => {
+      if (active) setCatalogError(error);
+    });
+    return () => { active = false; };
+  }, [mode]);
+  useEffect(() => {
+    if (!workflow?.nodes.some(node => node.id === selectedNodeId)) setSelectedNodeId(null);
+  }, [selectedNodeId, workflow]);
   const props = { config, onChange, issues };
   return (
     <div className="space-y-4">
@@ -52,7 +75,39 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
                 ))}
               </div>
               {chatflowTab === 'canvas' ? (
-                <div className="rounded-lg border border-dashed p-6 text-13 text-muted-foreground">Chatflow editor sẽ xuất hiện ở đây.</div>
+                <div className="space-y-4">
+                  {catalogError ? (
+                    <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                      Không tải được catalog node: {errorMessage(catalogError)}
+                    </p>
+                  ) : null}
+                  {workflow ? (
+                    <>
+                      <WorkflowCanvas
+                        workflow={workflow}
+                        catalog={catalog}
+                        issues={workflowIssues}
+                        selectedNodeId={selectedNodeId}
+                        onSelectNode={setSelectedNodeId}
+                        onChange={next => onChange(['workflow'], next)}
+                      />
+                      {selectedNodeId ? (
+                        <NodeForm
+                          workflow={workflow}
+                          nodeId={selectedNodeId}
+                          catalog={catalog}
+                          onChange={next => onChange(['workflow'], next)}
+                        />
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Chọn một node trên sơ đồ để chỉnh sửa.</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="rounded-lg border border-dashed p-6 text-13 text-muted-foreground">
+                      Bản nháp Chatflow chưa có workflow.
+                    </p>
+                  )}
+                </div>
               ) : (
                 <WorkflowJsonTab
                   workflow={config.workflow as Record<string, unknown> | undefined}

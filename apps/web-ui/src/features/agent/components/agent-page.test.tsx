@@ -51,7 +51,7 @@ describe('AgentPage', () => {
     render(<AgentPage />);
     fireEvent.click(screen.getByRole('radio', { name: 'Chatflow' }));
     expect(screen.getByRole('radio', { name: 'Chatflow' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByText('Chatflow editor sẽ xuất hiện ở đây.')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     const sent = save.mock.calls[0]?.[0]?.content as Record<string, unknown>;
@@ -62,7 +62,7 @@ describe('AgentPage', () => {
   it('confirms before removing chatflow fields when switching back to Agent', async () => {
     draftQuery = { ...draftQuery, data: { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: { entry: 'start', nodes: [], edges: [] }, persona_cases: [] } } };
     render(<AgentPage />);
-    expect(screen.getByText('Chatflow editor sẽ xuất hiện ở đây.')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: 'Agent' }));
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Đổi chế độ tác giả?');
     fireEvent.click(screen.getByRole('button', { name: 'Đổi chế độ' }));
@@ -175,7 +175,7 @@ describe('AgentPage', () => {
     draftQuery = { ...draftQuery, data: chatflowDraft };
     save.mockRejectedValueOnce(new ApiError({ code: 'CONFLICT_REVISION', message: 'x', httpStatus: 409, details: { current: { ...server, content: { ...server.content, mode: 'agent' } } } }));
     render(<AgentPage />);
-    expect(screen.getByText('Chatflow editor sẽ xuất hiện ở đây.')).toBeInTheDocument();
+    expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
     fireEvent.change(screen.getByLabelText('Workflow JSON'), { target: { value: JSON.stringify({ entry: 'start', nodes: [] }) } });
     fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
