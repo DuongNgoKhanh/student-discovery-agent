@@ -210,7 +210,7 @@ describe('addEdge, removeEdge, setHandleEdge', () => {
       addEdge(wf, { source: 'answer_yes', source_handle: 'next', target: 'answer_yes' }),
     ).toThrowError(/cycle/i);
     expect(() =>
-      addEdge(wf, { source: 'answer_yes', source_handle: 'next', target: 'start' }),
+      addEdge(wf, { source: 'answer_yes', source_handle: 'next', target: 'branch' }),
     ).toThrowError(/cycle/i);
     expect(() =>
       addEdge(wf, { source: 'missing', source_handle: 'next', target: 'answer_no' }),
@@ -223,6 +223,13 @@ describe('addEdge, removeEdge, setHandleEdge', () => {
         target: 'answer_no',
       }),
     ).toThrowError(/Duplicate edge id/i);
+  });
+
+  it('rejects edges into a start node, even from an unconnected node', () => {
+    const wf = makeBaseWorkflow();
+    expect(() =>
+      addEdge(wf, { source: 'answer_no', source_handle: 'next', target: 'start' }),
+    ).toThrowError(expect.objectContaining({ code: 'INVALID_TARGET' }));
   });
 
   it('enforces maximum of 100 edges', () => {

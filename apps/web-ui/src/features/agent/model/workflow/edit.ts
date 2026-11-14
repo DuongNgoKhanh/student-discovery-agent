@@ -13,6 +13,7 @@ export type WorkflowEditErrorCode =
   | 'RESERVED_ID'
   | 'DUPLICATE_ID'
   | 'NODE_NOT_FOUND'
+  | 'INVALID_TARGET'
   | 'INVALID_POSITION'
   | 'HANDLE_OCCUPIED'
   | 'CYCLE_DETECTED';
@@ -185,6 +186,7 @@ export type AddEdgeInput = Omit<ChatflowEdge, 'id'> & { id?: string };
  * Immutably adds an edge to the workflow, enforcing:
  * - max 100 edges
  * - valid source/target nodes and valid `source_handle` identifier
+ * - no edges into a `start` node
  * - no self-loops or cycles
  * - at most one outgoing edge per `(source, source_handle)`
  * - unique valid edge `id` (auto-generated when omitted)
@@ -202,8 +204,15 @@ export function addEdge(workflow: ChatflowWorkflow, edge: AddEdgeInput): Chatflo
   if (!nodeIds.has(edge.source)) {
     throw new WorkflowEditError('NODE_NOT_FOUND', `Source node "${edge.source}" does not exist`);
   }
-  if (!nodeIds.has(edge.target)) {
+  const targetNode = workflow.nodes.find((node) => node.id === edge.target);
+  if (!targetNode) {
     throw new WorkflowEditError('NODE_NOT_FOUND', `Target node "${edge.target}" does not exist`);
+  }
+  if (targetNode.type === 'start') {
+    throw new WorkflowEditError(
+      'INVALID_TARGET',
+      `Edges cannot target start node "${edge.target}"`,
+    );
   }
   if (!isValidIdentifier(edge.source_handle)) {
     throw new WorkflowEditError(

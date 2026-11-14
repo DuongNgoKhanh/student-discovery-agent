@@ -41,13 +41,16 @@ export function wouldCreateCycle(
   return ancestorsOf(edges, source).has(target);
 }
 
-/** Returns nodes from `nodes` that `sourceId` can connect to without creating a self-loop or cycle. */
-export function validTargets<T extends Pick<ChatflowNode, 'id'>>(
+/**
+ * Returns nodes from `nodes` that `sourceId` can connect to without creating a self-loop or cycle.
+ * `start` nodes are excluded because the runtime validator rejects edges into them.
+ */
+export function validTargets<T extends Pick<ChatflowNode, 'id' | 'type'>>(
   nodes: readonly T[],
   edges: readonly GraphEdge[],
   sourceId: string,
 ): T[] {
   const blocked = ancestorsOf(edges, sourceId);
   blocked.add(sourceId);
-  return nodes.filter((node) => !blocked.has(node.id));
+  return nodes.filter((node) => node.type !== 'start' && !blocked.has(node.id));
 }

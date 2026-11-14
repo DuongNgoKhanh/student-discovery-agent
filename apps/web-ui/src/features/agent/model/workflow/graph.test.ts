@@ -91,10 +91,13 @@ describe('validTargets', () => {
       'orphan',
     ]);
     expect(validTargets(nodes, chainEdges, 'orphan').map((n) => n.id)).toEqual([
-      'start',
       'classify',
       'branch',
       'answer',
     ]);
+  });
+
+  it('never offers a start node as a target', () => {
+    expect(validTargets(nodes, [], 'orphan').map((n) => n.id)).not.toContain('start');
   });
 });
