@@ -267,4 +267,53 @@ describe('addEdge, removeEdge, setHandleEdge', () => {
     const cleared = setHandleEdge(replaced, 'branch', 'true', null);
     expect(cleared.edges?.map((e) => e.id)).toEqual(['e_start']);
   });
+
+  it('stores only contract fields when given a React Flow style connection', () => {
+    const wf = makeBaseWorkflow();
+    const snapshot = structuredClone(wf);
+    const next = addEdge(wf, {
+      source: 'branch',
+      source_handle: 'false',
+      target: 'answer_no',
+      sourceHandle: 'false',
+      selected: true,
+    } as Parameters<typeof addEdge>[1]);
+
+    expect(wf).toEqual(snapshot);
+    expect(next.edges?.[2]).toEqual({
+      id: 'e_branch_false_1',
+      source: 'branch',
+      source_handle: 'false',
+      target: 'answer_no',
+    });
+  });
+
+  it('retargets a handle in place, keeping edge order', () => {
+    const wf = makeBaseWorkflow();
+    const next = setHandleEdge(wf, 'start', 'next', 'answer_no');
+    expect(next.edges?.map((e) => [e.id, e.target])).toEqual([
+      ['e_start', 'answer_no'],
+      ['e_true', 'answer_yes'],
+    ]);
+    expect(setHandleEdge(wf, 'start', 'next', 'branch')).toBe(wf);
+  });
+
+  it('leaves the workflow unchanged when retargeting would create a cycle', () => {
+    const wf = makeBaseWorkflow();
+    const snapshot = structuredClone(wf);
+    expect(() => setHandleEdge(wf, 'answer_yes', 'next', 'branch')).toThrowError(
+      expect.objectContaining({ code: 'CYCLE_DETECTED' }),
+    );
+    expect(wf).toEqual(snapshot);
+  });
+
+  it('validates source and handle even when clearing', () => {
+    const wf = makeBaseWorkflow();
+    expect(() => setHandleEdge(wf, 'missing', 'next', null)).toThrowError(
+      expect.objectContaining({ code: 'NODE_NOT_FOUND' }),
+    );
+    expect(() => setHandleEdge(wf, 'branch', 'Bad', null)).toThrowError(
+      expect.objectContaining({ code: 'INVALID_ID' }),
+    );
+  });
 });

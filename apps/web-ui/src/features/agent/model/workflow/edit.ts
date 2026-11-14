@@ -253,9 +253,13 @@ export function addEdge(workflow: ChatflowWorkflow, edge: AddEdgeInput): Chatflo
     throw new WorkflowEditError('DUPLICATE_ID', `Duplicate edge id "${id}"`);
   }
 
+  // Copy only contract fields: callers may pass React Flow connection objects, and the
+  // runtime schema rejects extra edge fields.
   const nextEdge: ChatflowEdge = {
-    ...edge,
     id,
+    source: edge.source,
+    source_handle: edge.source_handle,
+    target: edge.target,
   };
 
   return {
@@ -281,6 +285,7 @@ export function removeEdge(workflow: ChatflowWorkflow, edgeId: string): Chatflow
 /**
  * Sets or clears the single outgoing edge for `(source, sourceHandle)`.
  * When `target` is null or empty, any existing edge on that handle is removed.
+ * Retargeting keeps the existing edge's id and its position in `edges`, so layout order is stable.
  */
 export function setHandleEdge(
   workflow: ChatflowWorkflow,
@@ -288,15 +293,27 @@ export function setHandleEdge(
   sourceHandle: string,
   target: string | null,
 ): ChatflowWorkflow {
+  if (!workflow.nodes.some((node) => node.id === source)) {
+    throw new WorkflowEditError('NODE_NOT_FOUND', `Source node "${source}" does not exist`);
+  }
+  if (!isValidIdentifier(sourceHandle)) {
+    throw new WorkflowEditError(
+      'INVALID_ID',
+      `Invalid source_handle "${sourceHandle}": must match ${CHATFLOW_IDENTIFIER_RE.source}`,
+    );
+  }
+
   const currentEdges = workflow.edges ?? [];
-  const existing = currentEdges.find(
+  const existingIndex = currentEdges.findIndex(
     (edge) => edge.source === source && edge.source_handle === sourceHandle,
   );
+  const existing = currentEdges[existingIndex];
+  if (existing && existing.target === target) return workflow;
 
   const withoutHandle: ChatflowWorkflow = existing
     ? {
         ...workflow,
-        edges: currentEdges.filter((edge) => edge.id !== existing.id),
+        edges: currentEdges.filter((_, index) => index !== existingIndex),
       }
     : workflow;
 
@@ -304,10 +321,18 @@ export function setHandleEdge(
     return withoutHandle;
   }
 
-  return addEdge(withoutHandle, {
+  // addEdge runs every invariant check and throws before anything is returned.
+  const added = addEdge(withoutHandle, {
     ...(existing ? { id: existing.id } : {}),
     source,
     source_handle: sourceHandle,
     target,
   });
+  if (!existing) return added;
+
+  const retargeted = added.edges![added.edges!.length - 1]!;
+  return {
+    ...added,
+    edges: currentEdges.map((edge, index) => (index === existingIndex ? retargeted : edge)),
+  };
 }
