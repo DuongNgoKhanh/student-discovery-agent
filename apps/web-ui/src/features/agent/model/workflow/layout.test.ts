@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatflowWorkflow } from '../../types';
-import { computeWorkflowLayout, type WorkflowPosition } from './layout';
+import { arrangeWorkflow, computeWorkflowLayout, type WorkflowPosition } from './layout';
 
 function mustPos(positions: Record<string, WorkflowPosition>, id: string): WorkflowPosition {
   const pos = positions[id];
@@ -171,5 +171,22 @@ describe('computeWorkflowLayout', () => {
     const posCyclic = computeWorkflowLayout(cyclic);
     expect(mustPos(posCyclic, 'a').x).toBeLessThan(mustPos(posCyclic, 'b').x);
     expect(mustPos(posCyclic, 'b').x).toBeLessThan(mustPos(posCyclic, 'c').x);
+  });
+});
+
+describe('arrangeWorkflow', () => {
+  it('lays out every node again, ignoring saved positions that overlap', () => {
+    const workflow: ChatflowWorkflow = {
+      entry: 'start',
+      nodes: [
+        { id: 'start', type: 'start', ui: { position: { x: 0, y: 0 } } },
+        { id: 'a', type: 'answer', title: 'A', ui: { position: { x: 0, y: 0 } } },
+      ],
+      edges: [{ id: 'e1', source: 'start', source_handle: 'next', target: 'a' }],
+    };
+    const arranged = arrangeWorkflow(workflow, { nodeWidth: 240, layerGap: 100 });
+    expect(arranged.nodes.map((node) => node.ui?.position)).toEqual([{ x: 40, y: 40 }, { x: 380, y: 40 }]);
+    expect(arranged.nodes[1]).toMatchObject({ id: 'a', title: 'A' });
+    expect(arranged.edges).toBe(workflow.edges);
   });
 });

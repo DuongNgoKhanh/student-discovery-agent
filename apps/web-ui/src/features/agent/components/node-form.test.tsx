@@ -62,18 +62,18 @@ const workflow: ChatflowWorkflow = {
 };
 
 describe('NodeForm', () => {
-  it('renders catalog fields and falls back to JSON for x-widget properties', () => {
+  it('renders catalog fields and keeps a condition the builder cannot show as JSON', () => {
     render(<NodeForm workflow={workflow} nodeId="branch" catalog={catalog} />);
-    expect(screen.getByLabelText('condition')).toHaveValue(JSON.stringify({ '==': [1, 1] }, null, 2));
+    expect(screen.getByLabelText('Điều kiện')).toHaveValue(JSON.stringify({ '==': [1, 1] }, null, 2));
     expect(screen.getByLabelText('retries')).toHaveValue(2);
     expect(screen.getByRole('combobox', { name: 'tone' })).toBeInTheDocument();
-    expect(screen.getByText(/condition_builder/)).toBeInTheDocument();
+    expect(screen.getByText(/lồng nhau chỉ sửa được dạng JSON/)).toBeInTheDocument();
   });
 
   it('allows editing JSON in x-widget textarea and displays an error alert on invalid JSON without losing typed input', () => {
     const onChange = vi.fn();
     render(<NodeForm workflow={workflow} nodeId="branch" catalog={catalog} onChange={onChange} />);
-    const condition = screen.getByLabelText('condition');
+    const condition = screen.getByLabelText('Điều kiện');
 
     // Type invalid JSON
     fireEvent.change(condition, { target: { value: '{ "incomplete": ' } });
@@ -103,7 +103,7 @@ describe('NodeForm', () => {
 
   it('keeps the text as typed when its own edit comes back from the parent', () => {
     render(<StatefulForm />);
-    const condition = screen.getByLabelText('condition');
+    const condition = screen.getByLabelText('Điều kiện');
     fireEvent.change(condition, { target: { value: '{"op":"eq"}' } });
     expect(condition).toHaveValue('{"op":"eq"}');
   });
@@ -111,9 +111,9 @@ describe('NodeForm', () => {
   it('reports an invalid JSON field to the caller until it parses, and unsets an emptied field', () => {
     const onValidity = vi.fn();
     render(<StatefulForm onValidity={onValidity} />);
-    const condition = screen.getByLabelText('condition');
+    const condition = screen.getByLabelText('Điều kiện');
     fireEvent.change(condition, { target: { value: '{ "op": ' } });
-    expect(onValidity).toHaveBeenLastCalledWith('condition: JSON chưa hợp lệ');
+    expect(onValidity).toHaveBeenLastCalledWith('Điều kiện: JSON chưa hợp lệ');
     fireEvent.change(condition, { target: { value: '' } });
     expect(onValidity).toHaveBeenLastCalledWith(null);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -311,7 +311,7 @@ describe('NodeForm', () => {
 
     expect(screen.getByLabelText('Tiêu đề')).toBeDisabled();
     expect(screen.getByLabelText('retries')).toBeDisabled();
-    expect(screen.getByLabelText('condition')).toBeDisabled();
+    expect(screen.getByLabelText('Điều kiện')).toBeDisabled();
     expect(screen.getByRole('combobox', { name: 'tone' })).toBeDisabled();
     expect(screen.getByLabelText('is_active')).toBeDisabled();
     expect(screen.getByRole('combobox', { name: 'Khi true' })).toBeDisabled();

@@ -306,3 +306,13 @@ function bestParentSortKey(
     }
   );
 }
+
+/** Re-lays out every node from scratch (saved positions ignored) and stores the result in each `ui.position`. */
+export function arrangeWorkflow(workflow: ChatflowWorkflow, options: WorkflowLayoutOptions = {}): ChatflowWorkflow {
+  const unplaced = { ...workflow, nodes: workflow.nodes.map((node) => ({ ...node, ui: undefined })) };
+  const positions = computeWorkflowLayout(unplaced, options);
+  return {
+    ...workflow,
+    nodes: workflow.nodes.map((node) => ({ ...node, ui: { ...node.ui, position: positions[node.id]! } })),
+  };
+}

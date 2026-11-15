@@ -3,6 +3,7 @@
 import type { DragEvent } from 'react';
 import { MAX_WORKFLOW_NODES } from '../model/workflow/edit';
 import type { ChatflowNodeType, NodeTypeCatalog } from '../types';
+import { NodeIcon } from './node-visuals';
 
 export const WORKFLOW_PALETTE_MIME = 'application/x-chatflow-node-type';
 
@@ -29,9 +30,11 @@ export function NodePalette({ catalog, onAddNode, disabled, nodeCount = 0 }: Nod
     <div
       role="toolbar"
       aria-label="Thêm node"
+      aria-orientation="vertical"
       data-testid="workflow-node-palette"
-      className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2"
+      className="flex w-48 flex-col gap-0.5 rounded-xl border bg-card/95 p-1.5 shadow-md backdrop-blur"
     >
+      <p className="px-2 pb-1 pt-0.5 text-xs font-medium text-muted-foreground">Bấm hoặc kéo vào sơ đồ</p>
       {addableTypes.map((item) => {
         const label = item.title || item.type;
         return (
@@ -45,14 +48,15 @@ export function NodePalette({ catalog, onAddNode, disabled, nodeCount = 0 }: Nod
             draggable={!isButtonDisabled}
             onClick={() => onAddNode(item.type)}
             onDragStart={(event) => handleDragStart(event, item.type)}
-            className="rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-primary-subtle hover:text-primary disabled:pointer-events-none disabled:opacity-50"
+            className="flex cursor-grab items-center gap-2 rounded-lg px-2 py-1.5 text-left text-13 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing disabled:pointer-events-none disabled:opacity-50"
           >
-            + {label}
+            <NodeIcon type={item.type} size="sm" />
+            <span className="truncate">{label}</span>
           </button>
         );
       })}
       {limitReached ? (
-        <span className="text-xs text-muted-foreground">Đã đạt giới hạn {MAX_WORKFLOW_NODES} node</span>
+        <span className="px-2 pt-1 text-xs text-muted-foreground">Đã đạt giới hạn {MAX_WORKFLOW_NODES} node</span>
       ) : null}
     </div>
   );

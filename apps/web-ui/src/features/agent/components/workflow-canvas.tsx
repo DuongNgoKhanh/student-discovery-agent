@@ -3,9 +3,12 @@
 import '@xyflow/react/dist/style.css';
 import {
   Background,
+  BackgroundVariant,
   Handle,
+  Panel,
   Position,
   ReactFlow,
+  useReactFlow,
   type Edge,
   type IsValidConnection,
   type Node,
@@ -18,8 +21,10 @@ import {
   type OnNodesChange,
   type ReactFlowInstance,
 } from '@xyflow/react';
-import { useCallback, useMemo, useRef, useState, type DragEvent } from 'react';
+import { CircleAlert, LayoutGrid, Maximize, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { ConfirmDialog } from '@/features/knowledge';
+import { cn } from '@/lib/utils/cn';
 import {
   addNode,
   deleteNode,
@@ -33,18 +38,20 @@ import {
   WorkflowEditError,
 } from '../model/workflow/edit';
 import { validTargets } from '../model/workflow/graph';
+import { handleLabel, isErrorHandle, nodeHandles, type NodeHandle } from '../model/workflow/handles';
 import { parseWorkflowIssuePath, type WorkflowIssueTarget } from '../model/workflow/issue-path';
-import { computeWorkflowLayout } from '../model/workflow/layout';
+import { arrangeWorkflow, computeWorkflowLayout, type WorkflowLayoutOptions } from '../model/workflow/layout';
+import { nodeSummary } from '../model/workflow/summary';
 import type {
   AgentIssue,
   ChatflowNode,
   ChatflowNodeType,
   ChatflowWorkflow,
   NodeTypeCatalog,
-  WorkflowHandleSpec,
   WorkflowNodeType,
 } from '../types';
 import { NodePalette, WORKFLOW_PALETTE_MIME } from './node-palette';
+import { NodeIcon, nodeVisual } from './node-visuals';
 
 export interface WorkflowCanvasProps {
   workflow: ChatflowWorkflow;
@@ -56,6 +63,8 @@ export interface WorkflowCanvasProps {
   onSelectNode?: (nodeId: string | null) => void;
   onChange?: (next: ChatflowWorkflow) => void;
   className?: string;
+  /** Floats over the canvas (the node panel), so the graph keeps the full width. */
+  overlay?: ReactNode;
 }
 
 export interface WorkflowConnectionLike {
@@ -66,8 +75,12 @@ export interface WorkflowConnectionLike {
 
 interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
+  nodeType: string;
+  /** Catalog title, shown under a custom title so the kind of node stays readable. */
+  typeTitle?: string;
   description?: string;
-  handles: string[];
+  summary: string[];
+  handles: NodeHandle[];
   invalid: boolean;
   readOnly: boolean;
   isEntry: boolean;
@@ -80,24 +93,6 @@ type CanvasNode = Node<WorkflowNodeData, 'workflow'>;
 
 function catalogType(catalog: NodeTypeCatalog | undefined, node: ChatflowNode): WorkflowNodeType | undefined {
   return catalog?.node_types.find((item) => item.type === node.type);
-}
-
-function handleNames(node: ChatflowNode, spec: WorkflowHandleSpec | undefined): string[] {
-  if (!spec) return [];
-  const names = [...spec.static];
-  const generated = spec.from_config;
-  const config = node.config ?? {};
-  const configured = generated ? config[generated.array] : undefined;
-  const values: unknown[] = Array.isArray(configured) ? configured : [];
-  if (generated) {
-    for (const value of values) {
-      const item = value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
-      if (item && typeof item[generated.id_field] === 'string') {
-        names.push(item[generated.id_field] as string);
-      }
-    }
-  }
-  return [...new Set(names)];
 }
 
 function defaultConfigFromSchema(schema: Record<string, unknown> | undefined): Record<string, unknown> {
@@ -195,31 +190,50 @@ export function createNodeFromCatalog(
   return addNode(workflow, node);
 }
 
+// Card geometry, also fed to the auto layout so arranged cards do not overlap.
+const CARD_WIDTH = 240;
+const CARD_HEADER = 52;
+const CARD_SUMMARY_LINE = 18;
+const CARD_ROW = 24;
+
+function estimatedCardHeight(summaryLines: number, handles: number): number {
+  return CARD_HEADER + (summaryLines ? summaryLines * CARD_SUMMARY_LINE + 16 : 0) + handles * CARD_ROW + 12;
+}
+
 function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
-  const borderClass = data.invalid
-    ? 'border-destructive ring-2 ring-destructive/30'
+  const { dot } = nodeVisual(data.nodeType);
+  const ring = data.invalid
+    ? 'border-destructive ring-2 ring-destructive/25'
     : data.selected
-      ? 'border-primary ring-2 ring-primary/30'
-      : 'border-border';
+      ? 'border-primary ring-2 ring-primary/25'
+      : 'border-border hover:border-primary/40';
 
   return (
     <div
       data-testid={`workflow-node-${id}`}
       data-position={`${Math.round(data.position.x)},${Math.round(data.position.y)}`}
-      className={`min-w-48 rounded-md border bg-background px-3 py-2 shadow-sm ${borderClass}`}
+      title={data.description}
+      style={{ width: CARD_WIDTH }}
+      className={cn('group rounded-xl border bg-card pb-2 text-card-foreground shadow-sm transition-shadow hover:shadow-md', ring)}
     >
       <Handle
         type="target"
         position={Position.Left}
         isConnectable={!data.readOnly && !data.isEntry}
-        className="!h-2 !w-2"
+        style={{ top: CARD_HEADER / 2 }}
+        className={cn('!h-4 !w-1.5 !rounded-sm !border-0', data.isEntry ? '!opacity-0' : '!bg-muted-foreground/60')}
       />
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-sm font-medium">{data.label}</div>
+      <div className="flex items-center gap-2.5 px-3 pt-3">
+        <NodeIcon type={data.nodeType} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-13 font-semibold leading-tight">{data.label}</div>
+          {data.typeTitle ? <div className="truncate text-[11px] leading-tight text-muted-foreground">{data.typeTitle}</div> : null}
+        </div>
+        {data.invalid ? <CircleAlert aria-label="Node có lỗi" className="size-4 shrink-0 text-destructive" /> : null}
         {!data.readOnly && !data.isEntry && data.onRequestDelete ? (
           <button
             type="button"
-            className="nodrag nopan rounded px-1 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            className="nodrag nopan rounded-md p-1 text-muted-foreground opacity-0 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
             aria-label={`Xoá node ${data.label}`}
             data-testid={`delete-node-${id}`}
             onClick={(event) => {
@@ -227,24 +241,71 @@ function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
               data.onRequestDelete?.(id);
             }}
           >
-            ×
+            <Trash2 className="size-3.5" />
           </button>
         ) : null}
       </div>
-      {data.description ? <div className="mt-1 text-xs text-muted-foreground">{data.description}</div> : null}
-      {data.handles.map((handle) => (
-        <div key={handle} className="relative mt-1 pr-2 text-right text-[11px] text-muted-foreground">
-          {handle}
-          {/* Positioned within its own row (default top: 50%), so the dot sits beside its label. */}
-          <Handle
-            type="source"
-            position={Position.Right}
-            id={handle}
-            isConnectable={!data.readOnly}
-            className="!h-2 !w-2"
-          />
+      {data.summary.length ? (
+        <div className="mx-3 mt-2 space-y-0.5 rounded-md bg-muted/70 px-2 py-1.5">
+          {data.summary.map((line, index) => (
+            <p key={index} className="truncate font-mono text-[11px] leading-[18px] text-muted-foreground">{line}</p>
+          ))}
         </div>
-      ))}
+      ) : null}
+      {data.handles.length ? (
+        <div className="mt-1.5">
+          {data.handles.map((handle) => {
+            const label = handleLabel(handle);
+            return (
+              <div
+                key={handle.id}
+                title={label === handle.id ? undefined : handle.id}
+                className={cn(
+                  'relative flex h-6 items-center justify-end px-3 text-[11px] font-medium',
+                  isErrorHandle(handle) ? 'text-destructive/80' : 'text-foreground/70',
+                )}
+              >
+                {label}
+                {/* Positioned within its own row (default top: 50%), so the dot sits beside its label. */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={handle.id}
+                  isConnectable={!data.readOnly}
+                  className={cn('!size-2.5 !border-2 !border-card', isErrorHandle(handle) ? '!bg-destructive/70' : dot)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CanvasToolbar({ onArrange }: { onArrange?: () => void }) {
+  const flow = useReactFlow();
+  const button =
+    'rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+  return (
+    <div role="toolbar" aria-label="Điều khiển sơ đồ" className="flex items-center gap-0.5 rounded-xl border bg-card/95 p-1 shadow-md backdrop-blur">
+      <button type="button" aria-label="Thu nhỏ" title="Thu nhỏ" className={button} onClick={() => void flow.zoomOut()}>
+        <ZoomOut className="size-4" />
+      </button>
+      <button type="button" aria-label="Phóng to" title="Phóng to" className={button} onClick={() => void flow.zoomIn()}>
+        <ZoomIn className="size-4" />
+      </button>
+      <button type="button" aria-label="Vừa khung" title="Vừa khung" className={button} onClick={() => void flow.fitView({ padding: 0.2 })}>
+        <Maximize className="size-4" />
+      </button>
+      {onArrange ? (
+        <>
+          <span aria-hidden className="mx-0.5 h-5 w-px bg-border" />
+          <button type="button" className={cn(button, 'flex items-center gap-1.5 px-2 text-xs font-medium')} onClick={onArrange}>
+            <LayoutGrid className="size-4" /> Sắp xếp lại
+          </button>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -262,6 +323,7 @@ export function WorkflowCanvas({
   onSelectNode,
   onChange,
   className,
+  overlay,
 }: WorkflowCanvasProps) {
   const isReadOnly = readOnly ?? !onChange;
   const flowInstanceRef = useRef<ReactFlowInstance<CanvasNode, Edge> | null>(null);
@@ -294,17 +356,28 @@ export function WorkflowCanvas({
     () => new Set(targets.filter((target) => target.kind === 'edge').map((target) => target.edgeId)),
     [targets],
   );
-  const handleOrderByNode = useMemo(
+  const cards = useMemo(
     () =>
-      Object.fromEntries(
-        workflow.nodes.map((node) => [node.id, handleNames(node, catalogType(catalog, node)?.handles)]),
+      new Map(
+        workflow.nodes.map((node) => {
+          const type = catalogType(catalog, node);
+          return [node.id, { type, handles: nodeHandles(node, type?.handles), summary: nodeSummary(node) }];
+        }),
       ),
     [catalog, workflow.nodes],
   );
-  const positions = useMemo(
-    () => computeWorkflowLayout(workflow, { handleOrderByNode }),
-    [handleOrderByNode, workflow],
-  );
+  const layoutOptions = useMemo<WorkflowLayoutOptions>(() => {
+    let nodeHeight = 120;
+    for (const card of cards.values()) {
+      nodeHeight = Math.max(nodeHeight, estimatedCardHeight(card.summary.length, card.handles.length));
+    }
+    return {
+      nodeWidth: CARD_WIDTH,
+      nodeHeight,
+      handleOrderByNode: Object.fromEntries([...cards].map(([id, card]) => [id, card.handles.map((handle) => handle.id)])),
+    };
+  }, [cards]);
+  const positions = useMemo(() => computeWorkflowLayout(workflow, layoutOptions), [layoutOptions, workflow]);
 
   const requestDeleteNode = useCallback(
     (nodeId: string) => {
@@ -319,7 +392,8 @@ export function WorkflowCanvas({
   const nodes = useMemo<CanvasNode[]>(
     () =>
       workflow.nodes.map((node) => {
-        const type = catalogType(catalog, node);
+        const card = cards.get(node.id);
+        const type = card?.type;
         const pos = dragPositions[node.id] ?? positions[node.id] ?? { x: 40, y: 40 };
         const isEntry = node.id === workflow.entry || node.type === 'start';
         const isSelected = activeSelectedNodeId === node.id;
@@ -330,8 +404,11 @@ export function WorkflowCanvas({
           selected: isSelected,
           data: {
             label: node.title || type?.title || node.type,
+            nodeType: node.type,
+            typeTitle: node.title && type?.title && node.title !== type.title ? type.title : undefined,
             description: type?.description,
-            handles: handleNames(node, type?.handles),
+            summary: card?.summary ?? [],
+            handles: card?.handles ?? [],
             invalid: invalidNodes.has(node.id),
             readOnly: isReadOnly,
             isEntry,
@@ -345,7 +422,7 @@ export function WorkflowCanvas({
       }),
     [
       activeSelectedNodeId,
-      catalog,
+      cards,
       dragPositions,
       invalidNodes,
       isReadOnly,
@@ -365,7 +442,11 @@ export function WorkflowCanvas({
         sourceHandle: edge.source_handle || undefined,
         selected: selectedEdgeIds.has(edge.id),
         animated: false,
-        style: invalidEdges.has(edge.id) ? { stroke: 'hsl(var(--destructive))', strokeWidth: 3 } : undefined,
+        style: invalidEdges.has(edge.id)
+          ? { stroke: 'hsl(var(--destructive))', strokeWidth: 2.5 }
+          : selectedEdgeIds.has(edge.id)
+            ? { stroke: 'hsl(var(--primary))', strokeWidth: 2 }
+            : { stroke: 'hsl(var(--muted-foreground) / 0.45)', strokeWidth: 1.5 },
       })),
     [invalidEdges, selectedEdgeIds, workflow.edges],
   );
@@ -399,6 +480,13 @@ export function WorkflowCanvas({
     },
     [applyEdit, catalog, isReadOnly, onChange, selectNode, workflow],
   );
+
+  const handleArrange = useCallback(() => {
+    if (isReadOnly) return;
+    onChange?.(arrangeWorkflow(workflow, layoutOptions));
+    // Let the moved cards render before framing them.
+    requestAnimationFrame(() => void flowInstanceRef.current?.fitView({ padding: 0.2 }));
+  }, [isReadOnly, layoutOptions, onChange, workflow]);
 
   const handleNodesChange: OnNodesChange<CanvasNode> = useCallback(
     (changes) => {
@@ -620,17 +708,9 @@ export function WorkflowCanvas({
     : 0;
 
   return (
-    <div className="space-y-3">
-      {!isReadOnly && showPalette ? (
-        <NodePalette
-          catalog={catalog}
-          nodeCount={workflow.nodes.length}
-          onAddNode={handleAddNode}
-        />
-      ) : null}
-      {editError ? <p role="alert" className="text-sm text-destructive">{editError}</p> : null}
+    <>
       <div
-        className={className ?? 'h-[520px] w-full rounded-md border'}
+        className={cn('relative overflow-hidden rounded-xl border bg-muted/40', className ?? 'h-[520px] w-full')}
         data-testid="workflow-canvas"
         onDragOver={handleDragOver}
         onDrop={handleDrop}
@@ -640,6 +720,9 @@ export function WorkflowCanvas({
           edges={edges}
           nodeTypes={nodeTypes}
           fitView
+          fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+          minZoom={0.25}
+          proOptions={{ hideAttribution: true }}
           nodesDraggable={!isReadOnly}
           nodesConnectable={!isReadOnly}
           elementsSelectable={!isReadOnly}
@@ -661,8 +744,24 @@ export function WorkflowCanvas({
           onNodeClick={(_event, node) => selectNode(node.id)}
           onPaneClick={() => selectNode(null)}
         >
-          <Background />
+          <Background variant={BackgroundVariant.Dots} gap={18} size={1.5} color="hsl(var(--muted-foreground) / 0.25)" />
+          {!isReadOnly && showPalette ? (
+            <Panel position="top-left">
+              <NodePalette catalog={catalog} nodeCount={workflow.nodes.length} onAddNode={handleAddNode} />
+            </Panel>
+          ) : null}
+          {editError ? (
+            <Panel position="top-center">
+              <p role="alert" className="rounded-lg border border-destructive/30 bg-card px-3 py-2 text-sm text-destructive shadow-md">
+                {editError}
+              </p>
+            </Panel>
+          ) : null}
+          <Panel position="bottom-left">
+            <CanvasToolbar onArrange={isReadOnly ? undefined : handleArrange} />
+          </Panel>
         </ReactFlow>
+        {overlay}
       </div>
       <ConfirmDialog
         open={Boolean(pendingDeleteNode)}
@@ -687,6 +786,6 @@ export function WorkflowCanvas({
         confirmLabel="Xoá node"
         destructive
       />
-    </div>
+    </>
   );
 }

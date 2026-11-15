@@ -288,6 +288,35 @@ describe('WorkflowCanvas', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('shows what a node does and names static branches in words', () => {
+    const withAnswer: ChatflowWorkflow = {
+      ...workflow,
+      nodes: workflow.nodes.map((node) => (node.id === 'answer' ? { ...node, config: { text: 'Xin chào bạn' } } : node)),
+    };
+    render(<WorkflowCanvas workflow={withAnswer} catalog={catalog} />);
+    expect(screen.getByTestId('workflow-node-answer')).toHaveTextContent('Xin chào bạn');
+    expect(screen.getByText('Tiếp theo')).toHaveAttribute('title', 'next');
+  });
+
+  it('rearranges every node on request so none overlap', () => {
+    const onChange = vi.fn();
+    const stacked: ChatflowWorkflow = {
+      ...workflow,
+      nodes: workflow.nodes.map((node) => ({ ...node, ui: { position: { x: 0, y: 0 } } })),
+    };
+    render(<WorkflowCanvas workflow={stacked} catalog={catalog} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sắp xếp lại' }));
+    const next = onChange.mock.calls[0]?.[0] as ChatflowWorkflow;
+    const xs = next.nodes.map((node) => node.ui?.position?.x);
+    expect(new Set(xs).size).toBe(3);
+  });
+
+  it('has no arrange button when read-only', () => {
+    render(<WorkflowCanvas workflow={workflow} catalog={catalog} readOnly />);
+    expect(screen.getByRole('button', { name: 'Vừa khung' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sắp xếp lại' })).not.toBeInTheDocument();
+  });
+
   it('disables NodePalette buttons when max node limit is reached', () => {
     const onAddNode = vi.fn();
     render(<NodePalette catalog={catalog} onAddNode={onAddNode} nodeCount={MAX_WORKFLOW_NODES} />);
