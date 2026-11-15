@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { canonical } from '../model/config';
-import { setHandleEdge, updateNode, WorkflowEditError } from '../model/workflow/edit';
+import { removeEdge, setHandleEdge, updateNode, WorkflowEditError } from '../model/workflow/edit';
 import { validTargets } from '../model/workflow/graph';
 import type { ChatflowNode, ChatflowWorkflow, NodeTypeCatalog, WorkflowHandleSpec } from '../types';
 
@@ -261,6 +261,10 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
   const properties = schemaProperties(definition?.config_schema);
   const handles = handleNames(node, definition?.handles);
   const edges = workflow.edges ?? [];
+  // Edges on a branch that was renamed or removed in config: the canvas cannot draw them, so list them here.
+  const orphanEdges = definition
+    ? edges.filter((edge) => edge.source === node.id && !handles.includes(edge.source_handle))
+    : [];
 
   const changeConfig = (name: string, value: unknown) => {
     const nextConfig = { ...(node.config ?? {}) };
@@ -357,6 +361,27 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
               </div>
             );
           })}
+        </div>
+      ) : null}
+
+      {orphanEdges.length ? (
+        <div role="group" aria-label="Cạnh trên nhánh không còn tồn tại" className="space-y-2 border-t pt-3">
+          <h4 className="text-sm font-medium text-destructive">Cạnh trên nhánh không còn tồn tại</h4>
+          {orphanEdges.map((edge) => (
+            <div key={edge.id} className="flex items-center justify-between gap-2 text-sm">
+              <span>
+                <code>{edge.source_handle}</code> → {edge.target}
+              </span>
+              <button
+                type="button"
+                className="text-xs underline disabled:opacity-50"
+                disabled={readOnly}
+                onClick={() => onChange?.(removeEdge(workflow, edge.id))}
+              >
+                Gỡ cạnh {edge.id}
+              </button>
+            </div>
+          ))}
         </div>
       ) : null}
     </section>

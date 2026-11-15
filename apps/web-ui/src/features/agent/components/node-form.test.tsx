@@ -142,6 +142,20 @@ describe('NodeForm', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Không nối được nhánh "Có!"');
   });
 
+  it('lists an edge whose branch no longer exists and removes it on request', () => {
+    // "maybe" is not a handle of if_else (true/false): e.g. left behind by a renamed branch.
+    const withOrphan: ChatflowWorkflow = {
+      ...workflow,
+      edges: [...(workflow.edges ?? []), { id: 'e_branch_maybe', source: 'branch', source_handle: 'maybe', target: 'answer_a' }],
+    };
+    const onChange = vi.fn();
+    render(<NodeForm workflow={withOrphan} nodeId="branch" catalog={catalog} onChange={onChange} />);
+    expect(screen.getByRole('group', { name: 'Cạnh trên nhánh không còn tồn tại' })).toHaveTextContent('maybe');
+    fireEvent.click(screen.getByRole('button', { name: 'Gỡ cạnh e_branch_maybe' }));
+    const next = onChange.mock.calls[0]?.[0] as ChatflowWorkflow;
+    expect(next.edges?.map((edge) => edge.id)).toEqual(['e_start_next']);
+  });
+
   it('offers only valid graph targets for every handle and prevents cycle targets (AT #2)', () => {
     const onChange = vi.fn();
     render(<NodeForm workflow={workflow} nodeId="branch" catalog={catalog} onChange={onChange} />);
