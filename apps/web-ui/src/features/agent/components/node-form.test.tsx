@@ -119,6 +119,29 @@ describe('NodeForm', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('says why a routing choice was rejected instead of silently snapping back', () => {
+    const classifierCatalog: NodeTypeCatalog = {
+      ...catalog,
+      node_types: [
+        ...catalog.node_types,
+        {
+          type: 'intent_classifier', title: 'Phân loại', description: 'Classifies', output_schema: { type: 'object' },
+          config_schema: { type: 'object', properties: {} }, handles: { static: [], from_config: { array: 'labels', id_field: 'id' } },
+        },
+      ],
+    };
+    // A label id typed by hand that is not a valid handle identifier.
+    const withClassifier: ChatflowWorkflow = {
+      ...workflow,
+      nodes: [...workflow.nodes, { id: 'classify', type: 'intent_classifier', config: { labels: [{ id: 'Có!' }] } }],
+    };
+    const onChange = vi.fn();
+    render(<NodeForm workflow={withClassifier} nodeId="classify" catalog={classifierCatalog} onChange={onChange} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Khi Có!' }), { target: { value: 'answer_a' } });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Không nối được nhánh "Có!"');
+  });
+
   it('offers only valid graph targets for every handle and prevents cycle targets (AT #2)', () => {
     const onChange = vi.fn();
     render(<NodeForm workflow={workflow} nodeId="branch" catalog={catalog} onChange={onChange} />);

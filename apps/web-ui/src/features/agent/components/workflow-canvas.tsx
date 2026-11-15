@@ -30,6 +30,7 @@ import {
   moveNode,
   removeEdge,
   setHandleEdge,
+  WorkflowEditError,
 } from '../model/workflow/edit';
 import { validTargets } from '../model/workflow/graph';
 import { parseWorkflowIssuePath, type WorkflowIssueTarget } from '../model/workflow/issue-path';
@@ -270,6 +271,7 @@ export function WorkflowCanvas({
   const [internalSelectedNodeId, setInternalSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<Set<string>>(() => new Set());
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const activeSelectedNodeId = selectedNodeId !== undefined ? selectedNodeId : internalSelectedNodeId;
 
@@ -368,17 +370,34 @@ export function WorkflowCanvas({
     [invalidEdges, selectedEdgeIds, workflow.edges],
   );
 
+  // Edit helpers throw WorkflowEditError for graph rules; show it instead of an uncaught error in a DOM handler.
+  const applyEdit = useCallback(
+    (edit: () => ChatflowWorkflow): ChatflowWorkflow | null => {
+      try {
+        const next = edit();
+        setEditError(null);
+        return next;
+      } catch (error) {
+        if (!(error instanceof WorkflowEditError)) throw error;
+        setEditError(`Không thực hiện được: ${error.message}`);
+        return null;
+      }
+    },
+    [],
+  );
+
   const handleAddNode = useCallback(
     (type: ChatflowNodeType, position?: { x: number; y: number }) => {
       if (isReadOnly || workflow.nodes.length >= MAX_WORKFLOW_NODES) return;
-      const next = createNodeFromCatalog(workflow, type, catalog, position);
+      const next = applyEdit(() => createNodeFromCatalog(workflow, type, catalog, position));
+      if (!next) return;
       const addedNode = next.nodes[next.nodes.length - 1];
       onChange?.(next);
       if (addedNode) {
         selectNode(addedNode.id);
       }
     },
-    [catalog, isReadOnly, onChange, selectNode, workflow],
+    [applyEdit, catalog, isReadOnly, onChange, selectNode, workflow],
   );
 
   const handleNodesChange: OnNodesChange<CanvasNode> = useCallback(
@@ -514,12 +533,12 @@ export function WorkflowCanvas({
   const handleConnect: OnConnect = useCallback(
     (connection) => {
       if (isReadOnly) return;
-      const next = connectWorkflowNodes(workflow, connection);
-      if (next !== workflow) {
+      const next = applyEdit(() => connectWorkflowNodes(workflow, connection));
+      if (next && next !== workflow) {
         onChange?.(next);
       }
     },
-    [isReadOnly, onChange, workflow],
+    [applyEdit, isReadOnly, onChange, workflow],
   );
 
   const handleBeforeDelete: OnBeforeDelete<CanvasNode, Edge> = useCallback(
@@ -609,6 +628,7 @@ export function WorkflowCanvas({
           onAddNode={handleAddNode}
         />
       ) : null}
+      {editError ? <p role="alert" className="text-sm text-destructive">{editError}</p> : null}
       <div
         className={className ?? 'h-[520px] w-full rounded-md border'}
         data-testid="workflow-canvas"

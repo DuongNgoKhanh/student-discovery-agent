@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { canonical } from '../model/config';
-import { setHandleEdge, updateNode } from '../model/workflow/edit';
+import { setHandleEdge, updateNode, WorkflowEditError } from '../model/workflow/edit';
 import { validTargets } from '../model/workflow/graph';
 import type { ChatflowNode, ChatflowWorkflow, NodeTypeCatalog, WorkflowHandleSpec } from '../types';
 
@@ -234,6 +234,7 @@ function NodeField({
 export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange, onValidity }: NodeFormProps) {
   const node = workflow.nodes.find((candidate) => candidate.id === nodeId);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [routingError, setRoutingError] = useState<string | null>(null);
   const firstError = Object.values(fieldErrors)[0] ?? null;
   const onValidityRef = useRef(onValidity);
   onValidityRef.current = onValidity;
@@ -321,6 +322,7 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
       {handles.length ? (
         <div className="space-y-3 border-t pt-3">
           <h4 className="text-sm font-medium">Điều hướng</h4>
+          {routingError ? <p role="alert" className="text-xs text-destructive">{routingError}</p> : null}
           {handles.map((handle) => {
             const edge = edges.find((candidate) => candidate.source === node.id && candidate.source_handle === handle);
             return (
@@ -337,8 +339,11 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
                   onChange={(event) => {
                     try {
                       onChange?.(setHandleEdge(workflow, node.id, handle, event.target.value || null));
-                    } catch {
-                      /* Invalid graph states remain unchanged. */
+                      setRoutingError(null);
+                    } catch (error) {
+                      // The select snaps back to the stored target; say why instead of failing silently.
+                      if (!(error instanceof WorkflowEditError)) throw error;
+                      setRoutingError(`Không nối được nhánh "${handle}": ${error.message}`);
                     }
                   }}
                 >
