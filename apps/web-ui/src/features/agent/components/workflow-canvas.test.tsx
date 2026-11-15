@@ -231,8 +231,11 @@ describe('WorkflowCanvas', () => {
 
     expect(screen.queryByRole('button', { name: 'Thêm node Bắt đầu' })).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByTestId('workflow-node-palette'));
     fireEvent.click(screen.getByRole('button', { name: 'Thêm node Trả lời' }));
     expect(onChange).toHaveBeenCalledTimes(1);
+    // The list closes after adding, so it does not cover the graph.
+    expect(screen.queryByRole('button', { name: 'Thêm node Trả lời' })).not.toBeInTheDocument();
     const addedByClick = (onChange.mock.calls[0]?.[0] as ChatflowWorkflow).nodes.at(-1);
     expect(addedByClick).toMatchObject({
       id: expect.stringMatching(/^answer_/),
@@ -320,6 +323,7 @@ describe('WorkflowCanvas', () => {
   it('disables NodePalette buttons when max node limit is reached', () => {
     const onAddNode = vi.fn();
     render(<NodePalette catalog={catalog} onAddNode={onAddNode} nodeCount={MAX_WORKFLOW_NODES} />);
+    fireEvent.click(screen.getByTestId('workflow-node-palette'));
 
     expect(screen.getByRole('button', { name: 'Thêm node Trả lời' })).toBeDisabled();
     expect(screen.getByText(`Đã đạt giới hạn ${MAX_WORKFLOW_NODES} node`)).toBeInTheDocument();

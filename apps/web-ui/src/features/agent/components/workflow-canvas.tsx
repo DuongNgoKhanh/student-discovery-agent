@@ -4,6 +4,7 @@ import '@xyflow/react/dist/style.css';
 import {
   Background,
   BackgroundVariant,
+  ConnectionLineType,
   Handle,
   Panel,
   Position,
@@ -440,6 +441,9 @@ export function WorkflowCanvas({
         source: edge.source,
         target: edge.target,
         sourceHandle: edge.source_handle || undefined,
+        // Right-angle paths read more calmly than curves when many branches fan out.
+        type: 'smoothstep',
+        pathOptions: { borderRadius: 10, offset: 18 },
         selected: selectedEdgeIds.has(edge.id),
         animated: false,
         style: invalidEdges.has(edge.id)
@@ -720,6 +724,7 @@ export function WorkflowCanvas({
           edges={edges}
           nodeTypes={nodeTypes}
           fitView
+          connectionLineType={ConnectionLineType.SmoothStep}
           fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
           minZoom={0.25}
           proOptions={{ hideAttribution: true }}
