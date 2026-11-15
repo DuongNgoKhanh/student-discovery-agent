@@ -9,6 +9,7 @@ import { ConfirmDialog, QueryState, errorMessage, fullDateTime } from '@/feature
 import { actionKey, agentKeys, useAgentNodeTypes, useAgentRelease, useAgentReleases, useRestore } from '../hooks/use-agent';
 import { ApiError } from '@/lib/api/errors';
 import { conflictMessage } from '../model/conflict';
+import { isRenderableWorkflow } from '../model/workflow/shape';
 import type { AgentActive, AgentConfig, AgentIssue, AgentReleaseSummary } from '../types';
 import { AuditList } from './audit-list';
 import { WorkflowCanvas } from './workflow-canvas';
@@ -88,10 +89,10 @@ export function VersionsTab({ active, onCopyToDraft }: VersionsTabProps) {
       <Sheet open={viewing !== null} onOpenChange={open => { if (!open) setViewing(null); }}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
           <SheetTitle>{viewed.data ? `Nội dung v${viewed.data.version}` : 'Nội dung phiên bản'}</SheetTitle>
-          {viewed.data?.content.mode === 'chatflow' && viewed.data.content.workflow ? (
+          {viewed.data?.content.mode === 'chatflow' && isRenderableWorkflow(viewed.data.content.workflow) ? (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-muted-foreground">Bản phát hành chỉ xem — chỉnh sửa bằng cách chép vào nháp.</p>
-              <WorkflowCanvas workflow={viewed.data.content.workflow as import('../types').ChatflowWorkflow} catalog={nodeTypes.data} readOnly showPalette={false} />
+              <WorkflowCanvas workflow={viewed.data.content.workflow} catalog={nodeTypes.data} readOnly showPalette={false} />
             </div>
           ) : null}
           <pre className="mt-4 whitespace-pre-wrap break-words rounded bg-muted p-3 font-mono text-xs">{viewed.data ? JSON.stringify(viewed.data.content, null, 2) : 'Đang tải…'}</pre>

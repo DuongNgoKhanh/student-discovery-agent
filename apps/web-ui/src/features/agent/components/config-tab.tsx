@@ -5,6 +5,7 @@ import { errorMessage } from '@/features/knowledge';
 import type { Path } from '../model/config';
 import { sectionsForMode, type AgentMode, type SectionId } from '../model/sections';
 import { agentApi } from '../api/agent';
+import { isRenderableWorkflow } from '../model/workflow/shape';
 import type { AgentConfig, ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { IssuesPanel, type ValidationState } from './issues-panel';
 import { JsonSection } from './json-section';
@@ -33,7 +34,8 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
   const handleJsonValidity = (error: string | null) => { setJsonError(error); onJsonValidity(error); };
   const visibleSections = sectionsForMode(mode ?? 'agent');
   const issues = validation?.issues ?? [];
-  const workflow = config.workflow as ChatflowWorkflow | undefined;
+  const workflow = isRenderableWorkflow(config.workflow) ? config.workflow : undefined;
+  const workflowMalformed = config.workflow != null && !workflow;
   const workflowIssues = validation?.stale ? [] : issues;
   useEffect(() => {
     if (mode !== 'chatflow' || typeof agentApi.getNodeTypes !== 'function') return;
@@ -102,6 +104,10 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
                         <p className="text-sm text-muted-foreground">Chọn một node trên sơ đồ để chỉnh sửa.</p>
                       )}
                     </>
+                  ) : workflowMalformed ? (
+                    <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-13 text-destructive">
+                      Workflow chưa đúng cấu trúc (cần mảng nodes, mỗi node có id và type) — sửa ở tab JSON.
+                    </p>
                   ) : (
                     <p className="rounded-lg border border-dashed p-6 text-13 text-muted-foreground">
                       Bản nháp Chatflow chưa có workflow.

@@ -115,6 +115,17 @@ describe('ConfigTab', () => {
     expect(editor.value.slice(editor.selectionStart, editor.selectionEnd)).toContain('"labels"');
   });
 
+  it('survives a half-typed workflow in the JSON tab and explains it on the canvas tab', () => {
+    const chatflowSeed: AgentConfig = { ...SEED, mode: 'chatflow', workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start' }], edges: [] } };
+    render(<Harness initial={chatflowSeed} initialSection="chatflow" mode="chatflow" />);
+    fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
+    // Valid JSON, wrong shape: one deleted letter of "nodes".
+    fireEvent.change(screen.getByLabelText('Workflow JSON'), { target: { value: '{ "entry": "start", "node": [] }' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'Sơ đồ' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Workflow chưa đúng cấu trúc');
+    expect(screen.queryByTestId('workflow-canvas')).not.toBeInTheDocument();
+  });
+
   it('resolves a stale report against the workflow it validated, not the edited one', () => {
     const edited: AgentConfig = {
       ...SEED,
