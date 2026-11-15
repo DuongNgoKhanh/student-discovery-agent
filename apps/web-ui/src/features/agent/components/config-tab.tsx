@@ -90,11 +90,14 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
                         catalog={catalog}
                         issues={workflowIssues}
                         selectedNodeId={selectedNodeId}
-                        onSelectNode={setSelectedNodeId}
+                        onSelectNode={id => { if (!jsonError) setSelectedNodeId(id); }}
                         onChange={next => onChange(['workflow'], next)}
                       />
                       {selectedNodeId ? (
                         <NodeForm
+                          // Per-node field state (typed text, errors) must not carry over to the next node.
+                          key={selectedNodeId}
+                          onValidity={handleJsonValidity}
                           workflow={workflow}
                           nodeId={selectedNodeId}
                           catalog={catalog}

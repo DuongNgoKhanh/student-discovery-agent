@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { canonical } from '../model/config';
 import { setHandleEdge, updateNode } from '../model/workflow/edit';
 import { validTargets } from '../model/workflow/graph';
 import type { ChatflowNode, ChatflowWorkflow, NodeTypeCatalog, WorkflowHandleSpec } from '../types';
@@ -14,6 +15,8 @@ export interface NodeFormProps {
   catalog?: NodeTypeCatalog;
   readOnly?: boolean;
   onChange?: (next: ChatflowWorkflow) => void;
+  /** Reports a field holding invalid JSON (or null), so the caller can block saving and leaving. */
+  onValidity?: (error: string | null) => void;
 }
 
 type SchemaProperty = Record<string, unknown>;
@@ -79,6 +82,7 @@ function JsonTextareaField({
   disabled,
   widget,
   onChange,
+  onValidity,
 }: {
   name: string;
   label: string;
@@ -87,13 +91,20 @@ function JsonTextareaField({
   disabled: boolean;
   widget?: string;
   onChange: (value: unknown) => void;
+  onValidity: (error: string | null) => void;
 }) {
   const [text, setText] = useState(() => jsonValue(value, defaultValue));
   const [error, setError] = useState<string | null>(null);
+  const lastCanonical = useRef(canonical(value));
 
+  // Resync only on outside edits (canvas, JSON tab): echoing our own edit back would reformat the text and move the caret.
   useEffect(() => {
-    setText(jsonValue(value, defaultValue));
-  }, [value, defaultValue]);
+    const nextCanonical = canonical(value);
+    if (!error && nextCanonical !== lastCanonical.current) {
+      lastCanonical.current = nextCanonical;
+      setText(jsonValue(value, defaultValue));
+    }
+  }, [value, defaultValue, error]);
 
   return (
     <div className="space-y-1.5">
@@ -109,11 +120,15 @@ function JsonTextareaField({
           const nextText = event.target.value;
           setText(nextText);
           try {
-            const parsed = JSON.parse(nextText);
+            // An emptied field unsets the key instead of being a syntax error.
+            const parsed = nextText.trim() === '' ? undefined : JSON.parse(nextText);
+            lastCanonical.current = canonical(parsed);
             setError(null);
+            onValidity(null);
             onChange(parsed);
           } catch (err) {
             setError((err as Error).message);
+            onValidity(`${label}: JSON chưa hợp lệ`);
           }
         }}
       />
@@ -134,12 +149,14 @@ function NodeField({
   value,
   disabled,
   onChange,
+  onValidity,
 }: {
   name: string;
   property: SchemaProperty;
   value: unknown;
   disabled: boolean;
   onChange: (value: unknown) => void;
+  onValidity: (error: string | null) => void;
 }) {
   const label = typeof property.title === 'string' ? property.title : name;
   const widget = typeof property['x-widget'] === 'string' ? property['x-widget'] : undefined;
@@ -155,6 +172,7 @@ function NodeField({
         disabled={disabled}
         widget={widget}
         onChange={onChange}
+        onValidity={onValidity}
       />
     );
   }
@@ -213,8 +231,24 @@ function NodeField({
   );
 }
 
-export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange }: NodeFormProps) {
+export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange, onValidity }: NodeFormProps) {
   const node = workflow.nodes.find((candidate) => candidate.id === nodeId);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const firstError = Object.values(fieldErrors)[0] ?? null;
+  const onValidityRef = useRef(onValidity);
+  onValidityRef.current = onValidity;
+  // A broken field holds text the workflow lacks: the page blocks saving and leaving until it parses.
+  useEffect(() => { onValidityRef.current?.(firstError); }, [firstError]);
+  useEffect(() => () => onValidityRef.current?.(null), []);
+  const setFieldValidity = (name: string, error: string | null) => setFieldErrors((current) => {
+    if (error === null) {
+      if (!(name in current)) return current;
+      const next = { ...current };
+      delete next[name];
+      return next;
+    }
+    return current[name] === error ? current : { ...current, [name]: error };
+  });
   const definition = catalog?.node_types.find((candidate) => candidate.type === node?.type);
   const targets = useMemo(
     () => (node ? validTargets(workflow.nodes, workflow.edges ?? [], node.id) : []),
@@ -276,6 +310,7 @@ export function NodeForm({ workflow, nodeId, catalog, readOnly = false, onChange
               value={node.config?.[name]}
               disabled={readOnly}
               onChange={(value) => changeConfig(name, value)}
+              onValidity={(error) => setFieldValidity(name, error)}
             />
           ))}
         </div>

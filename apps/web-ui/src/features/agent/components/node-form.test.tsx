@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
 import type { ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { NodeForm } from './node-form';
 
@@ -93,6 +94,29 @@ describe('NodeForm', () => {
         ]),
       }),
     );
+  });
+
+  function StatefulForm({ onValidity }: { onValidity?: (error: string | null) => void }) {
+    const [current, setCurrent] = useState(workflow);
+    return <NodeForm workflow={current} nodeId="branch" catalog={catalog} onChange={setCurrent} onValidity={onValidity} />;
+  }
+
+  it('keeps the text as typed when its own edit comes back from the parent', () => {
+    render(<StatefulForm />);
+    const condition = screen.getByLabelText('condition');
+    fireEvent.change(condition, { target: { value: '{"op":"eq"}' } });
+    expect(condition).toHaveValue('{"op":"eq"}');
+  });
+
+  it('reports an invalid JSON field to the caller until it parses, and unsets an emptied field', () => {
+    const onValidity = vi.fn();
+    render(<StatefulForm onValidity={onValidity} />);
+    const condition = screen.getByLabelText('condition');
+    fireEvent.change(condition, { target: { value: '{ "op": ' } });
+    expect(onValidity).toHaveBeenLastCalledWith('condition: JSON chưa hợp lệ');
+    fireEvent.change(condition, { target: { value: '' } });
+    expect(onValidity).toHaveBeenLastCalledWith(null);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('offers only valid graph targets for every handle and prevents cycle targets (AT #2)', () => {

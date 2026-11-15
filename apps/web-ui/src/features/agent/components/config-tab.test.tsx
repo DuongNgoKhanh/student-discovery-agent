@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { setIn, type Path } from '../model/config';
 import type { SectionId } from '../model/sections';
-import type { AgentConfig } from '../types';
+import type { AgentConfig, NodeTypeCatalog } from '../types';
 import { ConfigTab } from './config-tab';
 import type { ValidationState } from './issues-panel';
 
@@ -12,12 +12,27 @@ vi.mock('@/features/knowledge', async original => ({
   useKnowledgeBases: () => ({ data: [{ id: 'kb1', name: 'KB 1' }] }),
 }));
 
+const nodeCatalog: NodeTypeCatalog = {
+  catalog_version: 'test',
+  namespaces: [],
+  node_types: [
+    { type: 'start', title: 'Bắt đầu', description: 'Entry', config_schema: {}, handles: { static: ['next'] }, output_schema: {} },
+    {
+      type: 'answer', title: 'Trả lời', description: 'Answer', handles: { static: [] }, output_schema: {},
+      config_schema: { type: 'object', properties: { blocks: { type: 'array', default: [] } } },
+    },
+  ],
+};
+vi.mock('../api/agent', () => ({ agentApi: { getNodeTypes: vi.fn(async () => nodeCatalog) } }));
+
 const SEED: AgentConfig = { greeting_text: 'Chào', persona: { name: 'IHRD', system_prompt: 'x' }, model: { ref: 'gemini/x' }, extra_field: { keep: true } };
 
 function Harness({
   validation = null, onConfig = () => {}, initial = SEED, initialSection = 'persona' as SectionId, mode = 'agent' as 'agent' | 'chatflow',
+  onJsonValidity = () => {},
 }: {
   validation?: ValidationState | null; onConfig?: (c: AgentConfig) => void; initial?: AgentConfig; initialSection?: SectionId; mode?: 'agent' | 'chatflow';
+  onJsonValidity?: (error: string | null) => void;
 }) {
   const [config, setConfig] = useState(initial);
   const [section, setSection] = useState<SectionId>(initialSection);
@@ -25,7 +40,7 @@ function Harness({
   const update = (next: AgentConfig) => { setConfig(next); onConfig(next); };
   return (
     <ConfigTab config={config} onChange={(path: Path, value) => update(setIn(config, path, value))} onReplace={update}
-      section={section} onSection={id => { if (!jsonError) setSection(id); }} onJsonValidity={setJsonError}
+      section={section} onSection={id => { if (!jsonError) setSection(id); }} onJsonValidity={error => { setJsonError(error); onJsonValidity(error); }}
       validation={validation} onBindKb={() => {}} mode={mode} />
   );
 }
@@ -124,6 +139,37 @@ describe('ConfigTab', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Sơ đồ' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Workflow chưa đúng cấu trúc');
     expect(screen.queryByTestId('workflow-canvas')).not.toBeInTheDocument();
+  });
+
+  it('does not carry a node form JSON field over to the next node, and blocks switching while it is broken', async () => {
+    const onJsonValidity = vi.fn();
+    const chatflowSeed: AgentConfig = {
+      ...SEED,
+      mode: 'chatflow',
+      workflow: {
+        entry: 'start',
+        nodes: [
+          { id: 'start', type: 'start' },
+          { id: 'a', type: 'answer', title: 'A' },
+          { id: 'b', type: 'answer', title: 'B' },
+        ],
+        edges: [],
+      },
+    };
+    render(<Harness initial={chatflowSeed} initialSection="chatflow" mode="chatflow" onJsonValidity={onJsonValidity} />);
+    fireEvent.click(await screen.findByTestId('workflow-node-a'));
+    const blocks = await screen.findByLabelText('blocks');
+    fireEvent.change(blocks, { target: { value: '[ "half' } });
+    expect(onJsonValidity).toHaveBeenLastCalledWith('blocks: JSON chưa hợp lệ');
+
+    fireEvent.click(screen.getByTestId('workflow-node-b'));
+    expect(screen.getByRole('region', { name: /Biểu mẫu node A/ })).toBeInTheDocument();
+
+    fireEvent.change(blocks, { target: { value: '[]' } });
+    expect(onJsonValidity).toHaveBeenLastCalledWith(null);
+    fireEvent.click(screen.getByTestId('workflow-node-b'));
+    expect(screen.getByRole('region', { name: /Biểu mẫu node B/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('blocks')).toHaveValue('[]');
   });
 
   it('resolves a stale report against the workflow it validated, not the edited one', () => {
