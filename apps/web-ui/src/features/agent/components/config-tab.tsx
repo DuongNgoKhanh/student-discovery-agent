@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import { errorMessage } from '@/features/knowledge';
 import type { Path } from '../model/config';
 import { sectionsForMode, type AgentMode, type SectionId } from '../model/sections';
-import { agentApi } from '../api/agent';
+import { useAgentNodeTypes } from '../hooks/use-agent';
 import { isRenderableWorkflow } from '../model/workflow/shape';
-import type { AgentConfig, ChatflowWorkflow, NodeTypeCatalog } from '../types';
+import type { AgentConfig, ChatflowWorkflow } from '../types';
 import { IssuesPanel, type ValidationState } from './issues-panel';
 import { JsonSection } from './json-section';
 import { LimitsSection } from './limits-section';
@@ -29,25 +29,14 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
   const [chatflowTab, setChatflowTab] = useState<ChatflowTab>('canvas');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [jsonError, setJsonError] = useState<string | null>(null);
-  const [catalog, setCatalog] = useState<NodeTypeCatalog | undefined>();
-  const [catalogError, setCatalogError] = useState<unknown>(null);
+  const nodeTypes = useAgentNodeTypes(mode === 'chatflow');
+  const catalog = nodeTypes.data;
   const handleJsonValidity = (error: string | null) => { setJsonError(error); onJsonValidity(error); };
   const visibleSections = sectionsForMode(mode ?? 'agent');
   const issues = validation?.issues ?? [];
   const workflow = isRenderableWorkflow(config.workflow) ? config.workflow : undefined;
   const workflowMalformed = config.workflow != null && !workflow;
   const workflowIssues = validation?.stale ? [] : issues;
-  useEffect(() => {
-    if (mode !== 'chatflow' || typeof agentApi.getNodeTypes !== 'function') return;
-    let active = true;
-    setCatalogError(null);
-    void agentApi.getNodeTypes().then(next => {
-      if (active) setCatalog(next);
-    }).catch(error => {
-      if (active) setCatalogError(error);
-    });
-    return () => { active = false; };
-  }, [mode]);
   useEffect(() => {
     if (!workflow?.nodes.some(node => node.id === selectedNodeId)) setSelectedNodeId(null);
   }, [selectedNodeId, workflow]);
@@ -78,16 +67,21 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
               </div>
               {chatflowTab === 'canvas' ? (
                 <div className="space-y-4">
-                  {catalogError ? (
-                    <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                      Không tải được catalog node: {errorMessage(catalogError)}
-                    </p>
+                  {/* Without the catalog nodes have no handles, so edges cannot be drawn: keep the canvas read-only until it loads. */}
+                  {nodeTypes.isError ? (
+                    <div role="alert" className="flex flex-wrap items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                      <span>Không tải được catalog node: {errorMessage(nodeTypes.error)}. Sơ đồ chỉ xem cho tới khi tải được.</span>
+                      <button type="button" className="underline" onClick={() => void nodeTypes.refetch()}>Thử lại</button>
+                    </div>
+                  ) : !catalog ? (
+                    <p role="status" className="text-sm text-muted-foreground">Đang tải catalog node…</p>
                   ) : null}
                   {workflow ? (
                     <>
                       <WorkflowCanvas
                         workflow={workflow}
                         catalog={catalog}
+                        readOnly={!catalog}
                         issues={workflowIssues}
                         selectedNodeId={selectedNodeId}
                         onSelectNode={id => { if (!jsonError) setSelectedNodeId(id); }}
@@ -101,6 +95,7 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
                           workflow={workflow}
                           nodeId={selectedNodeId}
                           catalog={catalog}
+                          readOnly={!catalog}
                           onChange={next => onChange(['workflow'], next)}
                         />
                       ) : (

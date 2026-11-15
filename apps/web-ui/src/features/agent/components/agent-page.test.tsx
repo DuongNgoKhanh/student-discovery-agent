@@ -27,6 +27,7 @@ vi.mock('../hooks/use-agent', () => ({
   useAgentActive: () => ({ data: { release_id: 'r', version: 1, content_hash: 'h0', revision: 1, updated_at: '2026-01-01T00:00:00Z', updated_by: 'admin' } }),
   useSaveDraft: () => ({ mutateAsync: save, isPending: false }),
   useValidateDraft: () => ({ mutateAsync: validateMock, isPending: false }),
+  useAgentNodeTypes: () => ({ data: undefined, isError: false, error: null, refetch: vi.fn() }),
 }));
 vi.mock('../api/agent', () => ({ agentApi: { getDraft: vi.fn() } }));
 // Stand-in for the dialog: its own 409 handling is covered in publish-dialog.test.tsx; here only the page's reaction matters.

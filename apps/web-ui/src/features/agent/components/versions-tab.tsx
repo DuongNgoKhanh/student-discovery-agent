@@ -92,6 +92,13 @@ export function VersionsTab({ active, onCopyToDraft }: VersionsTabProps) {
           {viewed.data?.content.mode === 'chatflow' && isRenderableWorkflow(viewed.data.content.workflow) ? (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-muted-foreground">Bản phát hành chỉ xem — chỉnh sửa bằng cách chép vào nháp.</p>
+              {nodeTypes.isError ? (
+                <p role="alert" className="text-sm text-destructive">
+                  Không tải được catalog node: {errorMessage(nodeTypes.error)}. Sơ đồ có thể thiếu nhánh và cạnh.
+                </p>
+              ) : !nodeTypes.data ? (
+                <p role="status" className="text-sm text-muted-foreground">Đang tải catalog node…</p>
+              ) : null}
               <WorkflowCanvas workflow={viewed.data.content.workflow} catalog={nodeTypes.data} readOnly showPalette={false} />
             </div>
           ) : null}
