@@ -53,7 +53,8 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
       )}
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
         <SectionNav active={section} onSelect={onSection} issues={issues} sections={visibleSections} />
-        <div className="max-w-3xl">
+        {/* The canvas needs the room; form sections keep a readable line length. */}
+        <div className={section === 'chatflow' ? 'min-w-0' : 'max-w-3xl'}>
           {section === 'chatflow' && (
             <div className="space-y-4">
               <div role="tablist" aria-label="Chế độ xem Chatflow" className="flex gap-4 border-b text-sm">
@@ -77,31 +78,34 @@ export function ConfigTab({ config, onChange, onReplace, section, onSection, onJ
                     <p role="status" className="text-sm text-muted-foreground">Đang tải catalog node…</p>
                   ) : null}
                   {workflow ? (
-                    <>
-                      <WorkflowCanvas
-                        workflow={workflow}
-                        catalog={catalog}
-                        readOnly={!catalog}
-                        issues={workflowIssues}
-                        selectedNodeId={selectedNodeId}
-                        onSelectNode={id => { if (!jsonError) setSelectedNodeId(id); }}
-                        onChange={next => onChange(['workflow'], next)}
-                      />
-                      {selectedNodeId ? (
-                        <NodeForm
-                          // Per-node field state (typed text, errors) must not carry over to the next node.
-                          key={selectedNodeId}
-                          onValidity={handleJsonValidity}
-                          workflow={workflow}
-                          nodeId={selectedNodeId}
-                          catalog={catalog}
-                          readOnly={!catalog}
-                          onChange={next => onChange(['workflow'], next)}
-                        />
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Chọn một node trên sơ đồ để chỉnh sửa.</p>
-                      )}
-                    </>
+                    <WorkflowCanvas
+                      className="h-[calc(100vh-16rem)] min-h-[560px] w-full"
+                      workflow={workflow}
+                      catalog={catalog}
+                      readOnly={!catalog}
+                      issues={workflowIssues}
+                      selectedNodeId={selectedNodeId}
+                      onSelectNode={id => { if (!jsonError) setSelectedNodeId(id); }}
+                      onChange={next => onChange(['workflow'], next)}
+                      overlay={selectedNodeId ? (
+                        <aside
+                          aria-label="Cấu hình node"
+                          className="absolute inset-y-3 right-3 z-10 flex w-[min(420px,calc(100%-1.5rem))] flex-col overflow-hidden rounded-xl border bg-card shadow-xl animate-in fade-in slide-in-from-right-4 duration-200 motion-reduce:animate-none"
+                        >
+                          <NodeForm
+                            // Per-node field state (typed text, errors) must not carry over to the next node.
+                            key={selectedNodeId}
+                            onValidity={handleJsonValidity}
+                            workflow={workflow}
+                            nodeId={selectedNodeId}
+                            catalog={catalog}
+                            readOnly={!catalog}
+                            onChange={next => onChange(['workflow'], next)}
+                            onClose={() => { if (!jsonError) setSelectedNodeId(null); }}
+                          />
+                        </aside>
+                      ) : null}
+                    />
                   ) : workflowMalformed ? (
                     <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-13 text-destructive">
                       Workflow chưa đúng cấu trúc (cần mảng nodes, mỗi node có id và type) — sửa ở tab JSON.

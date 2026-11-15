@@ -168,9 +168,9 @@ describe('ConfigTab', () => {
     render(<Harness initial={chatflowSeed} initialSection="chatflow" mode="chatflow" onJsonValidity={onJsonValidity} />);
     await screen.findByTestId('workflow-node-palette');
     fireEvent.click(screen.getByTestId('workflow-node-a'));
-    const blocks = await screen.findByLabelText('blocks');
+    const blocks = await screen.findByLabelText('Block');
     fireEvent.change(blocks, { target: { value: '[ "half' } });
-    expect(onJsonValidity).toHaveBeenLastCalledWith('blocks: JSON chưa hợp lệ');
+    expect(onJsonValidity).toHaveBeenLastCalledWith('Block: JSON chưa hợp lệ');
 
     fireEvent.click(screen.getByTestId('workflow-node-b'));
     expect(screen.getByRole('region', { name: /Biểu mẫu node A/ })).toBeInTheDocument();
@@ -179,7 +179,17 @@ describe('ConfigTab', () => {
     expect(onJsonValidity).toHaveBeenLastCalledWith(null);
     fireEvent.click(screen.getByTestId('workflow-node-b'));
     expect(screen.getByRole('region', { name: /Biểu mẫu node B/ })).toBeInTheDocument();
-    expect(screen.getByLabelText('blocks')).toHaveValue('[]');
+    expect(screen.getByLabelText('Block')).toHaveValue('[]');
+  });
+
+  it('opens the node panel over the canvas and closes it', async () => {
+    render(<Harness initial={CHATFLOW_SEED} initialSection="chatflow" mode="chatflow" />);
+    await screen.findByTestId('workflow-node-palette');
+    fireEvent.click(screen.getByTestId('workflow-node-a'));
+    const panel = screen.getByRole('complementary', { name: 'Cấu hình node' });
+    expect(screen.getByTestId('workflow-canvas')).toContainElement(panel);
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng bảng node' }));
+    expect(screen.queryByRole('complementary', { name: 'Cấu hình node' })).not.toBeInTheDocument();
   });
 
   it('keeps the canvas read-only while the node catalog loads', () => {
