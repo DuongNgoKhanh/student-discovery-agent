@@ -39,13 +39,14 @@ function Harness({
   const [config, setConfig] = useState(initial);
   const [section, setSection] = useState<SectionId>(initialSection);
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [chatflowOpen, setChatflowOpen] = useState(initialSection === 'chatflow');
   const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   const update = (next: AgentConfig) => { setConfig(next); onConfig(next); };
   return (
     <QueryClientProvider client={client}>
       <ConfigTab config={config} onChange={(path: Path, value) => update(setIn(config, path, value))} onReplace={update}
         section={section} onSection={id => { if (!jsonError) setSection(id); }} onJsonValidity={error => { setJsonError(error); onJsonValidity(error); }}
-        validation={validation} onBindKb={() => {}} mode={mode} />
+        validation={validation} onBindKb={() => {}} mode={mode} chatflowOpen={chatflowOpen} onChatflowOpen={setChatflowOpen} />
     </QueryClientProvider>
   );
 }
@@ -190,6 +191,36 @@ describe('ConfigTab', () => {
     expect(screen.getByTestId('workflow-canvas')).toContainElement(panel);
     fireEvent.click(screen.getByRole('button', { name: 'Đóng bảng node' }));
     expect(screen.queryByRole('complementary', { name: 'Cấu hình node' })).not.toBeInTheDocument();
+  });
+
+  it('shows a read-only preview and opens the full-window editor from it or from the section nav', async () => {
+    function Closed() {
+      const [open, setOpen] = useState(false);
+      const [client] = useState(() => new QueryClient());
+      return (
+        <QueryClientProvider client={client}>
+          <ConfigTab config={CHATFLOW_SEED} onChange={() => {}} onReplace={() => {}} section="chatflow" onSection={() => {}}
+            onJsonValidity={() => {}} validation={null} onBindKb={() => {}} mode="chatflow" chatflowOpen={open} onChatflowOpen={setOpen} />
+        </QueryClientProvider>
+      );
+    }
+    render(<Closed />);
+    expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
+    expect(screen.queryByTestId('workflow-node-palette')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mở trình chỉnh sửa' }));
+    const editor = screen.getByRole('dialog', { name: 'Trình chỉnh sửa Chatflow' });
+    expect(editor).toContainElement(await screen.findByTestId('workflow-node-palette'));
+    fireEvent.click(screen.getByRole('button', { name: /Về trang Agent/ }));
+    expect(screen.queryByRole('dialog', { name: 'Trình chỉnh sửa Chatflow' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Chatflow' }));
+    expect(screen.getByRole('dialog', { name: 'Trình chỉnh sửa Chatflow' })).toBeInTheDocument();
+  });
+
+  it('keeps the editor open while a JSON field is broken', () => {
+    render(<Harness initial={CHATFLOW_SEED} initialSection="chatflow" mode="chatflow" />);
+    fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
+    fireEvent.change(screen.getByLabelText('Workflow JSON'), { target: { value: '{ "entry": ' } });
+    expect(screen.getByRole('button', { name: /Về trang Agent/ })).toBeDisabled();
   });
 
   it('keeps the canvas read-only while the node catalog loads', () => {

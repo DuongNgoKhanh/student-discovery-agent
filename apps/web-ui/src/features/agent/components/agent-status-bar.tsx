@@ -7,12 +7,16 @@ import type { AgentActive } from '../types';
 export type DraftState = 'unsaved' | 'differs' | 'same';
 const LABEL: Record<DraftState, string> = { unsaved: 'Chưa lưu', differs: 'Đã lưu – khác bản đang dùng', same: 'Trùng bản đang dùng' };
 
-export function AgentStatusBar({ active, draftState, busy, canPublish, onSave, onValidate, onPublish }: {
+export function AgentStatusBar({ active, draftState, busy, canPublish, onSave, onValidate, onPublish, compact = false }: {
   active: AgentActive | null | undefined; draftState: DraftState; busy: boolean; canPublish: boolean;
   onSave: () => void; onValidate: () => void; onPublish: () => void;
+  /** Inline in another header (the chatflow editor) instead of a sticky bar of its own. */
+  compact?: boolean;
 }) {
   return (
-    <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-background/95 py-3 backdrop-blur">
+    <div className={compact
+      ? 'flex flex-wrap items-center gap-3'
+      : 'sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-background/95 py-3 backdrop-blur'}>
       <p className="text-13 text-muted-foreground">
         {active ? <>Đang dùng <strong className="text-foreground">v{active.version}</strong> · {relativeTime(active.updated_at)}</> : 'Chưa có bản phát hành'}
         <span className="mx-2">·</span>

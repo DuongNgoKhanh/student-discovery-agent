@@ -52,12 +52,25 @@ describe('AgentPage', () => {
     render(<AgentPage />);
     fireEvent.click(screen.getByRole('radio', { name: 'Chatflow' }));
     expect(screen.getByRole('radio', { name: 'Chatflow' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
+    // Switching to Chatflow opens the full-window editor, with the draft actions in its header.
+    expect(screen.getByRole('dialog', { name: 'Trình chỉnh sửa Chatflow' })).toContainElement(screen.getByTestId('workflow-canvas'));
     fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     const sent = save.mock.calls[0]?.[0]?.content as Record<string, unknown>;
     expect(sent.mode).toBe('chatflow');
     expect(sent.workflow).toMatchObject({ entry: 'start' });
+  });
+
+  it('gives the editor a history entry, so Back closes it', async () => {
+    draftQuery = { ...draftQuery, data: { ...draft, content: { ...draft.content, mode: 'chatflow', workflow: { entry: 'start', nodes: [], edges: [] } } } };
+    window.history.replaceState(null, '', '/admin/agent');
+    render(<AgentPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mở trình chỉnh sửa' }));
+    expect(window.location.search).toBe('?editor=chatflow');
+    expect(screen.getAllByRole('button', { name: 'Lưu nháp' })).toHaveLength(1);
+    window.history.back();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Trình chỉnh sửa Chatflow' })).not.toBeInTheDocument());
+    expect(window.location.search).toBe('');
   });
 
   it('confirms before removing chatflow fields when switching back to Agent', async () => {
@@ -177,6 +190,7 @@ describe('AgentPage', () => {
     save.mockRejectedValueOnce(new ApiError({ code: 'CONFLICT_REVISION', message: 'x', httpStatus: 409, details: { current: { ...server, content: { ...server.content, mode: 'agent' } } } }));
     render(<AgentPage />);
     expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mở trình chỉnh sửa' }));
     fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
     fireEvent.change(screen.getByLabelText('Workflow JSON'), { target: { value: JSON.stringify({ entry: 'start', nodes: [] }) } });
     fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
@@ -226,6 +240,7 @@ describe('AgentPage', () => {
     draftQuery = { ...draftQuery, data: chatflowDraft };
 
     const first = render(<AgentPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mở trình chỉnh sửa' }));
     fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
     const editor = screen.getByLabelText('Workflow JSON') as HTMLTextAreaElement;
     expect(JSON.parse(editor.value)).toEqual(initialWorkflow);
@@ -256,6 +271,7 @@ describe('AgentPage', () => {
     first.unmount();
     draftQuery = { ...draftQuery, data: savedDraft };
     render(<AgentPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mở trình chỉnh sửa' }));
     fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
     expect(JSON.parse((screen.getByLabelText('Workflow JSON') as HTMLTextAreaElement).value)).toEqual(editedWorkflow);
   });

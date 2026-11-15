@@ -67,6 +67,8 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
   const [publishing, setPublishing] = useState(false);
   const mode: AgentMode = config.mode === 'chatflow' ? 'chatflow' : 'agent';
   const [pendingMode, setPendingMode] = useState<AgentMode | null>(null);
+  const [chatflowOpen, setChatflowOpen] = useState(() => params.get('editor') === 'chatflow' && draft.content.mode === 'chatflow');
+  const pushedEditorEntry = useRef(false);
   // The mode can also change outside the switch (loading the server copy, copying a version, the JSON section).
   const shownSection = sectionsForMode(mode).some(s => s.id === section) ? section : mode === 'chatflow' ? 'chatflow' : 'persona';
 
@@ -82,6 +84,36 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     setValidation(v => (v ? { ...v, stale: true } : v));
   }, []);
 
+  // The editor gets its own history entry (?editor=chatflow), so the browser Back button closes it.
+  const openChatflow = useCallback((open: boolean) => {
+    const url = new URL(window.location.href);
+    if (open && url.searchParams.get('editor') !== 'chatflow') {
+      url.searchParams.set('editor', 'chatflow');
+      window.history.pushState(window.history.state, '', url);
+      pushedEditorEntry.current = true;
+    } else if (!open && url.searchParams.get('editor') === 'chatflow') {
+      if (pushedEditorEntry.current) {
+        pushedEditorEntry.current = false;
+        window.history.back();
+      } else {
+        // Opened from a link: there is no earlier entry of ours to go back to.
+        url.searchParams.delete('editor');
+        window.history.replaceState(window.history.state, '', url);
+      }
+    }
+    setChatflowOpen(open);
+  }, []);
+
+  useEffect(() => {
+    const onPop = () => {
+      const open = new URL(window.location.href).searchParams.get('editor') === 'chatflow';
+      if (!open) pushedEditorEntry.current = false;
+      setChatflowOpen(open);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
   const applyMode = (next: AgentMode) => {
     setConfig(current => {
       if (next === 'chatflow') return { ...current, mode: next, workflow: current.workflow ?? minimalChatflow };
@@ -92,6 +124,7 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     });
     setSection(next === 'chatflow' ? 'chatflow' : 'persona');
     setValidation(v => (v ? { ...v, stale: true } : v));
+    openChatflow(next === 'chatflow');
   };
 
   const hasChatflowData = config.workflow !== undefined || config.persona_cases !== undefined;
@@ -130,6 +163,8 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     } catch (error) {
       if (error instanceof ApiError && error.code === 'CONFLICT_REVISION') {
         setConflict((error.details as { current?: AgentDraft } | undefined)?.current ?? null);
+        // The conflict banner and its choices live on the page, under the editor.
+        openChatflow(false);
       } else toast.error(errorMessage(error));
       return null;
     }
@@ -180,10 +215,15 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  const statusBar = (compact: boolean) => (
+    <AgentStatusBar compact={compact} active={active.data} draftState={draftState} busy={save.isPending || validate.isPending || Boolean(jsonError)}
+      canPublish={Boolean(active.data)} onSave={() => void persist()} onValidate={() => void runValidation()} onPublish={() => setPublishing(true)} />
+  );
+
   return (
     <div className="space-y-4">
-      <AgentStatusBar active={active.data} draftState={draftState} busy={save.isPending || validate.isPending || Boolean(jsonError)} canPublish={Boolean(active.data)}
-        onSave={() => void persist()} onValidate={() => void runValidation()} onPublish={() => setPublishing(true)} />
+      {/* The open editor shows the same actions in its header. */}
+      {!(chatflowOpen && mode === 'chatflow' && tab === 'config') && statusBar(false)}
 
       <ModeSwitch mode={mode} onChange={requestMode} disabled={Boolean(jsonError)} />
 
@@ -211,7 +251,8 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
       {tab === 'config' ? (
         <ConfigTab config={config} onChange={change} onReplace={next => { setConfig(next); setValidation(v => (v ? { ...v, stale: true } : v)); }}
           section={shownSection} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
-          validation={shownValidation} onBindKb={kb => void bindKb(kb)} mode={mode} />
+          validation={shownValidation} onBindKb={kb => void bindKb(kb)} mode={mode}
+          chatflowOpen={chatflowOpen && mode === 'chatflow'} onChatflowOpen={openChatflow} chatflowActions={statusBar(true)} />
       ) : (
         <VersionsTab active={active.data ?? null} onCopyToDraft={content => { setConfig(content); setValidation(v => (v ? { ...v, stale: true } : v)); setTab('config'); }} />
       )}
