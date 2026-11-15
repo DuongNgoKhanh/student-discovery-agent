@@ -231,15 +231,15 @@ function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
         ) : null}
       </div>
       {data.description ? <div className="mt-1 text-xs text-muted-foreground">{data.description}</div> : null}
-      {data.handles.map((handle, index) => (
+      {data.handles.map((handle) => (
         <div key={handle} className="relative mt-1 pr-2 text-right text-[11px] text-muted-foreground">
           {handle}
+          {/* Positioned within its own row (default top: 50%), so the dot sits beside its label. */}
           <Handle
             type="source"
             position={Position.Right}
             id={handle}
             isConnectable={!data.readOnly}
-            style={{ top: `${index * 20 + 12}px` }}
             className="!h-2 !w-2"
           />
         </div>

@@ -87,6 +87,17 @@ describe('WorkflowCanvas', () => {
     expect(screen.queryByTestId('delete-node-classify')).not.toBeInTheDocument();
   });
 
+  it('places each source handle inside the row of its own label', () => {
+    render(<WorkflowCanvas workflow={workflow} catalog={catalog} />);
+    for (const label of ['study', 'other']) {
+      const row = screen.getByText(label);
+      const handle = row.querySelector('.react-flow__handle-right') as HTMLElement | null;
+      expect(handle?.getAttribute('data-handleid')).toBe(label);
+      // No per-index offset: the row already places it, an extra `top` pushes it next to a later label.
+      expect(handle?.style.top).toBe('');
+    }
+  });
+
   it('connects true and false handles of an if_else node to distinct targets (AT #1)', () => {
     const branchWorkflow: ChatflowWorkflow = {
       entry: 'start',
