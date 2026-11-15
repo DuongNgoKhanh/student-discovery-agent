@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { agentApi } from '../api/agent';
 import { setIn, type Path } from '../model/config';
 import type { SectionId } from '../model/sections';
-import type { AgentConfig } from '../types';
+import type { AgentConfig, NodeTypeCatalog } from '../types';
 import { ConfigTab } from './config-tab';
 import type { ValidationState } from './issues-panel';
 
@@ -12,23 +14,45 @@ vi.mock('@/features/knowledge', async original => ({
   useKnowledgeBases: () => ({ data: [{ id: 'kb1', name: 'KB 1' }] }),
 }));
 
+const nodeCatalog: NodeTypeCatalog = {
+  catalog_version: 'test',
+  namespaces: [],
+  node_types: [
+    { type: 'start', title: 'Bắt đầu', description: 'Entry', config_schema: {}, handles: { static: ['next'] }, output_schema: {} },
+    {
+      type: 'answer', title: 'Trả lời', description: 'Answer', handles: { static: [] }, output_schema: {},
+      config_schema: { type: 'object', properties: { blocks: { type: 'array', default: [] } } },
+    },
+  ],
+};
+vi.mock('../api/agent', () => ({ agentApi: { getNodeTypes: vi.fn(async () => nodeCatalog) } }));
+
 const SEED: AgentConfig = { greeting_text: 'Chào', persona: { name: 'IHRD', system_prompt: 'x' }, model: { ref: 'gemini/x' }, extra_field: { keep: true } };
 
 function Harness({
   validation = null, onConfig = () => {}, initial = SEED, initialSection = 'persona' as SectionId, mode = 'agent' as 'agent' | 'chatflow',
+  onJsonValidity = () => {},
 }: {
   validation?: ValidationState | null; onConfig?: (c: AgentConfig) => void; initial?: AgentConfig; initialSection?: SectionId; mode?: 'agent' | 'chatflow';
+  onJsonValidity?: (error: string | null) => void;
 }) {
   const [config, setConfig] = useState(initial);
   const [section, setSection] = useState<SectionId>(initialSection);
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   const update = (next: AgentConfig) => { setConfig(next); onConfig(next); };
   return (
-    <ConfigTab config={config} onChange={(path: Path, value) => update(setIn(config, path, value))} onReplace={update}
-      section={section} onSection={id => { if (!jsonError) setSection(id); }} onJsonValidity={setJsonError}
-      validation={validation} onBindKb={() => {}} mode={mode} />
+    <QueryClientProvider client={client}>
+      <ConfigTab config={config} onChange={(path: Path, value) => update(setIn(config, path, value))} onReplace={update}
+        section={section} onSection={id => { if (!jsonError) setSection(id); }} onJsonValidity={error => { setJsonError(error); onJsonValidity(error); }}
+        validation={validation} onBindKb={() => {}} mode={mode} />
+    </QueryClientProvider>
   );
 }
+
+const CHATFLOW_SEED: AgentConfig = {
+  ...SEED, mode: 'chatflow', workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start' }, { id: 'a', type: 'answer' }], edges: [] },
+};
 
 describe('ConfigTab', () => {
   it('edits a form field and keeps fields the form does not show', () => {
@@ -113,6 +137,67 @@ describe('ConfigTab', () => {
     await new Promise(r => setTimeout(r, 0));
     expect(document.activeElement).toBe(editor);
     expect(editor.value.slice(editor.selectionStart, editor.selectionEnd)).toContain('"labels"');
+  });
+
+  it('survives a half-typed workflow in the JSON tab and explains it on the canvas tab', () => {
+    const chatflowSeed: AgentConfig = { ...SEED, mode: 'chatflow', workflow: { entry: 'start', nodes: [{ id: 'start', type: 'start' }], edges: [] } };
+    render(<Harness initial={chatflowSeed} initialSection="chatflow" mode="chatflow" />);
+    fireEvent.click(screen.getByRole('tab', { name: 'JSON' }));
+    // Valid JSON, wrong shape: one deleted letter of "nodes".
+    fireEvent.change(screen.getByLabelText('Workflow JSON'), { target: { value: '{ "entry": "start", "node": [] }' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'Sơ đồ' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Workflow chưa đúng cấu trúc');
+    expect(screen.queryByTestId('workflow-canvas')).not.toBeInTheDocument();
+  });
+
+  it('does not carry a node form JSON field over to the next node, and blocks switching while it is broken', async () => {
+    const onJsonValidity = vi.fn();
+    const chatflowSeed: AgentConfig = {
+      ...SEED,
+      mode: 'chatflow',
+      workflow: {
+        entry: 'start',
+        nodes: [
+          { id: 'start', type: 'start' },
+          { id: 'a', type: 'answer', title: 'A' },
+          { id: 'b', type: 'answer', title: 'B' },
+        ],
+        edges: [],
+      },
+    };
+    render(<Harness initial={chatflowSeed} initialSection="chatflow" mode="chatflow" onJsonValidity={onJsonValidity} />);
+    await screen.findByTestId('workflow-node-palette');
+    fireEvent.click(screen.getByTestId('workflow-node-a'));
+    const blocks = await screen.findByLabelText('blocks');
+    fireEvent.change(blocks, { target: { value: '[ "half' } });
+    expect(onJsonValidity).toHaveBeenLastCalledWith('blocks: JSON chưa hợp lệ');
+
+    fireEvent.click(screen.getByTestId('workflow-node-b'));
+    expect(screen.getByRole('region', { name: /Biểu mẫu node A/ })).toBeInTheDocument();
+
+    fireEvent.change(blocks, { target: { value: '[]' } });
+    expect(onJsonValidity).toHaveBeenLastCalledWith(null);
+    fireEvent.click(screen.getByTestId('workflow-node-b'));
+    expect(screen.getByRole('region', { name: /Biểu mẫu node B/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('blocks')).toHaveValue('[]');
+  });
+
+  it('keeps the canvas read-only while the node catalog loads', () => {
+    vi.mocked(agentApi.getNodeTypes).mockReturnValueOnce(new Promise(() => {}));
+    render(<Harness initial={CHATFLOW_SEED} initialSection="chatflow" mode="chatflow" />);
+    expect(screen.getByRole('status')).toHaveTextContent('Đang tải catalog node');
+    expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
+    expect(screen.queryByTestId('workflow-node-palette')).not.toBeInTheDocument();
+  });
+
+  it('explains a failed catalog load and retries on request', async () => {
+    vi.mocked(agentApi.getNodeTypes).mockRejectedValueOnce(new Error('runtime down'));
+    render(<Harness initial={CHATFLOW_SEED} initialSection="chatflow" mode="chatflow" />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không tải được catalog node');
+    expect(screen.queryByTestId('workflow-node-palette')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    expect(await screen.findByTestId('workflow-node-palette')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('resolves a stale report against the workflow it validated, not the edited one', () => {

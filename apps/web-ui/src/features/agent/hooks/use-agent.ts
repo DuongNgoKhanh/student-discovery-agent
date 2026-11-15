@@ -6,6 +6,7 @@ import { agentApi } from '../api/agent';
 export const agentKeys = {
   all: ['agent'] as const,
   draft: () => ['agent', 'draft'] as const,
+  nodeTypes: () => ['agent', 'workflow', 'node-types'] as const,
   active: () => ['agent', 'active'] as const,
   releases: (cursor: string | null) => ['agent', 'releases', cursor] as const,
   release: (id: string) => ['agent', 'release', id] as const,
@@ -18,6 +19,8 @@ export const actionKey = (prefix: string) =>
 
 // No focus refetch: the editor keeps its own copy and conflicts are detected on save.
 export const useAgentDraft = () => useQuery({ queryKey: agentKeys.draft(), queryFn: agentApi.getDraft, refetchOnWindowFocus: false });
+export const useAgentNodeTypes = (enabled = true) =>
+  useQuery({ queryKey: agentKeys.nodeTypes(), queryFn: () => agentApi.getNodeTypes(), enabled, staleTime: 5 * 60 * 1000 });
 export const useAgentActive = () => useQuery({ queryKey: agentKeys.active(), queryFn: agentApi.getActive });
 export const useAgentReleases = (cursor: string | null) =>
   useQuery({ queryKey: agentKeys.releases(cursor), queryFn: () => agentApi.listReleases(cursor), placeholderData: keepPreviousData });

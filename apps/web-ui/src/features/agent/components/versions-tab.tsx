@@ -6,11 +6,13 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { ConfirmDialog, QueryState, errorMessage, fullDateTime } from '@/features/knowledge';
-import { actionKey, agentKeys, useAgentRelease, useAgentReleases, useRestore } from '../hooks/use-agent';
+import { actionKey, agentKeys, useAgentNodeTypes, useAgentRelease, useAgentReleases, useRestore } from '../hooks/use-agent';
 import { ApiError } from '@/lib/api/errors';
 import { conflictMessage } from '../model/conflict';
+import { isRenderableWorkflow } from '../model/workflow/shape';
 import type { AgentActive, AgentConfig, AgentIssue, AgentReleaseSummary } from '../types';
 import { AuditList } from './audit-list';
+import { WorkflowCanvas } from './workflow-canvas';
 
 export interface VersionsTabProps { active: AgentActive | null; onCopyToDraft: (content: AgentConfig) => void }
 
@@ -25,6 +27,7 @@ export function VersionsTab({ active, onCopyToDraft }: VersionsTabProps) {
   // issues: why the runtime refused this release, shown in the dialog; retrying cannot help, so confirm is disabled.
   const [restoring, setRestoring] = useState<{ release: AgentReleaseSummary; key: string; issues?: AgentIssue[] } | null>(null);
   const viewed = useAgentRelease(viewing ?? copying);
+  const nodeTypes = useAgentNodeTypes(Boolean(viewed.data?.content.workflow));
 
   const doRestore = async ({ release, key }: { release: AgentReleaseSummary; key: string }) => {
     if (!active) return;
@@ -86,6 +89,19 @@ export function VersionsTab({ active, onCopyToDraft }: VersionsTabProps) {
       <Sheet open={viewing !== null} onOpenChange={open => { if (!open) setViewing(null); }}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
           <SheetTitle>{viewed.data ? `Nội dung v${viewed.data.version}` : 'Nội dung phiên bản'}</SheetTitle>
+          {viewed.data?.content.mode === 'chatflow' && isRenderableWorkflow(viewed.data.content.workflow) ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Bản phát hành chỉ xem — chỉnh sửa bằng cách chép vào nháp.</p>
+              {nodeTypes.isError ? (
+                <p role="alert" className="text-sm text-destructive">
+                  Không tải được catalog node: {errorMessage(nodeTypes.error)}. Sơ đồ có thể thiếu nhánh và cạnh.
+                </p>
+              ) : !nodeTypes.data ? (
+                <p role="status" className="text-sm text-muted-foreground">Đang tải catalog node…</p>
+              ) : null}
+              <WorkflowCanvas workflow={viewed.data.content.workflow} catalog={nodeTypes.data} readOnly showPalette={false} />
+            </div>
+          ) : null}
           <pre className="mt-4 whitespace-pre-wrap break-words rounded bg-muted p-3 font-mono text-xs">{viewed.data ? JSON.stringify(viewed.data.content, null, 2) : 'Đang tải…'}</pre>
         </SheetContent>
       </Sheet>
