@@ -66,6 +66,10 @@ export interface WorkflowCanvasProps {
   className?: string;
   /** Floats over the canvas (the node panel), so the graph keeps the full width. */
   overlay?: ReactNode;
+  /** Node ids reached by a debug run, rendered as a highlighted path. */
+  highlightedPath?: readonly string[];
+  /** Node currently between workflow.node_started and workflow.node_finished. */
+  activeNodeId?: string | null;
 }
 
 export interface WorkflowConnectionLike {
@@ -83,6 +87,8 @@ interface WorkflowNodeData extends Record<string, unknown> {
   summary: string[];
   handles: NodeHandle[];
   invalid: boolean;
+  highlighted: boolean;
+  active: boolean;
   readOnly: boolean;
   isEntry: boolean;
   selected: boolean;
@@ -205,6 +211,10 @@ function WorkflowNode({ id, data }: NodeProps<CanvasNode>) {
   const { dot } = nodeVisual(data.nodeType);
   const ring = data.invalid
     ? 'border-destructive ring-2 ring-destructive/25'
+    : data.active
+      ? 'border-primary ring-2 ring-primary animate-pulse'
+      : data.highlighted
+        ? 'border-primary ring-2 ring-primary/20'
     : data.selected
       ? 'border-primary ring-2 ring-primary/25'
       : 'border-border hover:border-primary/40';
@@ -325,6 +335,8 @@ export function WorkflowCanvas({
   onChange,
   className,
   overlay,
+  highlightedPath = [],
+  activeNodeId = null,
 }: WorkflowCanvasProps) {
   const isReadOnly = readOnly ?? !onChange;
   const flowInstanceRef = useRef<ReactFlowInstance<CanvasNode, Edge> | null>(null);
@@ -357,6 +369,10 @@ export function WorkflowCanvas({
     () => new Set(targets.filter((target) => target.kind === 'edge').map((target) => target.edgeId)),
     [targets],
   );
+  const highlightedNodes = useMemo(() => new Set(highlightedPath), [highlightedPath]);
+  const highlightedEdges = useMemo(() => new Set(
+    highlightedPath.slice(0, -1).map((source, index) => `${source}->${highlightedPath[index + 1]}`),
+  ), [highlightedPath]);
   const cards = useMemo(
     () =>
       new Map(
@@ -411,6 +427,8 @@ export function WorkflowCanvas({
             summary: card?.summary ?? [],
             handles: card?.handles ?? [],
             invalid: invalidNodes.has(node.id),
+            highlighted: highlightedNodes.has(node.id),
+            active: activeNodeId === node.id,
             readOnly: isReadOnly,
             isEntry,
             selected: isSelected,
@@ -431,6 +449,8 @@ export function WorkflowCanvas({
       requestDeleteNode,
       workflow.entry,
       workflow.nodes,
+      activeNodeId,
+      highlightedNodes,
     ],
   );
 
@@ -448,11 +468,13 @@ export function WorkflowCanvas({
         animated: false,
         style: invalidEdges.has(edge.id)
           ? { stroke: 'hsl(var(--destructive))', strokeWidth: 2.5 }
+          : highlightedEdges.has(`${edge.source}->${edge.target}`)
+            ? { stroke: 'hsl(var(--primary))', strokeWidth: 3 }
           : selectedEdgeIds.has(edge.id)
             ? { stroke: 'hsl(var(--primary))', strokeWidth: 2 }
             : { stroke: 'hsl(var(--muted-foreground) / 0.45)', strokeWidth: 1.5 },
       })),
-    [invalidEdges, selectedEdgeIds, workflow.edges],
+    [highlightedEdges, invalidEdges, selectedEdgeIds, workflow.edges],
   );
 
   // Edit helpers throw WorkflowEditError for graph rules; show it instead of an uncaught error in a DOM handler.

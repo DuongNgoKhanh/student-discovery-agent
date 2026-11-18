@@ -21,7 +21,7 @@ import { ToolsSection } from './tools-section';
 import { WorkflowJsonTab } from './workflow-json-tab';
 import { NodeForm } from './node-form';
 import { WorkflowCanvas } from './workflow-canvas';
-import { DebugRunPanel } from './debug-run-panel';
+import { DebugRunTab } from './debug-run-tab';
 
 type ChatflowTab = 'canvas' | 'json' | 'debug';
 
@@ -113,7 +113,7 @@ export function ConfigTab({
         >
           {chatflowTab === 'debug' ? (
             <div className="mx-auto h-full max-w-4xl overflow-y-auto">
-              <DebugRunPanel beforeRun={onBeforeDebugRun} />
+              <DebugRunTab workflow={workflow} catalog={catalog} beforeRun={onBeforeDebugRun} />
             </div>
           ) : chatflowTab === 'json' ? (
             <div className="mx-auto h-full max-w-4xl overflow-y-auto">

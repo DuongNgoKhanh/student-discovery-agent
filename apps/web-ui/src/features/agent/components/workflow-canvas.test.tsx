@@ -328,4 +328,20 @@ describe('WorkflowCanvas', () => {
     expect(screen.getByRole('button', { name: 'Thêm node Trả lời' })).toBeDisabled();
     expect(screen.getByText(`Đã đạt giới hạn ${MAX_WORKFLOW_NODES} node`)).toBeInTheDocument();
   });
+
+  it('highlights the executed path and pulses the active node during debug runs', () => {
+    render(
+      <WorkflowCanvas
+        workflow={workflow}
+        catalog={catalog}
+        readOnly
+        highlightedPath={['start', 'classify']}
+        activeNodeId="classify"
+      />,
+    );
+
+    expect(screen.getByTestId('workflow-node-start').className).toContain('ring-primary/20');
+    expect(screen.getByTestId('workflow-node-classify').className).toContain('animate-pulse');
+    expect(screen.getByTestId('workflow-node-answer').className).not.toContain('ring-primary/20');
+  });
 });
