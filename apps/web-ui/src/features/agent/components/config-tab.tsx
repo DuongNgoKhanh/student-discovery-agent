@@ -21,12 +21,20 @@ import { ToolsSection } from './tools-section';
 import { WorkflowJsonTab } from './workflow-json-tab';
 import { NodeForm } from './node-form';
 import { WorkflowCanvas } from './workflow-canvas';
+import { DebugRunPanel } from './debug-run-panel';
 
-type ChatflowTab = 'canvas' | 'json';
+type ChatflowTab = 'canvas' | 'json' | 'debug';
+
+const CHATFLOW_TABS: ReadonlyArray<{ id: ChatflowTab; label: string }> = [
+  { id: 'canvas', label: 'Sơ đồ' },
+  { id: 'json', label: 'JSON' },
+  { id: 'debug', label: 'Chạy thử' },
+];
 
 export function ConfigTab({
   config, onChange, onReplace, section, onSection, onJsonValidity, validation, onBindKb, mode,
   chatflowOpen = false, onChatflowOpen = () => {}, chatflowActions,
+  onBeforeDebugRun,
 }: {
   config: AgentConfig; onChange: (path: Path, value: unknown) => void; onReplace: (next: AgentConfig) => void;
   section: SectionId; onSection: (id: SectionId) => void; onJsonValidity: (error: string | null) => void;
@@ -35,6 +43,7 @@ export function ConfigTab({
   chatflowOpen?: boolean; onChatflowOpen?: (open: boolean) => void;
   /** Draft actions (save, validate, publish) shown in the editor's header. */
   chatflowActions?: ReactNode;
+  onBeforeDebugRun?: () => Promise<boolean>;
 }) {
   const [chatflowTab, setChatflowTab] = useState<ChatflowTab>('canvas');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -69,11 +78,11 @@ export function ConfigTab({
           actions={chatflowActions}
           tabs={
             <div role="tablist" aria-label="Chế độ xem Chatflow" className="flex gap-1 rounded-lg bg-muted p-0.5 text-13">
-              {(['canvas', 'json'] as const).map(id => (
-                <button key={id} role="tab" aria-selected={chatflowTab === id} type="button"
-                  onClick={() => { if (!jsonError) setChatflowTab(id); }}
-                  className={chatflowTab === id ? 'rounded-md bg-background px-3 py-1 font-medium shadow-sm' : 'rounded-md px-3 py-1 text-muted-foreground hover:text-foreground'}>
-                  {id === 'canvas' ? 'Sơ đồ' : 'JSON'}
+              {CHATFLOW_TABS.map(tab => (
+                <button key={tab.id} role="tab" aria-selected={chatflowTab === tab.id} type="button"
+                  onClick={() => { if (!jsonError) setChatflowTab(tab.id); }}
+                  className={chatflowTab === tab.id ? 'rounded-md bg-background px-3 py-1 font-medium shadow-sm' : 'rounded-md px-3 py-1 text-muted-foreground hover:text-foreground'}>
+                  {tab.label}
                 </button>
               ))}
             </div>
@@ -102,7 +111,11 @@ export function ConfigTab({
             ) : null
           }
         >
-          {chatflowTab === 'json' ? (
+          {chatflowTab === 'debug' ? (
+            <div className="mx-auto h-full max-w-4xl overflow-y-auto">
+              <DebugRunPanel beforeRun={onBeforeDebugRun} />
+            </div>
+          ) : chatflowTab === 'json' ? (
             <div className="mx-auto h-full max-w-4xl overflow-y-auto">
               <WorkflowJsonTab
                 workflow={config.workflow as Record<string, unknown> | undefined}

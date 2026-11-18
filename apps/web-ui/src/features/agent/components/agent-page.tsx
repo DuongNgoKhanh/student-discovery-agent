@@ -252,7 +252,8 @@ function AgentEditor({ draft }: { draft: AgentDraft }) {
         <ConfigTab config={config} onChange={change} onReplace={next => { setConfig(next); setValidation(v => (v ? { ...v, stale: true } : v)); }}
           section={shownSection} onSection={next => { if (!jsonError) setSection(next); }} onJsonValidity={setJsonError}
           validation={shownValidation} onBindKb={kb => void bindKb(kb)} mode={mode}
-          chatflowOpen={chatflowOpen && mode === 'chatflow'} onChatflowOpen={openChatflow} chatflowActions={statusBar(true)} />
+          chatflowOpen={chatflowOpen && mode === 'chatflow'} onChatflowOpen={openChatflow} chatflowActions={statusBar(true)}
+          onBeforeDebugRun={async () => Boolean(await persist())} />
       ) : (
         <VersionsTab active={active.data ?? null} onCopyToDraft={content => { setConfig(content); setValidation(v => (v ? { ...v, stale: true } : v)); setTab('config'); }} />
       )}

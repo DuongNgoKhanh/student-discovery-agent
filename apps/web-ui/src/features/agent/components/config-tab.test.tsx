@@ -258,4 +258,11 @@ describe('ConfigTab', () => {
     expect(screen.getByText('node classify')).toBeInTheDocument();
     expect(screen.queryByText('node answer')).not.toBeInTheDocument();
   });
+
+  it('switches to the Chạy thử tab inside the Chatflow editor', () => {
+    render(<Harness initial={CHATFLOW_SEED} initialSection="chatflow" mode="chatflow" />);
+    expect(screen.queryByLabelText('Chạy thử Chatflow')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Chạy thử' }));
+    expect(screen.getByLabelText('Chạy thử Chatflow')).toBeInTheDocument();
+  });
 });
