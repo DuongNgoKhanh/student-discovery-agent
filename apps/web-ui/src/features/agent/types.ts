@@ -49,3 +49,8 @@ export type WorkflowNodeTypeCatalog = Schemas['WorkflowNodeTypeCatalog'];
 export type WorkflowNamespace = Schemas['WorkflowNamespace'];
 export type WorkflowHandleSpec = Schemas['WorkflowHandleSpec'];
 export type NodeTypeCatalog = WorkflowNodeTypeCatalog;
+
+export type WorkflowDebugRunRequest = Schemas['WorkflowDebugRunRequest'];
+export type WorkflowDebugRunResult = Schemas['WorkflowDebugRunResult'];
+export type WorkflowDebugNodeRun = Schemas['WorkflowDebugNodeRun'];
+export type WorkflowDebugStreamEvent = Schemas['WorkflowDebugStreamEvent'];
