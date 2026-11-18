@@ -35,24 +35,32 @@ async function renewSession(): Promise<boolean> {
  * Unwraps the envelope. `path` is the part after /api/v1, e.g. 'me', 'admin/users?page=1'.
  * On AUTH_TOKEN_EXPIRED for an authenticated request: refresh once, then retry once with the same body.
  */
-async function requestWithMeta<T, M>(method: string, path: string, body?: unknown) {
-  const serialized = body !== undefined ? JSON.stringify(body) : undefined;
-  const send = () =>
-    fetch(`${BASE}/${path}`, {
-      method,
-      headers: serialized !== undefined ? { 'content-type': 'application/json' } : undefined,
-      body: serialized,
-      credentials: 'same-origin',
-    });
+/**
+ * Same-origin fetch to `/api/v1/<path>` with the session cookie. On AUTH_TOKEN_EXPIRED it refreshes once and
+ * resends the same request; any other response is returned as is (the caller unwraps or streams it).
+ * `init.body` must be replayable (a string), since it may be sent twice.
+ */
+export async function fetchWithRefresh(path: string, init: Omit<RequestInit, 'credentials'> & { body?: string }) {
+  const send = () => fetch(`${BASE}/${path}`, { ...init, credentials: 'same-origin' });
 
   let res = await send();
   let expired = false;
   if (res.status === 401 && !NO_RETRY.has(path.split('?')[0] ?? path)) {
     try { expired = (await res.clone().json()).error?.code === 'AUTH_TOKEN_EXPIRED'; } catch { /* unwrap reports malformed responses */ }
   }
-  if (expired && (await refreshSession())) {
+  if (expired && !init.signal?.aborted && (await refreshSession())) {
     res = await send();
   }
+  return res;
+}
+
+async function requestWithMeta<T, M>(method: string, path: string, body?: unknown) {
+  const serialized = body !== undefined ? JSON.stringify(body) : undefined;
+  const res = await fetchWithRefresh(path, {
+    method,
+    headers: serialized !== undefined ? { 'content-type': 'application/json' } : undefined,
+    body: serialized,
+  });
   return unwrapWithMeta<T, M>(res);
 }
 
