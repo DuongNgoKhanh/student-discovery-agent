@@ -70,7 +70,7 @@ describe('debug-run API', () => {
     })));
 
     const events = [];
-    for await (const event of streamDebugRun({ interaction: { type: 'click' } })) events.push(event);
+    for await (const event of streamDebugRun({ interaction: { action: 'confirm_answer' } })) events.push(event);
     expect(events.map((event) => event.event)).toEqual(['workflow.node_started', 'completed']);
   });
 
