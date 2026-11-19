@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import type { ChatflowWorkflow, NodeTypeCatalog } from '../types';
 import { useDebugRun } from '../hooks/use-debug-run';
 import { DebugRunForm } from './debug-run-form';
@@ -14,10 +15,11 @@ export function DebugRunTab({ workflow, catalog, beforeRun, visible = true }: {
   visible?: boolean;
 }) {
   const debug = useDebugRun(beforeRun);
-  const livePath = debug.result?.path ?? debug.events
+  // Memoized so streamed answer text does not hand the canvas a new path, and a full re-layout, per token.
+  const livePath = useMemo(() => debug.result?.path ?? debug.events
     .filter(event => event.event === 'workflow.node_started')
-    .map(event => event.node_id);
-  const activeNodeId = debug.running ? activeNode(debug.events) : null;
+    .map(event => event.node_id), [debug.result, debug.events]);
+  const activeNodeId = useMemo(() => (debug.running ? activeNode(debug.events) : null), [debug.running, debug.events]);
 
   return (
     <section aria-label="Chạy thử Chatflow" className="space-y-3">
@@ -59,12 +61,16 @@ export function DebugRunTab({ workflow, catalog, beforeRun, visible = true }: {
   );
 }
 
-function activeNode(events: ReturnType<typeof useDebugRun>['events']): string | null {
-  const active = new Set<string>();
+/** The most recently started node that has not finished; a node revisited in a loop counts once per visit. */
+export function activeNode(events: ReturnType<typeof useDebugRun>['events']): string | null {
+  const open: string[] = [];
   for (const event of events) {
-    if (event.event === 'workflow.node_started') active.add(event.node_id);
-    if (event.event === 'workflow.node_finished') active.delete(event.node_id);
+    if (event.event === 'workflow.node_started') open.push(event.node_id);
+    if (event.event === 'workflow.node_finished') {
+      const index = open.lastIndexOf(event.node_id);
+      if (index !== -1) open.splice(index, 1);
+    }
   }
-  return [...active].at(-1) ?? null;
+  return open.at(-1) ?? null;
 }
 

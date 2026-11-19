@@ -324,6 +324,9 @@ function CanvasToolbar({ onArrange }: { onArrange?: () => void }) {
 const nodeTypes = { workflow: WorkflowNode };
 
 /** Browser-only workflow canvas supporting read-only inspection and interactive graph editing. */
+// A shared default: a fresh `[]` per render would rebuild every node and edge memo below.
+const NO_PATH: readonly string[] = [];
+
 export function WorkflowCanvas({
   workflow,
   catalog,
@@ -335,7 +338,7 @@ export function WorkflowCanvas({
   onChange,
   className,
   overlay,
-  highlightedPath = [],
+  highlightedPath = NO_PATH,
   activeNodeId = null,
 }: WorkflowCanvasProps) {
   const isReadOnly = readOnly ?? !onChange;

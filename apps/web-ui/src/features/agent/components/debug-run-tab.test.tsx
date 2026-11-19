@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { ApiError } from '@/lib/api/errors';
 import { streamDebugRun, type DebugRunEvent } from '../api/debug-run';
 import type { ChatflowWorkflow, NodeTypeCatalog, WorkflowDebugRunRequest, WorkflowDebugRunResult } from '../types';
-import { DebugRunTab } from './debug-run-tab';
+import { DebugRunTab, activeNode } from './debug-run-tab';
 
 vi.mock('../api/debug-run', () => ({ streamDebugRun: vi.fn() }));
 
@@ -180,5 +180,20 @@ describe('DebugRunTab', () => {
 
     unmount();
     expect(capturedSignal?.aborted).toBe(true);
+  });
+});
+
+describe('activeNode', () => {
+  const started = (node_id: string, order: number): DebugRunEvent => ({ event: 'workflow.node_started', node_id, type: 'answer', order });
+  const finished = (node_id: string): DebugRunEvent => ({ event: 'workflow.node_finished', node_id, handle: null, duration_ms: 1, llm_calls: 0 });
+
+  it('points at the node started last, even when it was visited before', () => {
+    expect(activeNode([started('a', 1), started('b', 2), started('a', 3)])).toBe('a');
+  });
+
+  it('closes one visit per finish, so a looping node stays active while it is still open', () => {
+    expect(activeNode([started('a', 1), started('b', 2), started('a', 3), finished('a')])).toBe('b');
+    expect(activeNode([started('a', 1), finished('a'), started('b', 2), finished('b'), started('a', 3)])).toBe('a');
+    expect(activeNode([started('a', 1), finished('a')])).toBeNull();
   });
 });
