@@ -31,11 +31,6 @@ async function renewSession(): Promise<boolean> {
 }
 
 /**
- * Browser API client: same-origin calls to the Product API (/api/v1), cookies are httpOnly.
- * Unwraps the envelope. `path` is the part after /api/v1, e.g. 'me', 'admin/users?page=1'.
- * On AUTH_TOKEN_EXPIRED for an authenticated request: refresh once, then retry once with the same body.
- */
-/**
  * Same-origin fetch to `/api/v1/<path>` with the session cookie. On AUTH_TOKEN_EXPIRED it refreshes once and
  * resends the same request; any other response is returned as is (the caller unwraps or streams it).
  * `init.body` must be replayable (a string), since it may be sent twice.
@@ -54,6 +49,11 @@ export async function fetchWithRefresh(path: string, init: Omit<RequestInit, 'cr
   return res;
 }
 
+/**
+ * Browser API client: same-origin calls to the Product API (/api/v1), cookies are httpOnly.
+ * Unwraps the envelope. `path` is the part after /api/v1, e.g. 'me', 'admin/users?page=1'.
+ * On AUTH_TOKEN_EXPIRED for an authenticated request: refresh once, then retry once with the same body.
+ */
 async function requestWithMeta<T, M>(method: string, path: string, body?: unknown) {
   const serialized = body !== undefined ? JSON.stringify(body) : undefined;
   const res = await fetchWithRefresh(path, {
