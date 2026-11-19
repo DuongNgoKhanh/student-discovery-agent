@@ -86,7 +86,14 @@ components:
       additionalProperties: false
       properties:
         message: {type: string, minLength: 1, maxLength: 4000}
-        interaction: {type: object, additionalProperties: true}
+        interaction:
+          type: object
+          additionalProperties: false
+          required: [action]
+          properties:
+            action: {type: string, minLength: 1, description: "Tên interaction, ví dụ confirm_answer."}
+            outcome: {type: string, minLength: 1, description: "Ghi đè sys.interaction_outcome; bỏ trống để dùng mặc định theo action."}
+            option_id: {type: string, minLength: 1}
         state: {$ref: '#/components/schemas/WorkflowDebugRunState'}
         llm_stubs:
           type: object

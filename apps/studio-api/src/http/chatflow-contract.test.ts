@@ -110,10 +110,19 @@ describe('workflow debug run contract', () => {
 
   it('requires exactly one of message and interaction', () => {
     expect(request({ state: example.request.state })).toBe(false);
-    expect(request({ ...example.request, interaction: { type: 'confirm_profile' } })).toBe(false);
+    expect(request({ ...example.request, interaction: { action: 'confirm_answer' } })).toBe(false);
     const rest = structuredClone(example.request);
     delete rest.message;
-    expect(request({ ...rest, interaction: { type: 'confirm_profile' } })).toBe(true);
+    expect(request({ ...rest, interaction: { action: 'confirm_answer' } })).toBe(true);
+  });
+
+  it('matches the interaction shape Studio and the runtime parse', () => {
+    const rest = structuredClone(example.request);
+    delete rest.message;
+    expect(request({ ...rest, interaction: { action: 'submit_answer', outcome: 'answered', option_id: 'opt_1' } })).toBe(true);
+    expect(request({ ...rest, interaction: { name: 'confirm_answer' } })).toBe(false);
+    expect(request({ ...rest, interaction: { action: 'confirm_answer', name: 'x' } })).toBe(false);
+    expect(request({ ...rest, interaction: { action: '' } })).toBe(false);
   });
 
   it('rejects fields outside the contract', () => {

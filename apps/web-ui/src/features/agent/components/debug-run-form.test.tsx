@@ -24,15 +24,32 @@ describe('DebugRunForm', () => {
     render(<DebugRunForm onSubmit={onSubmit} />);
 
     fireEvent.change(screen.getByLabelText('Loại input'), { target: { value: 'interaction' } });
-    fireEvent.change(screen.getByLabelText('Nội dung input'), { target: { value: 'select_majors' } });
+    fireEvent.change(screen.getByLabelText('Nội dung input'), { target: { value: 'confirm_answer' } });
     fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
 
+    // Studio's strict schema takes {action, outcome?, option_id?}; any other key is a 422.
     expect(onSubmit).toHaveBeenCalledWith({
-      interaction: { name: 'select_majors' },
+      interaction: { action: 'confirm_answer' },
       state: {},
       llm_stubs: {},
     });
     expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty('message');
+  });
+
+  it('adds option_id to the interaction only when one is given', () => {
+    const onSubmit = vi.fn();
+    render(<DebugRunForm onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByLabelText('Loại input'), { target: { value: 'interaction' } });
+    fireEvent.change(screen.getByLabelText('Nội dung input'), { target: { value: 'submit_answer' } });
+    fireEvent.change(screen.getByLabelText('option_id (tuỳ chọn)'), { target: { value: ' opt_2 ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      interaction: { action: 'submit_answer', option_id: 'opt_2' },
+      state: {},
+      llm_stubs: {},
+    } satisfies WorkflowDebugRunRequest);
   });
 
   it('rejects blank input and non-object JSON without submitting', () => {

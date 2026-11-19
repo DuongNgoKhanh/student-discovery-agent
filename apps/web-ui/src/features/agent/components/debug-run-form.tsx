@@ -15,6 +15,7 @@ interface DebugRunFormProps {
 export function DebugRunForm({ onSubmit, onCancel, running = false }: DebugRunFormProps) {
   const [input, setInput] = useState('học phí MTU');
   const [inputMode, setInputMode] = useState<'message' | 'interaction'>('message');
+  const [optionId, setOptionId] = useState('');
   const [stateText, setStateText] = useState(EMPTY_OBJECT);
   const [stubsText, setStubsText] = useState(EMPTY_OBJECT);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +23,7 @@ export function DebugRunForm({ onSubmit, onCancel, running = false }: DebugRunFo
   const submit = () => {
     const value = input.trim();
     if (!value) {
-      setError(inputMode === 'message' ? 'Nhập message trước khi chạy' : 'Nhập tên interaction trước khi chạy');
+      setError(inputMode === 'message' ? 'Nhập message trước khi chạy' : 'Nhập action của interaction trước khi chạy');
       return;
     }
 
@@ -49,7 +50,7 @@ export function DebugRunForm({ onSubmit, onCancel, running = false }: DebugRunFo
     setError(null);
     const request: WorkflowDebugRunRequest = inputMode === 'message'
       ? { message: value, state, llm_stubs: llmStubs }
-      : { interaction: { name: value }, state, llm_stubs: llmStubs };
+      : { interaction: { action: value, ...(optionId.trim() ? { option_id: optionId.trim() } : {}) }, state, llm_stubs: llmStubs };
     void onSubmit(request);
   };
 
@@ -72,11 +73,22 @@ export function DebugRunForm({ onSubmit, onCancel, running = false }: DebugRunFo
             <input
               aria-label="Nội dung input"
               className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1.5"
+              placeholder={inputMode === 'message' ? 'Tin nhắn của học sinh' : 'action, ví dụ confirm_answer'}
               value={input}
               onChange={event => setInput(event.target.value)}
               disabled={running}
             />
           </div>
+          {inputMode === 'interaction' && (
+            <input
+              aria-label="option_id (tuỳ chọn)"
+              className="mt-2 w-full rounded-md border bg-background px-2 py-1.5"
+              placeholder="option_id (tuỳ chọn)"
+              value={optionId}
+              onChange={event => setOptionId(event.target.value)}
+              disabled={running}
+            />
+          )}
         </label>
         <JsonInput label="State giả lập" value={stateText} onChange={setStateText} disabled={running} />
         <JsonInput label="LLM stubs (tuỳ chọn)" value={stubsText} onChange={setStubsText} disabled={running} />
