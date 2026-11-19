@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { knowledgeApi } from '@/features/knowledge';
 import { ApiError } from '@/lib/api/errors';
 import { agentApi } from '../api/agent';
+import { streamDebugRun, type DebugRunEvent } from '../api/debug-run';
 import type { AgentDraft } from '../types';
 import { AgentPage } from './agent-page';
 
@@ -30,6 +31,7 @@ vi.mock('../hooks/use-agent', () => ({
   useAgentNodeTypes: () => ({ data: undefined, isError: false, error: null, refetch: vi.fn() }),
 }));
 vi.mock('../api/agent', () => ({ agentApi: { getDraft: vi.fn() } }));
+vi.mock('../api/debug-run', () => ({ streamDebugRun: vi.fn() }));
 // Stand-in for the dialog: its own 409 handling is covered in publish-dialog.test.tsx; here only the page's reaction matters.
 vi.mock('./publish-dialog', () => ({
   PublishDialog: ({ onConflict }: { onConflict?: () => void }) => <button type="button" onClick={onConflict}>Giả lập 409 khi phát hành</button>,
@@ -59,6 +61,23 @@ describe('AgentPage', () => {
     const sent = save.mock.calls[0]?.[0]?.content as Record<string, unknown>;
     expect(sent.mode).toBe('chatflow');
     expect(sent.workflow).toMatchObject({ entry: 'start' });
+  });
+
+  it('lets a debug run wait for the save in flight instead of failing or saving twice', async () => {
+    let finishSave!: (saved: AgentDraft) => void;
+    save.mockImplementationOnce(() => new Promise<AgentDraft>(resolve => { finishSave = resolve; }));
+    vi.mocked(streamDebugRun).mockImplementation(async function* (): AsyncGenerator<DebugRunEvent> {});
+    render(<AgentPage />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Chatflow' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Chạy thử' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
+
+    expect(streamDebugRun).not.toHaveBeenCalled();
+    finishSave({ ...draft, revision: 2, content_hash: 'h2' });
+    await waitFor(() => expect(streamDebugRun).toHaveBeenCalledTimes(1));
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Không thể lưu bản nháp trước khi chạy thử')).not.toBeInTheDocument();
   });
 
   it('gives the editor a history entry, so Back closes it', async () => {
