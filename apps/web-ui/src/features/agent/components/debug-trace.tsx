@@ -4,17 +4,25 @@ import type { WorkflowDebugNodeRun, WorkflowDebugRunResult } from '../types';
 
 interface DebugTraceProps {
   result: WorkflowDebugRunResult;
+  /** Reason from Studio's trailing `run_not_saved` frame: the run id will not resolve later. */
+  notSavedReason?: string | null;
 }
 
-export function DebugTrace({ result }: DebugTraceProps) {
+export function DebugTrace({ result, notSavedReason = null }: DebugTraceProps) {
   return (
     <section aria-label="Trace chạy thử" className="space-y-4 rounded-md border p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold">Trace chạy thử</h3>
         <p className="text-xs text-muted-foreground">
-          Run <code>{result.run_id}</code> · trạng thái: <strong>{result.status}</strong>
+          Run <code>{result.run_id}</code>{notSavedReason ? ' (chưa lưu)' : ''} · trạng thái: <strong>{result.status}</strong>
         </p>
       </div>
+
+      {notSavedReason && (
+        <p role="status" className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs">
+          Lần chạy này không được lưu ({notSavedReason}): trace chỉ còn ở màn hình này, mở lại theo run id sẽ không tìm thấy.
+        </p>
+      )}
 
       {result.fallback_reason && (
         <p role="status" className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-xs">

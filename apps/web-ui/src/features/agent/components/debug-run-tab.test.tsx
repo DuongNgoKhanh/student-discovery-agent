@@ -129,6 +129,19 @@ describe('DebugRunTab', () => {
     expect(screen.getByLabelText('Tiến trình node').querySelectorAll('li')).toHaveLength(2);
   });
 
+  it('warns on the trace when Studio could not store the run', async () => {
+    vi.mocked(streamDebugRun).mockImplementation(async function* (): AsyncGenerator<DebugRunEvent> {
+      yield { event: 'completed', result: mockResult };
+      yield { event: 'run_not_saved', reason: 'store_failed' };
+    });
+
+    render(<DebugRunTab workflow={workflow} catalog={catalog} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Trace chạy thử')).toHaveTextContent('không được lưu (store_failed)'));
+    expect(screen.getByLabelText('Trace chạy thử')).toHaveTextContent('(chưa lưu)');
+  });
+
   it('surfaces validation issues from ApiError details', async () => {
     vi.mocked(streamDebugRun).mockImplementation(async function* (): AsyncGenerator<DebugRunEvent> {
       throw new ApiError({

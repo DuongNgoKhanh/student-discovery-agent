@@ -55,7 +55,7 @@ export function DebugRunTab({ workflow, catalog, beforeRun, visible = true }: {
         </div>
       )}
 
-      {debug.result && <DebugTrace result={debug.result} />}
+      {debug.result && <DebugTrace result={debug.result} notSavedReason={debug.notSavedReason} />}
       {!workflow && !debug.error && <p className="rounded-lg border border-dashed p-4 text-xs text-muted-foreground">Workflow chưa có để chạy thử.</p>}
     </section>
   );

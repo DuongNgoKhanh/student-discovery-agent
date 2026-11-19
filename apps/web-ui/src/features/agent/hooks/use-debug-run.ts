@@ -29,6 +29,7 @@ export function useDebugRun(beforeRun?: () => Promise<boolean>) {
   const [events, setEvents] = useState<DebugRunEvent[]>([]);
   const [result, setResult] = useState<WorkflowDebugRunResult | null>(null);
   const [delta, setDelta] = useState('');
+  const [notSavedReason, setNotSavedReason] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -41,6 +42,7 @@ export function useDebugRun(beforeRun?: () => Promise<boolean>) {
     setEvents([]);
     setResult(null);
     setDelta('');
+    setNotSavedReason(null);
     const controller = new AbortController();
     abortRef.current = controller;
     try {
@@ -53,6 +55,7 @@ export function useDebugRun(beforeRun?: () => Promise<boolean>) {
           continue;
         }
         setEvents(current => [...current, event]);
+        if (event.event === 'run_not_saved') setNotSavedReason(event.reason);
         if (event.event === 'completed') {
           completed = true;
           setResult(event.result);
@@ -71,5 +74,5 @@ export function useDebugRun(beforeRun?: () => Promise<boolean>) {
 
   const cancel = useCallback(() => abortRef.current?.abort(), []);
 
-  return { events, result, delta, error, running, run, cancel };
+  return { events, result, delta, notSavedReason, error, running, run, cancel };
 }
