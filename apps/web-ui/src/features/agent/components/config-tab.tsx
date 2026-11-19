@@ -111,11 +111,11 @@ export function ConfigTab({
             ) : null
           }
         >
-          {chatflowTab === 'debug' ? (
-            <div className="mx-auto h-full max-w-4xl overflow-y-auto">
-              <DebugRunTab workflow={workflow} catalog={catalog} beforeRun={onBeforeDebugRun} />
-            </div>
-          ) : chatflowTab === 'json' ? (
+          {/* Hidden, not unmounted: leaving the tab would abort the run and drop its trace. */}
+          <div hidden={chatflowTab !== 'debug'} className="mx-auto h-full max-w-4xl overflow-y-auto">
+            <DebugRunTab workflow={workflow} catalog={catalog} beforeRun={onBeforeDebugRun} visible={chatflowTab === 'debug'} />
+          </div>
+          {chatflowTab === 'debug' ? null : chatflowTab === 'json' ? (
             <div className="mx-auto h-full max-w-4xl overflow-y-auto">
               <WorkflowJsonTab
                 workflow={config.workflow as Record<string, unknown> | undefined}

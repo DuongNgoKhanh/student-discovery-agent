@@ -261,8 +261,18 @@ describe('ConfigTab', () => {
 
   it('switches to the Chạy thử tab inside the Chatflow editor', () => {
     render(<Harness initial={CHATFLOW_SEED} initialSection="chatflow" mode="chatflow" />);
-    expect(screen.queryByLabelText('Chạy thử Chatflow')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Chạy thử Chatflow')).not.toBeVisible();
     fireEvent.click(screen.getByRole('tab', { name: 'Chạy thử' }));
-    expect(screen.getByLabelText('Chạy thử Chatflow')).toBeInTheDocument();
+    expect(screen.getByLabelText('Chạy thử Chatflow')).toBeVisible();
+  });
+
+  it('keeps the debug tab mounted, with its input, across a switch to the canvas', () => {
+    render(<Harness initial={CHATFLOW_SEED} initialSection="chatflow" mode="chatflow" />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Chạy thử' }));
+    fireEvent.change(screen.getByLabelText('Nội dung input'), { target: { value: 'giữ nguyên' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'Sơ đồ' }));
+    expect(screen.getByLabelText('Chạy thử Chatflow')).not.toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Chạy thử' }));
+    expect(screen.getByLabelText('Nội dung input')).toHaveValue('giữ nguyên');
   });
 });

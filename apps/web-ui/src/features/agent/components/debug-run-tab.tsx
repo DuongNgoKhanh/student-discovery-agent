@@ -6,10 +6,12 @@ import { DebugRunForm } from './debug-run-form';
 import { DebugTrace } from './debug-trace';
 import { WorkflowCanvas } from './workflow-canvas';
 
-export function DebugRunTab({ workflow, catalog, beforeRun }: {
+export function DebugRunTab({ workflow, catalog, beforeRun, visible = true }: {
   workflow?: ChatflowWorkflow;
   catalog?: NodeTypeCatalog;
   beforeRun?: () => Promise<boolean>;
+  /** The editor keeps this tab mounted while hidden so a run survives a tab switch. */
+  visible?: boolean;
 }) {
   const debug = useDebugRun(beforeRun);
   const livePath = debug.result?.path ?? debug.events
@@ -37,7 +39,8 @@ export function DebugRunTab({ workflow, catalog, beforeRun }: {
       )}
       {debug.delta && <pre className="max-h-28 overflow-auto rounded-md bg-muted p-2 text-xs whitespace-pre-wrap">{debug.delta}</pre>}
 
-      {workflow && catalog && (livePath.length > 0 || debug.running) && (
+      {/* A canvas laid out while hidden has no size; remount it when the tab is shown again. */}
+      {visible && workflow && catalog && (livePath.length > 0 || debug.running) && (
         <div className="h-[360px] rounded-lg border p-1" aria-label="Đường đi đang chạy">
           <WorkflowCanvas
             className="h-full w-full"
