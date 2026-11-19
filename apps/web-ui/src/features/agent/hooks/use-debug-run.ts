@@ -23,6 +23,8 @@ function formatRunError(error: unknown): string {
   return error instanceof Error ? error.message : 'Không thể chạy thử workflow';
 }
 
+const STREAM_CUT = 'Lần chạy thử bị ngắt giữa chừng, chưa nhận được kết quả cuối. Hãy chạy lại.';
+
 export function useDebugRun(beforeRun?: () => Promise<boolean>) {
   const [events, setEvents] = useState<DebugRunEvent[]>([]);
   const [result, setResult] = useState<WorkflowDebugRunResult | null>(null);
@@ -43,11 +45,21 @@ export function useDebugRun(beforeRun?: () => Promise<boolean>) {
     abortRef.current = controller;
     try {
       if (beforeRun && !(await beforeRun())) throw new Error('Không thể lưu bản nháp trước khi chạy thử');
+      let completed = false;
       for await (const event of streamDebugRun(request, controller.signal)) {
+        // Deltas only feed the answer text: keeping them in `events` would copy the array once per token.
+        if (event.event === 'delta') {
+          setDelta(current => current + event.text);
+          continue;
+        }
         setEvents(current => [...current, event]);
-        if (event.event === 'delta') setDelta(current => current + event.text);
-        if (event.event === 'completed') setResult(event.result);
+        if (event.event === 'completed') {
+          completed = true;
+          setResult(event.result);
+        }
       }
+      // A stream that closes without `completed` (runtime crash, proxy cut) is a failed run, not an empty one.
+      if (!completed && !controller.signal.aborted) throw new Error(STREAM_CUT);
     } catch (runError) {
       const aborted = (runError instanceof DOMException || runError instanceof Error) && runError.name === 'AbortError';
       if (!aborted) setError(formatRunError(runError));

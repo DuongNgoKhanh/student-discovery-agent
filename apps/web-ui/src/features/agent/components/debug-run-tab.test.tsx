@@ -98,6 +98,37 @@ describe('DebugRunTab', () => {
     expect(streamMock).not.toHaveBeenCalled();
   });
 
+  it('reports a run whose stream ends without a completed frame', async () => {
+    vi.mocked(streamDebugRun).mockImplementation(async function* (): AsyncGenerator<DebugRunEvent> {
+      yield { event: 'workflow.node_started', node_id: 'start', type: 'start', order: 0 };
+      yield { event: 'delta', text: 'Xin' };
+    });
+
+    render(<DebugRunTab workflow={workflow} catalog={catalog} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('bị ngắt giữa chừng');
+    });
+    expect(screen.queryByLabelText('Trace chạy thử')).not.toBeInTheDocument();
+  });
+
+  it('keeps deltas out of the node progress list', async () => {
+    vi.mocked(streamDebugRun).mockImplementation(async function* (): AsyncGenerator<DebugRunEvent> {
+      yield { event: 'workflow.node_started', node_id: 'start', type: 'start', order: 0 };
+      yield { event: 'delta', text: 'Xin ' };
+      yield { event: 'delta', text: 'chào' };
+      yield { event: 'completed', result: mockResult };
+    });
+
+    render(<DebugRunTab workflow={workflow} catalog={catalog} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Chạy' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Trace chạy thử')).toBeInTheDocument());
+    expect(screen.getByText('Xin chào')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tiến trình node').querySelectorAll('li')).toHaveLength(2);
+  });
+
   it('surfaces validation issues from ApiError details', async () => {
     vi.mocked(streamDebugRun).mockImplementation(async function* (): AsyncGenerator<DebugRunEvent> {
       throw new ApiError({
